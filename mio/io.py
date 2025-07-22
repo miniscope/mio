@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 from mio.exceptions import EndOfRecordingException, ReadHeaderException
 from mio.logging import init_logger
-from mio.models.data import Frame
+from mio.models.frames import SDCardFrame
 from mio.models.sdcard import SDBufferHeader, SDConfig, SDLayout
 from mio.types import ConfigSource
 
@@ -511,12 +511,12 @@ class SDCard:
         return data
 
     @overload
-    def read(self, return_header: Literal[True] = True) -> Frame: ...
+    def read(self, return_header: Literal[True] = True) -> SDCardFrame: ...
 
     @overload
     def read(self, return_header: Literal[False] = False) -> np.ndarray: ...
 
-    def read(self, return_header: bool = False) -> np.ndarray | Frame:
+    def read(self, return_header: bool = False) -> Union[np.ndarray, SDCardFrame]:
         """
         Read a single frame
 
@@ -576,7 +576,7 @@ class SDCard:
                 self.positions[self._frame] = last_position
                 frame = np.reshape(self._array, (self.config.width, self.config.height))
                 if return_header:
-                    return Frame.model_construct(frame=frame, headers=headers)
+                    return SDCardFrame.model_construct(frame=frame, headers=headers)
                 else:
                     return frame
 

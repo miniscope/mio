@@ -9,7 +9,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from mio import Config
 from mio.io import SDCard
 from mio.models.config import _global_config_path, set_user_dir
-from mio.models.data import Frames
+from mio.models.frames import SDCardFrame
 from mio.models.mixins import ConfigYAMLMixin, YamlDumper
 
 
@@ -32,7 +32,7 @@ def wirefree_battery() -> SDCard:
 
 
 @pytest.fixture()
-def wirefree_frames(wirefree) -> Frames:
+def wirefree_frames(wirefree) -> SDCardFrame:
     frames = []
     with wirefree:
         while True:
@@ -41,7 +41,7 @@ def wirefree_frames(wirefree) -> Frames:
                 frames.append(frame_object)
             except StopIteration:
                 break
-    return Frames(frames=frames)
+    return SDCardFrame(frames=frames)
 
 
 @pytest.fixture()

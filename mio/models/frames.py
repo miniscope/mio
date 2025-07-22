@@ -2,45 +2,89 @@
 Pydantic models for storing frames and videos.
 """
 
+from abc import abstractmethod
 from pathlib import Path
+from typing import List, Literal, Optional, Union, overload
 
 import cv2
 import numpy as np
+import pandas as pd
 from numpydantic import NDArray
 from pydantic import BaseModel, Field, field_validator
 
 from mio.io import VideoWriter
 from mio.logging import init_logger
+from mio.models.sdcard import SDBufferHeader
 
 logger = init_logger("model.frames")
 
 
-class NamedBaseFrame(BaseModel):
+class BaseFrame(BaseModel):
     """
-    Pydantic model to store an an image or a video together with a name.
+    Pydantic model to store an image
     """
 
-    name: str = Field(
-        ...,
-        description="Name of the video.",
+    frame: NDArray = Field(
+        None,
+        description="Frame data, if provided.",
     )
 
-    def export(self, output_path: Path | str, fps: int, suffix: bool) -> None:
+    @field_validator("frame")
+    def validate_frame_is_2d(cls, v: NDArray) -> NDArray:
+        """
+        Validate that the frame is a 2D array.
+        """
+        if v is not None and len(v.shape) != 2:
+            raise ValueError("Frame must be a 2D array")
+        return v
+
+    @abstractmethod
+    def export(self, output_path: Union[Path, str], suffix: bool = False) -> None:
         """
         Export the frame data to a file.
-        The implementation needs to be defined in the derived classes.
         """
         raise NotImplementedError("Method not implemented.")
 
 
-class NamedFrame(NamedBaseFrame):
+class BaseVideo(BaseModel):
+    """
+    Pydantic model to store a video.
+    """
+
+    video: List[NDArray] = Field(
+        ...,
+        description="List of frames.",
+    )
+
+    @field_validator("video")
+    def validate_video_is_list_of_2d_arrays(cls, v: List[NDArray]) -> List[NDArray]:
+        """
+        Validate that the video is a list of 2D arrays.
+        """
+
+        # check that all frames have 2D shape and are the same shape
+        if v is not None and not all(
+            len(frame.shape) == 2 and frame.shape == v[0].shape for frame in v
+        ):
+            raise ValueError("Not all frames are 2D arrays or have the same shape.")
+        return v
+
+    @abstractmethod
+    def export(self, output_path: Union[Path, str], suffix: bool = False) -> None:
+        """
+        Export the frame data to a file.
+        """
+        raise NotImplementedError("Method not implemented.")
+
+
+class NamedFrame(BaseFrame):
     """
     Pydantic model to store an image or a video together with a name.
     """
 
-    frame: Optional[NDArray] = Field(
-        None,
-        description="Frame data, if provided.",
+    name: str = Field(
+        ...,
+        description="Name of the frame.",
     )
 
     def export(self, output_path: Path | str, suffix: bool = False) -> None:
@@ -94,14 +138,14 @@ class NamedFrame(NamedBaseFrame):
         return v
 
 
-class NamedVideo(NamedBaseFrame):
+class NamedVideo(BaseVideo):
     """
     Pydantic model to store a video together with a name.
     """
 
-    video: Optional[List[NDArray]] = Field(
-        None,
-        description="List of frames.",
+    name: str = Field(
+        ...,
+        description="Name of the video.",
     )
 
     def export(self, output_path: Path | str, suffix: bool = False, fps: float = 20) -> None:
@@ -130,3 +174,79 @@ class NamedVideo(NamedBaseFrame):
                 writer.write_frame(picture)
         finally:
             writer.close()
+
+
+class SDCardFrame(BaseModel):
+    """
+    An individual frame from a miniscope recording
+
+    Typically returned from :meth:`.SDCard.read`
+    """
+
+    frame: NDArray
+    headers: List[SDBufferHeader]
+
+    @field_validator("headers")
+    @classmethod
+    def frame_nums_must_be_equal(cls, v: List[SDBufferHeader]) -> Optional[List[SDBufferHeader]]:
+        """
+        Each frame_number field in each header must be the same
+        (they come from the same frame!)
+        """
+
+        if v is not None and not all([header.frame_num != v[0].frame_num for header in v]):
+            raise ValueError(f"All frame numbers should be equal! Got f{[h.frame_num for h in v]}")
+        return v
+
+    @property
+    def frame_num(self) -> Optional[int]:
+        """
+        Frame number for this set of headers, if headers are present
+        """
+        return self.headers[0].frame_num
+
+
+class Frames(BaseModel):
+    """
+    A collection of frames from a miniscope recording
+    """
+
+    frames: List[SDCardFrame]
+
+    @overload
+    def flatten_headers(self, as_dict: Literal[False]) -> List[SDBufferHeader]: ...
+
+    @overload
+    def flatten_headers(self, as_dict: Literal[True]) -> List[dict]: ...
+
+    def flatten_headers(self, as_dict: bool = False) -> Union[List[dict], List[SDBufferHeader]]:
+        """
+        Return flat list of headers, not grouped by frame
+
+        Args:
+            as_dict (bool): If `True`, return a list of dictionaries, if `False`
+                (default), return a list of :class:`.SDBufferHeader` s.
+        """
+        h: Union[List[dict], List[SDBufferHeader]] = []
+        for frame in self.frames:
+            headers: Union[List[dict], List[SDBufferHeader]]
+            if as_dict:
+                headers = [header.model_dump() for header in frame.headers]
+            else:
+                headers = frame.headers
+            h.extend(headers)
+        return h
+
+    def to_df(self, what: Literal["headers"] = "headers") -> pd.DataFrame:
+        """
+        Convert frames to pandas dataframe
+
+        Arguments:
+            what ('headers'): What information from the frame to include in the df,
+                currently only 'headers' is possible
+        """
+
+        if what == "headers":
+            return pd.DataFrame(self.flatten_headers(as_dict=True))
+        else:
+            raise ValueError("Return mode not implemented!")
