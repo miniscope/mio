@@ -4,22 +4,22 @@ Classes for using in-memory data from a miniscope
 
 from typing import Literal, overload
 
-import numpy as np
 import pandas as pd
+from numpydantic import NDArray
 from pydantic import BaseModel, field_validator
 
 from mio.models.sdcard import SDBufferHeader
 
 
-class Frame(BaseModel, arbitrary_types_allowed=True):
+class Frame(BaseModel):
     """
     An individual frame from a miniscope recording
 
     Typically returned from :meth:`.SDCard.read`
     """
 
-    frame: np.ndarray
-    headers: list[SDBufferHeader]
+    frame: NDArray
+    headers: List[SDBufferHeader]
 
     @field_validator("headers")
     @classmethod

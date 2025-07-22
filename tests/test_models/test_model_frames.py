@@ -45,12 +45,12 @@ class TestNamedFrame(unittest.TestCase):
         # Test with an invalid type
         with self.assertRaises(ValueError):
             named_frame = NamedFrame(name=self.name, frame=12345)
-            named_frame.export("output_path", 20, True)
+            named_frame.export("output_path", True)
 
         # Test with a list containing non-ndarray elements
         with self.assertRaises(ValueError):
             named_frame = NamedFrame(name=self.name, frame=[123, 456])
-            named_frame.export("output_path", 20, True)
+            named_frame.export("output_path", True)
 
         # Ensure that no write methods are called
         mock_VideoWriter.write_frame.assert_not_called()

@@ -6,7 +6,8 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
+from numpydantic import NDArray
+from pydantic import BaseModel, Field, field_validator
 
 from mio.io import VideoWriter
 from mio.logging import init_logger
@@ -23,9 +24,6 @@ class NamedBaseFrame(BaseModel):
         ...,
         description="Name of the video.",
     )
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True,
-    )
 
     def export(self, output_path: Path | str, fps: int, suffix: bool) -> None:
         """
@@ -40,7 +38,7 @@ class NamedFrame(NamedBaseFrame):
     Pydantic model to store an image or a video together with a name.
     """
 
-    frame: np.ndarray | None = Field(
+    frame: Optional[NDArray] = Field(
         None,
         description="Frame data, if provided.",
     )
@@ -86,13 +84,22 @@ class NamedFrame(NamedBaseFrame):
         cv2.destroyAllWindows()
         cv2.waitKey(1)  # Extra waitKey to properly close the window
 
+    @field_validator("frame")
+    def validate_frame_is_2d(cls, v: NDArray) -> NDArray:
+        """
+        Validate that the frame is a 2D array.
+        """
+        if v is not None and len(v.shape) != 2:
+            raise ValueError("Frame must be a 2D array")
+        return v
+
 
 class NamedVideo(NamedBaseFrame):
     """
     Pydantic model to store a video together with a name.
     """
 
-    video: list[np.ndarray] | None = Field(
+    video: Optional[List[NDArray]] = Field(
         None,
         description="List of frames.",
     )
