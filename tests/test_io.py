@@ -8,10 +8,10 @@ import numpy as np
 import warnings
 
 from mio.models.sdcard import SDBufferHeader
-from mio.io import SDCard
-from mio.io import BufferedCSVWriter
+from mio.io.sdcard import SDCard
+from mio.io.file import BufferedCSVWriter
 from mio.exceptions import EndOfRecordingException
-from mio.models.data import Frame
+from mio.models.frames import SDCardFrame
 from mio.utils import hash_file, hash_video
 
 from .fixtures import wirefree, wirefree_battery
@@ -175,7 +175,7 @@ def test_return_headers(wirefree):
     """
     with wirefree:
         frame_object = wirefree.read(return_header=True)
-        assert isinstance(frame_object, Frame)
+        assert isinstance(frame_object, SDCardFrame)
 
         assert len(frame_object.headers) == 5
         assert all([isinstance(b, SDBufferHeader) for b in frame_object.headers])

@@ -7,9 +7,9 @@ import tomli_w
 from _pytest.monkeypatch import MonkeyPatch
 
 from mio import Config
-from mio.io import SDCard
+from mio.io.sdcard import SDCard
 from mio.models.config import _global_config_path, set_user_dir
-from mio.models.frames import SDCardFrame
+from mio.models.frames import SDCardVideo
 from mio.models.mixins import ConfigYAMLMixin, YamlDumper
 
 
@@ -32,7 +32,7 @@ def wirefree_battery() -> SDCard:
 
 
 @pytest.fixture()
-def wirefree_frames(wirefree) -> SDCardFrame:
+def wirefree_frames(wirefree) -> SDCardVideo:
     frames = []
     with wirefree:
         while True:
@@ -41,7 +41,7 @@ def wirefree_frames(wirefree) -> SDCardFrame:
                 frames.append(frame_object)
             except StopIteration:
                 break
-    return SDCardFrame(frames=frames)
+    return SDCardVideo(frames=frames)
 
 
 @pytest.fixture()

@@ -12,7 +12,7 @@ import pandas as pd
 from numpydantic import NDArray
 from pydantic import BaseModel, Field, field_validator
 
-from mio.io import VideoWriter
+from mio.io.file import VideoWriter
 from mio.logging import init_logger
 from mio.models.sdcard import SDBufferHeader
 
@@ -206,7 +206,7 @@ class SDCardFrame(BaseModel):
         return self.headers[0].frame_num
 
 
-class Frames(BaseModel):
+class SDCardVideo(BaseModel):
     """
     A collection of frames from a miniscope recording
     """

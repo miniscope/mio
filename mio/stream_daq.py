@@ -20,7 +20,7 @@ from mio import init_logger
 from mio.bit_operation import BufferFormatter
 from mio.devices.mocks import okDevMock
 from mio.exceptions import EndOfRecordingException, StreamReadError
-from mio.io import BufferedCSVWriter, VideoWriter
+from mio.io.file import BufferedCSVWriter, VideoWriter
 from mio.models.process import FreqencyMaskingConfig
 from mio.models.stream import (
     RuntimeMetadata,

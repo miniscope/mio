@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 
 from mio import init_logger
-from mio.io import VideoReader
+from mio.io.file import VideoReader
 from mio.models.frames import NamedFrame, NamedVideo
 from mio.models.process import (
     DenoiseConfig,
