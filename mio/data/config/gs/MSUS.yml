@@ -21,7 +21,6 @@ port: null
 baudrate: null
 
 # Preamble for each data buffer.
-# preamble: 0x12345678 # original preamble
 preamble: 0x78563412 # new preamble
 
 # Incoming Pre-Processed Image format. 

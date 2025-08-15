@@ -77,6 +77,8 @@ def test_buffer_to_array():
     """Checking to see if a 12x4 (4 12 bit pixels) converts to a known value in our buffer_2_array fxn"""
 
     byte_sequence = bytes([0xC0, 0x1C, 0x01, 0xC0, 0x1C, 0x01])
+    # byte_sequence = bytes([0x80, 0x08, 0x00, 0x80, 0x08, 0x00]) # assert np.array_equal(sequence_16bit, np.array([0, 0, 0, 0]))
+
     sequence_16bit = buffer_to_array(byte_sequence)
     assert np.array_equal(sequence_16bit, np.array([512, 512, 512, 512]))
 

@@ -24,11 +24,12 @@ def buffer_to_array(buffer: bytes) -> np.ndarray:
     e.g. (``1xxxxxxxxxx0``)
 
     Strip the pads, and return a 16-bit ndarray
+
     """
     # convert to a binary array 8 at a time
     binary_data = np.unpackbits(np.frombuffer(buffer, dtype=np.uint8))
 
-    # reshape to a n x 12
+    # rehape to a n x 12
     pixel_cols = binary_data.reshape((-1, 12))
 
     # remove padding pixels (12 bit x n --> 10 bit x n)
