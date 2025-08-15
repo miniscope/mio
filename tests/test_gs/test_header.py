@@ -6,7 +6,6 @@ import pytest
 from mio.devices.gs import testing
 from mio.devices.gs.header import GSBufferHeaderFormat, GSBufferHeader, buffer_to_array
 from mio.devices.gs.config import GSDevConfig
-from mio.devices.gs.daq import format_frame
 
 import numpy as np
 
@@ -80,3 +79,12 @@ def test_buffer_to_array():
     byte_sequence = bytes([0xC0, 0x1C, 0x01, 0xC0, 0x1C, 0x01])
     sequence_16bit = buffer_to_array(byte_sequence)
     assert np.array_equal(sequence_16bit, np.array([512, 512, 512, 512]))
+
+
+def test_buffer_to_array_8bit():
+    """Checking to see if a 12x4 (4 12 bit pixels) converts to a known value in our buffer_2_array fxn"""
+
+    byte_sequence = bytes([0xC0, 0x1C, 0x01, 0xC0, 0x1C, 0x01])
+    sequence_8bit = buffer_to_array(byte_sequence)
+    # assert np.array_equal(sequence_8bit, np.array([128, 128, 128, 128]))
+

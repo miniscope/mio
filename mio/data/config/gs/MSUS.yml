@@ -37,7 +37,7 @@ header_len: 384 # 12 * 32 (in bits)
 buffer_block_length: 4  # 10 # originally 12 how many words per block length
 block_size: 3774 # 4012 # just buffer (header+data-header)
 num_buffers: 6 # 6 # (maybe change to 10 num of data buffers inside mcu
-dummy_words: 12 # num of dummy words before header file
+dummy_words: 12 # 12 # num of dummy words before header file
 
 # Flags to flip bit/byte order when recovering headers and data. See model document for details.
 reverse_header_bits: False # False

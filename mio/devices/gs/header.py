@@ -25,22 +25,24 @@ def buffer_to_array(buffer: bytes) -> np.ndarray:
 
     Strip the pads, and return a 16-bit ndarray
     """
-    # convert to a binary array
+    # convert to a binary array 8 at a time
     binary_data = np.unpackbits(np.frombuffer(buffer, dtype=np.uint8))
-    # reshape to be n x 12
+
+    # reshape to a n x 12
     pixel_cols = binary_data.reshape((-1, 12))
 
     # remove padding pixels (12 bit x n --> 10 bit x n)
     stripped = pixel_cols[:, 1:-1]
 
     # Cast to 16 bit ndarray
-    padded = np.pad(stripped, ((0, 0), (6, 0)), mode="constant", constant_values=0)
-    packed_16bit = np.packbits(padded, axis=1).view(np.uint16).byteswap()
-    # breakpoint()
+    # padded = np.pad(stripped, ((0, 0), (6, 0)), mode="constant", constant_values=0)
+    # packed_16bit = np.packbits(padded, axis=1).view(np.uint16).byteswap()
     # return packed_16bit.flatten()
 
-    stripped_8bit = stripped[:, :-2]
+    # cast to an 8 bit ndarray
+    stripped_8bit = stripped[:, :-2] # current
     packed_8bit =  np.packbits(stripped_8bit, axis=1).flatten()
+
     return packed_8bit
 
 

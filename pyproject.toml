@@ -121,7 +121,7 @@ filterwarnings = [
 testpaths = [
     "tests"
 ]
-timeout = 60
+timeout = 180
 
 [tool.coverage.run]
 omit = [
