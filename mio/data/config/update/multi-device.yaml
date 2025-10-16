@@ -1,0 +1,20 @@
+id: multi-device
+mio_model: mio.models.update.UpdateBatch
+devices:
+  - device_id: 1
+    updates:
+      LED: 5
+      GAIN: 1
+      ROI_X: 50
+      ROI_Y: 50
+      SUBSAMPLE: 0
+
+  - device_id: 2
+    updates:
+      LED: 10
+      GAIN: 1
+      ROI_X: 60
+      ROI_Y: 60
+      SUBSAMPLE: 0
+
+
