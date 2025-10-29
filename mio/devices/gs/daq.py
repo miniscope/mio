@@ -10,10 +10,10 @@ import numpy as np
 from mio import init_logger
 from mio.devices.gs.config import GSDevConfig
 from mio.devices.gs.header import GSBufferHeader, GSBufferHeaderFormat
-from mio.io import BufferedCSVWriter
 from mio.plots.headers import StreamPlotter
 from mio.stream_daq import StreamDaq
 from mio.types import ConfigSource
+from mio.io import BufferedCSVWriter, VideoWriter
 
 
 # testing here:
@@ -83,7 +83,7 @@ class GSStreamDaq(StreamDaq):
         image: np.ndarray,
         header_list: list[GSBufferHeaderFormat],
         show_video: bool,
-        writer: Optional[cv2.VideoWriter],
+        writer: Optional[VideoWriter],
         show_metadata: bool,
         metadata: Optional[Path] = None,
     ) -> None:
@@ -123,6 +123,6 @@ class GSStreamDaq(StreamDaq):
         if writer:
             try:
                 picture = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)  # If your image is grayscale
-                writer.write(picture)
+                writer.write_frame(picture)
             except cv2.error as e:
                 self.logger.exception(f"Exception writing frame: {e}")
