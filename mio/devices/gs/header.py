@@ -28,8 +28,8 @@ def buffer_to_array(buffer: bytes) -> np.ndarray:
     """
     # convert to a binary array 8 at a time
     binary_data = np.unpackbits(np.frombuffer(buffer, dtype=np.uint8))
-
     # rehape to a n x 12
+
     pixel_cols = binary_data.reshape((-1, 12))
 
     # remove padding pixels (12 bit x n --> 10 bit x n)
