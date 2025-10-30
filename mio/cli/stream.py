@@ -72,6 +72,18 @@ def _capture_options(fn: Callable) -> Callable:
         "(apply postprocessing separately).",
         type=ConfigIDOrPath(),
     )(fn)
+    fn = click.option(
+        "--ber",
+        is_flag=True,
+        default=False,
+        help="Run BER measurement mode. No video/metadata output.",
+    )(fn)
+    fn = click.option(
+        "--ber-n-buffers",
+        type=int,
+        default=None,
+        help="Override number of buffers to consume during BER measurement mode",
+    )(fn)
     return fn
 
 
@@ -86,6 +98,8 @@ def capture(
     no_display: Optional[bool],
     binary_export: Optional[bool],
     metadata_display: Optional[bool],
+    ber: Optional[bool],
+    ber_n_buffers: Optional[int],
     **kwargs: dict,
 ) -> None:
     """
@@ -94,21 +108,25 @@ def capture(
     daq_inst = StreamDaq(device_config=device_config)
     okwargs = dict(okwarg)
 
-    if output:
-        unique_stem_path = get_unique_stempath(Path(output))
+    unique_stem_path = get_unique_stempath(Path(output)) if output else None
+    if output and not ber:
         video_output = unique_stem_path.with_suffix(".avi")
         metadata_output = unique_stem_path.with_suffix(".csv")
-
-        binary_output = unique_stem_path.with_suffix(".bin") if binary_export else None
     else:
         video_output = None
         metadata_output = None
-        binary_output = None
+    # Allow binary export even in BER mode
+    binary_output = unique_stem_path.with_suffix(".bin") if output and binary_export else None
 
-    if freq_mask_config:
+    if freq_mask_config and not ber:
         freq_mask_config = FreqencyMaskingConfig.from_any(freq_mask_config)
     else:
         freq_mask_config = None
+
+    # If overriding BER buffer count via CLI, set it on the runtime
+    if ber and ber_n_buffers is not None:
+        # mutate the instance runtime before capture
+        daq_inst.config.runtime.ber_test_n_buffers = int(ber_n_buffers)
 
     daq_inst.capture(
         source="fpga",
@@ -116,9 +134,10 @@ def capture(
         video_kwargs=okwargs,
         metadata=metadata_output,
         binary=binary_output,
-        show_video=not no_display,
-        show_metadata=metadata_display,
+        show_video=(not no_display) and (not ber),
+        show_metadata=metadata_display and (not ber),
         freq_mask_config=freq_mask_config,
+        ber=bool(ber),
     )
 
 

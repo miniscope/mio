@@ -325,6 +325,67 @@ class StreamDaq:
 
         return header_data, payload
 
+    def prbs15_ber(
+        self, serial_buffer_queue: multiprocessing.Queue, n_buffers: int = 100
+    ) -> dict[str, float | int]:
+        """
+        Consume up to n_buffers from serial_buffer_queue, compare payload to PRBS-15
+        (seed=1, restarted each buffer), and return {'buffers','bits','errors','ber'}.
+        """
+        def prbs15_bytes(n: int) -> bytes:
+            # PRBS-15: x^15 + x^14 + 1, pack bits MSB-first into bytes
+            s = 1  # treat 0 as 1
+            out = bytearray(n)
+            for i in range(n):
+                b = 0
+                for _ in range(8):
+                    newbit = ((s >> 14) ^ (s >> 13)) & 1
+                    s = ((s << 1) | newbit) & 0x7FFF
+                    if s == 0:
+                        s = 1
+                    b = (b << 1) | (s & 1)
+                out[i] = b
+            return bytes(out)
+
+        total_bits = 0
+        total_errors = 0
+        got = 0
+
+        for buf in exact_iter(serial_buffer_queue.get, None):
+            # Parse header + payload (payload is np.uint8 array)
+            header_data, payload_u8 = self._parse_header(buf)
+            if payload_u8.size == 0:
+                continue
+
+            # Trim/pad to expected buffer size for this buffer index, ignoring dummy/extra data
+            try:
+                payload_u8 = self._trim(
+                    payload_u8,
+                    self.buffer_npix,
+                    header_data,
+                    self.logger,
+                )
+            except IndexError:
+                # If buffer index is invalid relative to expected, skip this buffer
+                continue
+
+            # Expected PRBS-15 for exactly this payload length (reset seed per buffer)
+            exp = np.frombuffer(prbs15_bytes(int(payload_u8.size)), dtype=np.uint8)
+
+            # XOR and count differing bits
+            diff = np.bitwise_xor(payload_u8, exp)
+            errors = int(np.unpackbits(diff).sum())
+            bits = int(payload_u8.size * 8)
+
+            total_errors += errors
+            total_bits += bits
+            got += 1
+            if got >= n_buffers:
+                break
+
+        ber = (total_errors / total_bits) if total_bits else float("nan")
+        return {"buffers": got, "bits": total_bits, "errors": total_errors, "ber": ber}
+
     def _buffer_to_frame(
         self,
         serial_buffer_queue: multiprocessing.Queue,
@@ -542,6 +603,7 @@ class StreamDaq:
         show_video: Optional[bool] = True,
         show_metadata: Optional[bool] = False,
         freq_mask_config: Optional[FreqencyMaskingConfig] = None,
+        ber: bool = False,
     ) -> None:
         """
         Entry point to start frame capture.
@@ -566,6 +628,11 @@ class StreamDaq:
             If True, display the video in real-time.
         show_metadata: bool, optional
             If True, show metadata information during capture.
+        freq_mask_config: FreqencyMaskingConfig, optional
+            Configuration for frequency masking processing.
+            If present, frequency masking is applied to each frame before display.
+        ber: bool, optional
+            If True, perform a BER test on the incoming data stream.
 
         Raises
         ------
@@ -618,27 +685,29 @@ class StreamDaq:
                 path=video,
                 fps=self.config.fs,
             )
-
-        p_buffer_to_frame = multiprocessing.Process(
-            target=self._buffer_to_frame,
-            args=(
-                serial_buffer_queue,
-                frame_buffer_queue,
-            ),
-            name="_buffer_to_frame",
-        )
-        p_format_frame = multiprocessing.Process(
-            target=self._format_frame,
-            args=(
-                frame_buffer_queue,
-                imagearray,
-            ),
-            name="_format_frame",
-        )
+        
+        if not ber:
+            p_buffer_to_frame = multiprocessing.Process(
+                target=self._buffer_to_frame,
+                args=(
+                    serial_buffer_queue,
+                    frame_buffer_queue,
+                ),
+                name="_buffer_to_frame",
+            )
+            p_format_frame = multiprocessing.Process(
+                target=self._format_frame,
+                args=(
+                    frame_buffer_queue,
+                    imagearray,
+                ),
+                name="_format_frame",
+            )
 
         p_recv.start()
-        p_buffer_to_frame.start()
-        p_format_frame.start()
+        if not ber:
+            p_buffer_to_frame.start()
+            p_format_frame.start()
 
         if show_metadata:
             self._header_plotter = StreamPlotter(
@@ -654,6 +723,19 @@ class StreamDaq:
             )
 
         try:
+            if ber:
+                # Run BER in the main process to capture and log results
+                result = self.prbs15_ber(
+                    serial_buffer_queue, self.config.runtime.ber_test_n_buffers
+                )
+                self.logger.info(
+                    "BER test complete: buffers=%d bits=%d errors=%d ber=%.6g",
+                    result["buffers"],
+                    result["bits"],
+                    result["errors"],
+                    result["ber"],
+                )
+                return
             for image, header_list in exact_iter(imagearray.get, None):
                 self._handle_frame(
                     image,
@@ -699,10 +781,15 @@ class StreamDaq:
             # Join child processes with a timeout
             # Should never happen except during a force quit, as we wait for all
             # queues to drain, and if they don't do so on their own, it's a bug.
-            for p in [p_recv, p_buffer_to_frame, p_format_frame]:
+            procs = [p_recv]
+            if not ber:
+                procs.extend([p_buffer_to_frame, p_format_frame])
+            for p in procs:
                 p.join(timeout=5)
                 if p.is_alive():
-                    self.logger.warning(f"Termination timeout: force terminating process {p.name}.")
+                    self.logger.warning(
+                        f"Termination timeout: force terminating process {p.name}."
+                    )
                     p.terminate()
                     p.join()
             self.logger.info("Child processes joined. End capture.")

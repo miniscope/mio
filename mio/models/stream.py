@@ -280,6 +280,10 @@ class StreamDevRuntime(MiniscopeConfig):
         "Note that this does *not* control whether header metadata is written during capture, "
         "for enabling/disabling, use the ``metadata`` kwarg in the capture method.",
     )
+    ber_test_n_buffers: int = Field(
+        100,
+        description="Number of buffers to consume when running BER test mode.",
+    )
 
 
 class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
