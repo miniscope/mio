@@ -23,7 +23,7 @@ from mio.models.update import UpdateBatch
     required=False,
     default=0,
     type=int,
-    help="[EXPERIMENTAL FEATURE] ID of the device to update. 0 (default) will update all devices.",
+    help="ID of the device to update. 0 (default) will update all devices.",
 )
 @click.option(
     "-k",
@@ -44,10 +44,7 @@ from mio.models.update import UpdateBatch
     "--batch",
     required=False,
     type=ConfigIDOrPath(),
-    help=(
-        "[EXPERIMENTAL FEATURE] Batch config (ID or YAML path). "
-        "Provide a list of device entries."
-    ),
+    help=("Batch config (ID or YAML path). " "Provide a list of device entries."),
 )
 def update(port: str, key: str, value: int, device_id: int, batch: str) -> None:
     """
