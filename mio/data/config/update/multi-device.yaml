@@ -1,0 +1,18 @@
+id: device-command-example
+mio_model: mio.models.update.UpdateBatch
+mio_version: 0.8.2.dev13+g338e847.d20251030
+devices:
+- device_id: 5
+  updates:
+    LED: 5
+    GAIN: 4
+    ROI_X: 20
+    ROI_Y: 30
+    SUBSAMPLE: 0
+- device_id: 2
+  updates:
+    LED: 10
+    GAIN: 1
+    ROI_X: 60
+    ROI_Y: 60
+    SUBSAMPLE: 0
