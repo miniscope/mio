@@ -464,7 +464,6 @@ class StreamDaq:
         frame_index_counter = 0
         try:
             for frame_data, header_list in exact_iter(frame_buffer_queue.get, None):
-
                 if not frame_data or len(frame_data) == 0:
                     try:
                         imagearray.put(

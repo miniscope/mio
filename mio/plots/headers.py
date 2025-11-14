@@ -152,7 +152,6 @@ class StreamPlotter:
     def _init_plot(
         self,
     ) -> tuple["plt.Figure", dict[str, "plt.Axes"], dict[str, "plt.Line2D"]]:
-
         # initialize matplotlib
         plt.ion()
         fig: plt.Figure

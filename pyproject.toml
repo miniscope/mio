@@ -25,6 +25,7 @@ dependencies = [
     'typing-extensions>=4.10.0; python_version<"3.13"',
     "scikit-video>=1.1.11",
     "scipy>=1.13.0",
+    "numpydantic>=1.6.11",
 ]
 
 readme = "README.md"

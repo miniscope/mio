@@ -38,7 +38,6 @@ def global_(ctx: click.Context) -> None:
     When run without arguments, displays contents of current global config
     """
     if ctx.invoked_subcommand is None:
-
         with open(_config._global_config_path) as f:
             config_str = f.read()
 

@@ -20,6 +20,30 @@ from mio.models.sdcard import SDBufferHeader, SDConfig, SDLayout
 from mio.types import ConfigSource
 
 
+def ensure_gray_uint8(frame: np.ndarray, where: str) -> np.ndarray:
+    """Normalize a frame to 2D uint8 grayscale and validate.
+
+    Args:
+        frame: Input frame array
+        where: Context string for error messages
+
+    Returns:
+        np.ndarray: 2D uint8 grayscale frame
+    """
+    if frame is None:
+        raise ValueError(f"{where} received None frame")
+    if isinstance(frame, np.ndarray) and frame.ndim == 3:
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    if isinstance(frame, np.ndarray) and frame.dtype != np.uint8:
+        frame = frame.astype(np.uint8, copy=False)
+    if not isinstance(frame, np.ndarray) or frame.ndim != 2 or frame.dtype != np.uint8:
+        raise ValueError(
+            f"{where} expects 2D uint8 grayscale; got shape={getattr(frame, 'shape', None)} "
+            f"dtype={getattr(frame, 'dtype', None)}"
+        )
+    return frame
+
+
 class VideoWriter:
     """
     Write data to a video file using FFMpegWriter.
@@ -41,6 +65,7 @@ class VideoWriter:
         """
         Initialize the VideoWriter object.
         """
+        self.logger = init_logger("VideoWriter")
         if output_dict is None:
             output_dict = {}
         output_dict = {**self.DEFAULT_OUTPUT, **output_dict}
@@ -59,6 +84,9 @@ class VideoWriter:
         Returns:
         bool: True if the frame write was attempted and did not raise anything.
         """
+        # Enforce grayscale uint8 (with normalization)
+        frame = ensure_gray_uint8(frame, "VideoWriter")
+
         self.writer.writeFrame(frame)
         return True
 
@@ -66,7 +94,16 @@ class VideoWriter:
         """
         Close the video file.
         """
-        self.writer.close()
+        try:
+            # FFmpegWriter may not start (_proc is None) if no frames were written
+            if hasattr(self.writer, "_proc") and getattr(self.writer, "_proc", None) is not None:
+                self.writer.close()
+            else:
+                self.logger.warning(
+                    "VideoWriter closed without any frames written; nothing to finalize."
+                )
+        except AttributeError:
+            self.logger.warning("VideoWriter backend not initialized; nothing to close.")
 
 
 class VideoReader:
@@ -114,6 +151,9 @@ class VideoReader:
         """
         if self._cap is None:
             self._cap = cv2.VideoCapture(str(self.video_path))
+            # Prefer native output when available (avoid implicit BGR conversion)
+            with contextlib.suppress(Exception):
+                self._cap.set(cv2.CAP_PROP_CONVERT_RGB, False)
         return self._cap
 
     def read_frames(self) -> Iterator[Tuple[int, np.ndarray]]:
@@ -128,10 +168,23 @@ class VideoReader:
             if not ret:
                 break
 
+            frame = ensure_gray_uint8(frame, "VideoReader")
+
             index = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             self.logger.debug(f"Reading frame {index}")
 
             yield index, frame
+
+    def read_frame(self, index: int) -> np.ndarray:
+        """
+        Read a frame from the video file.
+        """
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, index)
+        ret, frame = self.cap.read()
+        if not ret or frame is None:
+            return frame
+        frame = ensure_gray_uint8(frame, "VideoReader")
+        return frame
 
     def release(self) -> None:
         """
