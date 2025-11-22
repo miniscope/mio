@@ -236,9 +236,8 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         Directories to search for config files, in order of priority
         such that earlier sources are preferred over later sources.
         """
-        from const import CONFIG_DIR
-
         from mio import Config
+        from mio.const import CONFIG_DIR
 
         return [Config().config_dir, CONFIG_DIR]
 
@@ -289,8 +288,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
             else:
                 msg = f"Header keys were present, but either not at the start of {str(file_path)} "
                 "or in out of order. Updating file (preserving backup)..."
-            from const import CONFIG_DIR
-
+            from mio.const import CONFIG_DIR
             from mio.logging import init_logger
 
             logger = init_logger(cls.__name__)
