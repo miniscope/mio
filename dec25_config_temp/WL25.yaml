@@ -1,0 +1,12 @@
+id: WL21
+mio_model: mio.models.update.UpdateBatch
+mio_version: 0.6.1.dev99+gb8ff02f
+devices:
+- device_id: 4
+  updates:
+    LED: 30
+    GAIN: 2
+    ROI_X: 90
+    ROI_Y: 45
+    SUBSAMPLE: 0
+

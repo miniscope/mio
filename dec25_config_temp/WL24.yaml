@@ -1,0 +1,11 @@
+id: WL24
+mio_model: mio.models.update.UpdateBatch
+mio_version: 0.8.2.dev13+g338e847.d20251030
+devices:
+- device_id: 4
+  updates:
+    LED: 20
+    GAIN: 2
+    ROI_X: 60
+    ROI_Y: 51
+    SUBSAMPLE: 0
