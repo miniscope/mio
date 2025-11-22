@@ -2,18 +2,21 @@
 CLI commands for configuration
 """
 
+import ast
 import re
 from pathlib import Path
 
 import click
 import yaml
+from pydantic import TypeAdapter, ValidationError
 from rich.console import Console
 from rich.table import Table
 
-from mio import CONFIG_DIR
+from mio.const import CONFIG_DIR
 from mio.models import config as _config
 from mio.models.config import set_user_dir
 from mio.models.mixins import ConfigYAMLMixin
+from mio.types import ConfigID
 
 
 @click.group(invoke_without_command=True)
@@ -96,7 +99,7 @@ def user(ctx: click.Context) -> None:
     default=False,
     help="Show the config that would be written and where it would go without doing anything",
 )
-def create(
+def user_create(
     user_dir: Path = None, force: bool = False, clean: bool = False, dry_run: bool = False
 ) -> None:
     """
@@ -189,3 +192,121 @@ def _list(verbose: int) -> None:
 
     console = Console()
     console.print(table)
+
+
+@config.command("create")
+@click.argument(
+    "model",
+    required=False,
+)
+@click.argument(
+    "config_id",
+    metavar="id",
+    required=False,
+)
+@click.option("-f", "--force", help="Overwrite existing config file", is_flag=True)
+@click.option(
+    "-v", "--value", help="Pass key/value pairs to the model like key=value", multiple=True
+)
+@click.option(
+    "--output",
+    required=False,
+    default=None,
+    type=click.Path(),
+    help="Provide an explicit output path for the yaml config",
+)
+@click.option("--list", "show_list", is_flag=True, help="List available models")
+def create(
+    model: str | None = None,
+    config_id: ConfigID | None = None,
+    force: bool = False,
+    value: tuple = (),
+    output: Path | None = None,
+    show_list: bool = False,
+) -> None:
+    """
+    Create a new default config for a model in the user config directory,
+    given the name of a model and the name of a config id.
+
+    ```
+    mio config create MyModel some-config-id
+    ```
+
+    Use `--list` to see the available model names.
+
+    Pass required key/value pairs with `--value key=value`, e.g.
+
+    mio config create MyModel some-config --value device=abc
+
+    By default, created configs are saved to the user config directory with an escaped file name
+    based on the passed ``id`` ,
+    but an explicit output path can be passed.
+    Note that creating configs in locations
+    that are not in the user config directory will prevent mio from finding them.
+    (see ``mio config user`` )
+    """
+    if show_list:
+        table = Table(title="mio config models")
+        table.add_column("name", style="yellow", no_wrap=True)
+        table.add_column("module path")
+        for model_name, model in ConfigYAMLMixin.config_models().items():
+            table.add_row(model_name, f"{model.__module__}.{model.__name__}")
+
+        console = Console()
+        console.print(table)
+        return
+
+    assert model is not None, "Model name must be provided, use --list to see available models"
+    assert config_id is not None, "config id must be provided"
+    try:
+        config_id = TypeAdapter(ConfigID).validate_python(config_id)
+    except ValidationError as err:
+        raise ValueError("Config ID must follow config id pattern") from err
+
+    output = Path(output) if output else _config.Config().config_dir / (config_id + ".yaml")
+
+    if not force and output.exists():
+        click.echo(f"{output} already exists. use --force to overwrite")
+        return
+
+    models = ConfigYAMLMixin.config_models()
+    if model not in models:
+        raise ValueError(f"model {model} not found. available models: {models.keys()}")
+
+    try:
+        kwargs = _parse_kwargs(value)
+    except Exception as e:
+        raise ValueError(
+            "Error parsing value kwargs, must be specified like --value key=value"
+        ) from e
+
+    instance = models[model](id=config_id, **kwargs)
+    yaml_str = instance.to_yaml(output)
+    click.echo(f"Wrote {model} config to {output}\n{yaml_str}")
+
+
+@config.command("path")
+@click.argument("config_id", metavar="id")
+def config_path(config_id: str) -> None:
+    """
+    Print the path for a config
+
+    e.g. to open a config for editing
+
+    ```
+    open $(mio config path my-config)
+    ```
+    """
+    for cfg in ConfigYAMLMixin.iter_configs():
+        if cfg["id"] == config_id:
+            click.echo(cfg["path"])
+            return
+    raise KeyError(f"No config {config_id} found")
+
+
+def _parse_kwargs(value: tuple[str]) -> dict:
+    kwargs = {}
+    for v in value:
+        key, val = v.split("=")
+        kwargs[key] = ast.literal_eval(val)
+    return kwargs
