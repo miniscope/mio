@@ -15,7 +15,7 @@ from typing import Generator
 import warnings
 import cv2
 
-from mio import BASE_DIR
+from mio.const import BASE_DIR
 from mio.stream_daq import StreamDevConfig, StreamDaq, iter_buffers
 from mio.models.process import FreqencyMaskingConfig
 from mio.utils import hash_video, hash_file
@@ -60,11 +60,18 @@ def default_streamdaq(set_okdev_input, request) -> StreamDaq:
                 "22fa7249faffff45f5f5aa12d36399da9e8be2f7c578ca2a3c7dccbaddc9063e",
             ],
             False,
-        )
+        ),
     ],
 )
 def test_video_output(
-    device_config, filter_config, data, video_hash_list, tmp_path, show_video, set_okdev_input, buffer_size
+    device_config,
+    filter_config,
+    data,
+    video_hash_list,
+    tmp_path,
+    show_video,
+    set_okdev_input,
+    buffer_size,
 ):
     output_video = tmp_path / "output.avi"
     output_csv = tmp_path / "output.csv"
@@ -83,7 +90,13 @@ def test_video_output(
     set_okdev_input(data_file)
 
     daq_inst = StreamDaq(device_config=daqConfig)
-    daq_inst.capture(source="fpga", video=output_video, metadata=output_csv, show_video=show_video, freq_mask_config=processor_for_visualization)
+    daq_inst.capture(
+        source="fpga",
+        video=output_video,
+        metadata=output_csv,
+        show_video=show_video,
+        freq_mask_config=processor_for_visualization,
+    )
 
     assert output_video.exists()
     assert output_csv.exists()
@@ -93,17 +106,19 @@ def test_video_output(
 
     # Regression test: metadata indices must align with AVI frames
     df = pd.read_csv(output_csv)
-    
+
     cap = cv2.VideoCapture(str(output_video))
     avi_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
 
-    valid_indices = df[df['reconstructed_frame_index'] != -1]['reconstructed_frame_index']
+    valid_indices = df[df["reconstructed_frame_index"] != -1]["reconstructed_frame_index"]
     expected_max_index = avi_frame_count - 1
     actual_max_index = int(valid_indices.max()) if len(valid_indices) > 0 else -1
 
     # Max index should match AVI frame count
-    assert actual_max_index == expected_max_index, f"Max index {actual_max_index} != AVI max {expected_max_index}"
+    assert (
+        actual_max_index == expected_max_index
+    ), f"Max index {actual_max_index} != AVI max {expected_max_index}"
 
 
 @pytest.mark.parametrize(
@@ -153,11 +168,14 @@ def test_csv_output(tmp_path, default_streamdaq, write_metadata, caplog):
 
         # we should have the same columns in the same order as our header format plus reconstruction metadata
         col_names = df.columns.to_list()
-        expected = default_streamdaq.header_fmt.model_dump(exclude_none=True, exclude=set(default_streamdaq.header_fmt.HEADER_FIELDS))
+        expected = default_streamdaq.header_fmt.model_dump(
+            exclude_none=True, exclude=set(default_streamdaq.header_fmt.HEADER_FIELDS)
+        )
         expected = [h[0] for h in sorted(expected.items(), key=lambda x: x[1])]
-        
+
         # Add runtime_metadata fields
         from mio.models.stream import RuntimeMetadata
+
         runtime_fields = list(RuntimeMetadata.model_fields.keys())
         expected.extend(runtime_fields)
         assert col_names == expected
@@ -169,19 +187,22 @@ def test_csv_output(tmp_path, default_streamdaq, write_metadata, caplog):
         # ensure the buffer_recv_index increments from 0 to the number of buffers in the data file as an array
         buffer_recv_index = df.buffer_recv_index.to_numpy()
         assert np.all(buffer_recv_index == np.arange(0, len(buffer_recv_index)))
-        
+
         # ensure the reconstructed frame index array that excludes -1 monotonically increases from 0
         reconstructed_frame_index = df.reconstructed_frame_index.to_numpy()
         reconstructed_frame_index = reconstructed_frame_index[reconstructed_frame_index != -1]
         assert np.all(np.diff(reconstructed_frame_index) >= 0)
-        
+
         # ensure that reconstructed frame index contains all values from 0 to the number of frames in the data file
         unique_reconstructed_frame_index = np.unique(reconstructed_frame_index)
-        assert np.all(unique_reconstructed_frame_index == np.arange(0, len(unique_reconstructed_frame_index)))
-    
+        assert np.all(
+            unique_reconstructed_frame_index == np.arange(0, len(unique_reconstructed_frame_index))
+        )
+
     else:
         default_streamdaq.capture(source="fpga", metadata=None, show_video=False)
         assert not output_csv.exists()
+
 
 def test_processing_speed(tmp_path, default_streamdaq):
     """
@@ -197,20 +218,23 @@ def test_processing_speed(tmp_path, default_streamdaq):
 
     df = pd.read_csv(output_csv)
 
-    unix_time_first = df.iloc[0]['buffer_recv_unix_time']
-    unix_time_last = df.iloc[-1]['buffer_recv_unix_time']
+    unix_time_first = df.iloc[0]["buffer_recv_unix_time"]
+    unix_time_last = df.iloc[-1]["buffer_recv_unix_time"]
     time_taken = unix_time_last - unix_time_first
 
-    frame_index_first = df.iloc[0]['frame_num']
-    frame_index_last = df.iloc[-1]['frame_num']
+    frame_index_first = df.iloc[0]["frame_num"]
+    frame_index_last = df.iloc[-1]["frame_num"]
     num_frames = frame_index_last - frame_index_first
 
     processing_fps = num_frames / time_taken
 
     if processing_fps < warning_fps:
-        warnings.warn(f"Processing speed is {processing_fps} FPS, which is slower than the required {warning_fps} FPS")
+        warnings.warn(
+            f"Processing speed is {processing_fps} FPS, which is slower than the required {warning_fps} FPS"
+        )
 
     assert processing_fps > test_fail_fps
+
 
 def test_csv_no_duplicates(tmp_path, set_okdev_input):
     """
@@ -234,7 +258,9 @@ def test_csv_no_duplicates(tmp_path, set_okdev_input):
     assert daq_inst.buffer_npix == bad_buffer_npix
     df = pd.read_csv(output_csv)
     vals, counts = np.unique(df.buffer_count, return_counts=True)
-    assert all([c == 1 for c in counts]), "Duplicated buffer indexes found, rows being written twice"
+    assert all(
+        [c == 1 for c in counts]
+    ), "Duplicated buffer indexes found, rows being written twice"
 
 
 # This is a helper function for test_continuous_and_termination() that is currently skipped
@@ -352,7 +378,7 @@ def test_writer_returns_match_avi_frame_count(tmp_path: Path, set_okdev_input, m
         if ok:
             call_count["ok"] += 1
         else:
-            call_count["failed"] += 1 # This shouldn't happen but just in case
+            call_count["failed"] += 1  # This shouldn't happen but just in case
         return ok
 
     monkeypatch.setattr(VideoWriter, "write_frame", wrapped, raising=True)
@@ -376,6 +402,6 @@ def test_writer_returns_match_avi_frame_count(tmp_path: Path, set_okdev_input, m
     assert call_count["failed"] == 0, f"write_frame False returns ({call_count['failed']})"
 
     # Successes should equal the frames counted by AVI?
-    assert call_count["ok"] == avi_frames, (
-        f"write_frame True returns ({call_count['ok']}) != AVI frames ({avi_frames})"
-    )
+    assert (
+        call_count["ok"] == avi_frames
+    ), f"write_frame True returns ({call_count['ok']}) != AVI frames ({avi_frames})"

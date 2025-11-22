@@ -9,7 +9,7 @@ from typing import Literal, Optional, Union
 
 from pydantic import Field, computed_field, field_validator
 
-from mio import DEVICE_DIR
+from mio.const import DEVICE_DIR
 from mio.models import MiniscopeConfig
 from mio.models.buffer import BufferHeader, BufferHeaderFormat
 from mio.models.mixins import ConfigYAMLMixin

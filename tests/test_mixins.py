@@ -5,7 +5,7 @@ import pytest
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from mio import CONFIG_DIR
+from mio.const import CONFIG_DIR
 from mio.models.mixins import yaml_peek, ConfigYAMLMixin
 from tests.fixtures import tmp_config_source, yaml_config
 
