@@ -105,7 +105,7 @@ class RuntimeMetadata(MiniscopeConfig):
 
 class StreamBufferHeaderFormat(BufferHeaderFormat):
     """
-    Refinements of :class:`.BufferHeaderFormat` for
+    Refinements of :class:`~mio.models.buffer.BufferHeaderFormat` for
     :class:`~mio.stream_daq.StreamDaq`
 
     Parameters
@@ -198,7 +198,7 @@ class StreamBufferHeader(BufferHeader):
 
         Args:
             vals (list, :class:`numpy.ndarray` ): Indexable values to cast to the header model
-            format (:class:`.BufferHeaderFormat` ): Format used to index values
+            format (:class:`~mio.models.buffer.BufferHeaderFormat` ): Format used to index values
             construct (bool): If ``True`` , use :meth:`~pydantic.BaseModel.model_construct`
                 to create the model instance (ie. without validation, but faster).
                 Default: ``False``
