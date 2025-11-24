@@ -3,7 +3,10 @@ CLI commands for configuration
 """
 
 import ast
+import os
+import platform
 import re
+import subprocess
 from pathlib import Path
 
 import click
@@ -300,6 +303,25 @@ def config_path(config_id: str) -> None:
     for cfg in ConfigYAMLMixin.iter_configs():
         if cfg["id"] == config_id:
             click.echo(cfg["path"])
+            return
+    raise KeyError(f"No config {config_id} found")
+
+
+@config.command("open")
+@click.argument("config_id", metavar="id")
+def config_open(config_id: str) -> None:
+    """
+    Open a config with the default text editor.
+
+    To open a config with a specific editor, use `path`
+    (see `mio config path --help`)
+    """
+    for cfg in ConfigYAMLMixin.iter_configs():
+        if cfg["id"] == config_id:
+            if platform.system() == "Windows":
+                os.startfile(cfg["path"])
+            else:
+                subprocess.call(["open", cfg["path"]])
             return
     raise KeyError(f"No config {config_id} found")
 
