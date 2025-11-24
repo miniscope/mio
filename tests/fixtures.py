@@ -63,6 +63,21 @@ def tmp_config_source(tmp_path, monkeypatch) -> Path:
 
 
 @pytest.fixture()
+def tmp_config_dir(tmp_path, monkeypatch, set_env) -> Path:
+    """
+    Monkeypatch the `config_dir` parameter to a temporary path that doesn't include any of the
+    builtin configs
+    """
+
+    def _config_sources(cls: type[ConfigYAMLMixin]) -> list[Path]:
+        return [tmp_path]
+
+    set_env({"config_dir": tmp_path})
+    monkeypatch.setattr(ConfigYAMLMixin, "config_sources", classmethod(_config_sources))
+    return tmp_path
+
+
+@pytest.fixture()
 def yaml_config(
     tmp_config_source, tmp_path, monkeypatch
 ) -> Callable[[str, dict, Optional[Path]], Path]:

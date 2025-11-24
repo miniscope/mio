@@ -330,5 +330,9 @@ def _parse_kwargs(value: tuple[str]) -> dict:
     kwargs = {}
     for v in value:
         key, val = v.split("=")
-        kwargs[key] = ast.literal_eval(val)
+        try:
+            kwargs[key] = ast.literal_eval(val)
+        except ValueError:
+            # try it as a bare string, validation errors should be more illuminating
+            kwargs[key] = val
     return kwargs
