@@ -8,6 +8,7 @@ import platform
 import re
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 import click
 import yaml
@@ -220,11 +221,11 @@ def _list(verbose: int) -> None:
 )
 @click.option("--list", "show_list", is_flag=True, help="List available models")
 def create(
-    model: str | None = None,
-    config_id: ConfigID | None = None,
+    model: Optional[str] = None,
+    config_id: Optional[ConfigID] = None,
     force: bool = False,
     value: tuple = (),
-    output: Path | None = None,
+    output: Optional[Path] = None,
     show_list: bool = False,
 ) -> None:
     """
