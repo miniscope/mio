@@ -15,7 +15,6 @@ class USBCameraRecordingConfig(MiniscopeConfig, ConfigYAMLMixin):
     Configuration for recording video from USB camera.
     """
 
-    camera_index: int = Field(default=0, description="Index of the camera to use.")
     output_dir: str = Field(
         default="recordings", description="Directory to save the recorded video."
     )

@@ -12,14 +12,14 @@ from typing import Optional, Union
 import cv2
 
 from mio import init_logger
+from mio.devices.usbcam import convert_frame_for_codec, determine_pix_fmt, open_camera
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.models.usbcam import USBCameraRecordingConfig
 from mio.types import ConfigSource
 from mio.utils import exact_iter
 
-# Constants
-FPS_LOG_INTERVAL_SECONDS = 5.0
-FRAME_QUEUE_MAXSIZE = 30
+FPS_LOG_INTERVAL_SECONDS = 10.0
+FRAME_QUEUE_MAXSIZE = 100
 CSV_BUFFER_SIZE = 100
 QUEUE_TIMEOUT_SECONDS = 1.0
 
@@ -35,15 +35,18 @@ class BehaviorCam:
     def __init__(
         self,
         recording_config: Union[USBCameraRecordingConfig, ConfigSource],
+        camera_index: int,
     ) -> None:
         """
         Initialize behavior camera capture.
 
         Args:
             recording_config: Configuration object, config ID, or path to config file
+            camera_index: Index of the camera to use
         """
         self.logger = init_logger("behaviorCam")
         self.config = USBCameraRecordingConfig.from_any(recording_config)
+        self.camera_index = camera_index
         self.terminate: multiprocessing.Event = multiprocessing.Event()
 
     def _camera_recv(
@@ -60,14 +63,16 @@ class BehaviorCam:
         """
         locallogs = init_logger("behaviorCam.camera_recv")
 
-        cap = cv2.VideoCapture(self.config.camera_index)
-        if not cap.isOpened():
+        try:
+            cap = open_camera(
+                camera_index=self.camera_index,
+                frame_width=self.config.frame_width,
+                frame_height=self.config.frame_height,
+                fps=self.config.fps,
+            )
+        except RuntimeError:
             frame_queue.put(None)
-            raise RuntimeError(f"Failed to open camera at index {self.config.camera_index}")
-
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.frame_width)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.frame_height)
-        cap.set(cv2.CAP_PROP_FPS, self.config.fps)
+            raise
 
         locallogs.info("Camera opened, starting frame capture")
 
@@ -125,14 +130,7 @@ class BehaviorCam:
         actual_height = self.config.frame_height
 
         # Determine pixel format from config or auto-detect based on codec
-        if self.config.pix_fmt is not None:
-            pix_fmt = self.config.pix_fmt
-        elif self.config.codec.lower() == "mjpeg":
-            pix_fmt = "yuvj420p"  # YUV color format for MJPEG
-        elif self.config.codec.lower() == "rawvideo":
-            pix_fmt = "gray"  # Grayscale for rawvideo
-        else:
-            pix_fmt = "yuv420p"  # Default YUV format for other codecs
+        pix_fmt = determine_pix_fmt(self.config.codec, self.config.pix_fmt)
 
         writer = VideoWriter(
             path=video_path,
@@ -170,10 +168,17 @@ class BehaviorCam:
         start_time = time.time()
         last_fps_log_time = start_time
         frames_in_window = 0
+        writer_used = False
 
         try:
             for frame_data in exact_iter(frame_queue.get, None):
                 if frame_data is None:
+                    # Early termination signal from camera process (camera failed)
+                    if frames_written == 0:
+                        raise RuntimeError(
+                            "Camera failed to initialize or read frames. "
+                            "Please check camera connection and settings."
+                        )
                     break
 
                 frame, unix_time = frame_data
@@ -187,22 +192,11 @@ class BehaviorCam:
                     first_frame = False
 
                 # Convert frame based on codec
-                if self.config.codec.lower() == "rawvideo":
-                    # Grayscale for rawvideo
-                    if len(frame.shape) == 3:
-                        frame_out = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    else:
-                        frame_out = frame
-                else:
-                    # RGB for color codecs (mjpeg, libx264, etc.)
-                    if len(frame.shape) == 3:
-                        frame_out = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    else:
-                        # If grayscale, convert to RGB
-                        frame_out = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+                frame_out = convert_frame_for_codec(frame, self.config.codec)
 
                 # Write frame to video
                 writer.write_frame(frame_out)
+                writer_used = True
 
                 # Write frame metadata to CSV
                 csv_writer.append(
@@ -252,8 +246,17 @@ class BehaviorCam:
                 p_camera.terminate()
                 p_camera.join()
 
-            # Close writers
-            writer.close()
+            # Close writers (only if used)
+            if writer_used:
+                try:
+                    writer.close()
+                except AttributeError as e:
+                    # FFmpegWriter may not have _proc if no frames were written
+                    self.logger.warning(f"Error closing video writer: {e}")
+            else:
+                # Remove empty video file if no frames were written
+                if video_path.exists():
+                    video_path.unlink()
             csv_writer.close()
 
             if show_video:

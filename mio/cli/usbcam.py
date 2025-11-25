@@ -8,7 +8,8 @@ import click
 
 from mio.behavior_cam import BehaviorCam
 from mio.cli.common import ConfigIDOrPath
-from mio.devices.usbcam import ELPUVCCamera
+from mio.devices.usbcam import format_camera_info
+from mio.devices.usbcam import list_cameras as list_available_cameras
 from mio.models.usbcam import USBCameraRecordingConfig
 
 
@@ -47,7 +48,23 @@ def record(config: str, output_dir: Optional[str]) -> None:
     if output_dir is not None:
         recording_config.output_dir = output_dir
 
-    behavior_cam = BehaviorCam(recording_config=recording_config)
+    # Get available cameras and always prompt for selection
+    cameras = list_available_cameras()
+    if not cameras:
+        raise click.ClickException("No cameras found. Please connect a camera and try again.")
+
+    click.echo("Available cameras:")
+    for idx, info in cameras.items():
+        click.echo(f"  {format_camera_info(idx, info)}")
+
+    selected_index = click.prompt(
+        "Select camera index",
+        type=click.Choice([str(idx) for idx in cameras], case_sensitive=False),
+        default=str(min(cameras.keys())),
+    )
+    camera_index = int(selected_index)
+
+    behavior_cam = BehaviorCam(recording_config=recording_config, camera_index=camera_index)
     try:
         behavior_cam.capture(output_dir=output_dir)
     except Exception as e:
@@ -58,11 +75,11 @@ def record(config: str, output_dir: Optional[str]) -> None:
 @usbcam.command()
 def list_cameras() -> None:
     """List available cameras"""
-    cameras = ELPUVCCamera.list_cameras()
+    cameras = list_available_cameras()
     if not cameras:
         click.echo("No cameras found")
         return
 
     click.echo("Available cameras:")
     for idx, info in cameras.items():
-        click.echo(f"  Index {idx}: {info['resolution']} @ {info['fps']} fps")
+        click.echo(f"  {format_camera_info(idx, info, prefix='Index ')}")
