@@ -43,3 +43,12 @@ class USBCameraRecordingConfig(MiniscopeConfig, ConfigYAMLMixin):
         default=None,
         description="USB product ID of the camera (for reference/documentation).",
     )
+    ntp_server: Optional[str] = Field(
+        default=None,
+        description="NTP server address for time synchronization check. "
+        "If specified, the system time will be verified against this server before capture.",
+    )
+    ntp_max_offset_seconds: float = Field(
+        default=0.01,
+        description="Maximum allowed time offset in seconds for NTP synchronization check (default: 0.01 = 10ms).",
+    )

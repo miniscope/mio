@@ -11,6 +11,7 @@ from mio.cli.common import ConfigIDOrPath
 from mio.devices.usbcam import format_camera_info
 from mio.devices.usbcam import list_cameras as list_available_cameras
 from mio.models.usbcam import USBCameraRecordingConfig
+from mio.ntp import prompt_ntp_sync
 
 
 @click.group()
@@ -49,6 +50,12 @@ def usbcam() -> None:
 def record(config: str, output_dir: Optional[str], index: Optional[int]) -> None:
     """Record video with Unix timestamp filename"""
     recording_config = USBCameraRecordingConfig.from_any(config)
+
+    # Check NTP sync if configured
+    if recording_config.ntp_server is not None:
+        prompt_ntp_sync(
+            recording_config.ntp_server, max_offset_seconds=recording_config.ntp_max_offset_seconds
+        )
 
     # Override output_dir if provided via CLI
     if output_dir is not None:
