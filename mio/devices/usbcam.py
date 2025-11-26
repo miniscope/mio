@@ -139,10 +139,18 @@ def list_cameras() -> Dict[int, Dict[str, str]]:
     """
     List available cameras with name, resolution, and fps.
 
+    .. note::
+        **Windows Limitation**: Camera enumeration on Windows has known issues where
+        checking one camera can interfere with detecting others. This function may
+        only find one camera per run on Windows systems. If you have multiple cameras,
+        you may need to check them individually or run the enumeration multiple times.
+
     Returns:
         Dictionary mapping camera index (0, 1, 2...) to camera info.
-        Prefers standard indices (0, 1, 2...) over backend-specific high indices.
     """
+    available_cameras: Dict[int, Dict[str, str]] = {}
+    found_cameras: Dict[tuple[str, str], int] = {}  # (resolution, fps) -> index
+
     # Get camera names from cv2-enumerate-cameras
     enumerated_cameras: Dict[int, str] = {}
     try:
@@ -151,10 +159,7 @@ def list_cameras() -> Dict[int, Dict[str, str]]:
     except Exception:
         pass
 
-    # First, check standard indices (0-9) - prefer these over high backend indices
-    available_cameras: Dict[int, Dict[str, str]] = {}
-    found_cameras: Dict[tuple[str, str, str], int] = {}  # (resolution, fps, name) -> index
-
+    # Check standard indices (0-9) - prefer these over high backend indices
     for i in range(MAX_CAMERA_INDEX):
         cap = cv2.VideoCapture(i)
         if cap.isOpened():

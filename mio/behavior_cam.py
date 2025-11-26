@@ -217,8 +217,8 @@ class BehaviorCam:
                     fps = frames_in_window / window_elapsed
                     total_elapsed = current_time - start_time
                     self.logger.info(
-                        f"FPS: {fps:.2f} | Frames: {frames_written} | "
-                        f"Time: {total_elapsed:.1f}s"
+                        f"\nFPS:\t{fps:.2f}\nFrames:\t{frames_written} \n"
+                        f"Time:\t{total_elapsed:.1f}s \n"
                     )
                     last_fps_log_time = current_time
                     frames_in_window = 0

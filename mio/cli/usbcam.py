@@ -40,7 +40,13 @@ def usbcam() -> None:
     type=click.Path(),
     help="Override output directory from config (optional)",
 )
-def record(config: str, output_dir: Optional[str]) -> None:
+@click.option(
+    "-i",
+    "--index",
+    type=int,
+    help="Specify camera index (optional)",
+)
+def record(config: str, output_dir: Optional[str], index: Optional[int]) -> None:
     """Record video with Unix timestamp filename"""
     recording_config = USBCameraRecordingConfig.from_any(config)
 
@@ -48,21 +54,24 @@ def record(config: str, output_dir: Optional[str]) -> None:
     if output_dir is not None:
         recording_config.output_dir = output_dir
 
-    # Get available cameras and always prompt for selection
-    cameras = list_available_cameras()
-    if not cameras:
-        raise click.ClickException("No cameras found. Please connect a camera and try again.")
+    if index is not None:
+        camera_index = index
+    else:
+        # Get available cameras and prompt for selection
+        cameras = list_available_cameras()
+        if not cameras:
+            raise click.ClickException("No cameras found. Please connect a camera and try again.")
 
-    click.echo("Available cameras:")
-    for idx, info in cameras.items():
-        click.echo(f"  {format_camera_info(idx, info)}")
+        click.echo("Available cameras:")
+        for idx, info in cameras.items():
+            click.echo(f"  {format_camera_info(idx, info)}")
 
-    selected_index = click.prompt(
-        "Select camera index",
-        type=click.Choice([str(idx) for idx in cameras], case_sensitive=False),
-        default=str(min(cameras.keys())),
-    )
-    camera_index = int(selected_index)
+        selected_index = click.prompt(
+            "Select camera index",
+            type=click.Choice([str(idx) for idx in cameras], case_sensitive=False),
+            default=str(min(cameras.keys())),
+        )
+        camera_index = int(selected_index)
 
     behavior_cam = BehaviorCam(recording_config=recording_config, camera_index=camera_index)
     try:
