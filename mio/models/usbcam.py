@@ -50,5 +50,6 @@ class USBCameraRecordingConfig(MiniscopeConfig, ConfigYAMLMixin):
     )
     ntp_max_offset_seconds: float = Field(
         default=0.01,
-        description="Maximum allowed time offset in seconds for NTP synchronization check (default: 0.01 = 10ms).",
+        description="Maximum allowed time offset in seconds for NTP synchronization check "
+        "(default: 0.01 = 10ms).",
     )

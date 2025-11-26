@@ -165,8 +165,8 @@ class BehaviorCam:
         frames_written = 0
         frame_index = 0
         first_frame = True
-        start_time = time.time()
-        last_fps_log_time = start_time
+        start_time = None
+        last_fps_log_time = None
         frames_in_window = 0
         writer_used = False
 
@@ -183,12 +183,15 @@ class BehaviorCam:
 
                 frame, unix_time = frame_data
 
-                # Get actual dimensions from first frame
+                # Get actual dimensions from first frame and initialize timing
                 if first_frame:
                     actual_height, actual_width = frame.shape[:2]
                     self.logger.info(
                         f"Resolution: {actual_width}x{actual_height} @ {actual_fps}fps"
                     )
+                    # Start FPS counting from the first grabbed frame
+                    start_time = unix_time
+                    last_fps_log_time = unix_time
                     first_frame = False
 
                 # Convert frame based on codec
