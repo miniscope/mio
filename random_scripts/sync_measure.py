@@ -42,8 +42,31 @@ def find_video_csv_pairs(folder: Path) -> List[Tuple[Path, Path]]:
 
 
 def load_behavior_timestamps(csv_path: Path) -> pd.DataFrame:
-    """Load behavior CSV: frame_index,unix_timestamp_ms (already in ms)."""
-    return pd.read_csv(csv_path, header=None, names=['frame_index', 'unix_timestamp_ms'])
+    """Load behavior CSV: frame_index,unix_time (in seconds, convert to ms)."""
+    df = pd.read_csv(csv_path)
+    # Handle both header and no-header cases
+    if 'unix_time' in df.columns:
+        # Has header with unix_time in seconds
+        df['unix_timestamp_ms'] = df['unix_time'] * 1000.0
+    elif 'unix_timestamp_ms' in df.columns:
+        # Already has unix_timestamp_ms
+        pass
+    elif len(df.columns) == 2:
+        # No header, assume frame_index, unix_timestamp
+        df.columns = ['frame_index', 'unix_timestamp']
+        # Convert seconds to ms if needed
+        if df['unix_timestamp'].max() < 1e11:
+            df['unix_timestamp_ms'] = df['unix_timestamp'] * 1000.0
+        else:
+            df['unix_timestamp_ms'] = df['unix_timestamp']
+    else:
+        raise ValueError(f"Unexpected CSV format in {csv_path}")
+    
+    # Ensure frame_index column exists
+    if 'frame_index' not in df.columns and len(df.columns) >= 1:
+        df.columns = ['frame_index'] + list(df.columns[1:])
+    
+    return df[['frame_index', 'unix_timestamp_ms']]
 
 
 def load_neural_timestamps(csv_path: Path) -> pd.DataFrame:
@@ -52,7 +75,7 @@ def load_neural_timestamps(csv_path: Path) -> pd.DataFrame:
     valid_df = df[df['reconstructed_frame_index'] != -1].copy()
     frame_timestamps = (
         valid_df.groupby('reconstructed_frame_index')['buffer_recv_unix_time']
-        .first()
+        .max()  # Use latest timestamp among multiple buffers for each frame
         .reset_index()
     )
     frame_timestamps.columns = ['frame_index', 'unix_timestamp']
@@ -86,25 +109,62 @@ def match_rises_falls_and_calculate_delays(
     beh_falls: List[float],
     neur_rises: List[float],
     neur_falls: List[float],
-    max_time_window_ms: float = 2000.0
+    max_time_window_ms: float = 500.0
 ) -> Tuple[List[dict], List[dict]]:
-    """Match rises/falls and calculate delays."""
+    """
+    Match rises/falls and calculate delays. Only returns events that have a match.
+    
+    Uses bidirectional matching: finds closest match for each behavior event,
+    then verifies the match is within the time window. Only includes matched pairs.
+    """
     def match_events(beh_times: List[float], neur_times: List[float]) -> List[dict]:
+        if not beh_times or not neur_times:
+            return []
+        
+        # Convert to numpy arrays for efficient computation
         neur_array = np.array(neur_times)
-        used = set()
-        delays = []
+        
+        # Sort for efficient searching
+        neur_sorted_idx = np.argsort(neur_array)
+        neur_sorted = neur_array[neur_sorted_idx]
+        
+        matched_pairs = []
+        used_neur = set()
+        
         for beh_time in beh_times:
-            diffs = neur_array - beh_time
-            valid = [i for i in np.where(np.abs(diffs) <= max_time_window_ms)[0] if i not in used]
-            if valid:
-                idx = valid[np.argmin(np.abs(diffs[valid]))]
-                delays.append({
+            # Find all neural events within the time window
+            # Use binary search to find the range
+            min_time = beh_time - max_time_window_ms
+            max_time = beh_time + max_time_window_ms
+            
+            # Find start and end indices in sorted array
+            start_idx = np.searchsorted(neur_sorted, min_time, side='left')
+            end_idx = np.searchsorted(neur_sorted, max_time, side='right')
+            
+            # Check all candidates within the window
+            best_match = None
+            best_diff = float('inf')
+            for i in range(start_idx, end_idx):
+                orig_idx = neur_sorted_idx[i]
+                if orig_idx in used_neur:
+                    continue
+                neur_time = neur_sorted[i]
+                diff = abs(neur_time - beh_time)
+                if diff <= max_time_window_ms and diff < best_diff:
+                    best_diff = diff
+                    best_match = (orig_idx, neur_time)
+            
+            if best_match is not None:
+                neur_idx, neur_time = best_match
+                matched_pairs.append({
                     'behavior_time_ms': beh_time,
-                    'neural_time_ms': neur_times[idx],
-                    'delay_ms': neur_times[idx] - beh_time
+                    'neural_time_ms': neur_time,
+                    'delay_ms': neur_time - beh_time
                 })
-                used.add(idx)
-        return delays
+                used_neur.add(neur_idx)
+        
+        return matched_pairs
+    
     return match_events(beh_rises, neur_rises), match_events(beh_falls, neur_falls)
 
 
@@ -239,21 +299,9 @@ def plot_delay_scatter(
     ax.set_title(title)
     ax.grid(True, alpha=0.3)
     
-    # Add mean and SD lines
+    # Add mean line only
     mean_delay = np.mean(delays)
-    std_delay = np.std(delays)
-    ax.axhline(y=mean_delay, color='r', linestyle='--', label=f'Mean: {mean_delay:.2f} ms')
-    mean_plus_sd = mean_delay + std_delay
-    mean_minus_sd = mean_delay - std_delay
-    ax.axhline(
-        y=mean_plus_sd, color='orange', linestyle=':', alpha=0.7,
-        label=f'Mean + SD: {mean_plus_sd:.2f} ms'
-    )
-    ax.axhline(
-        y=mean_minus_sd, color='orange', linestyle=':', alpha=0.7,
-        label=f'Mean - SD: {mean_minus_sd:.2f} ms'
-    )
-    ax.legend()
+    ax.axhline(y=mean_delay, color='r', linestyle='--')
     
     plt.tight_layout()
     
@@ -274,7 +322,8 @@ def process_behavior_neural_pair(
     neural_pairs: List[Tuple[Path, Path]],
     threshold: float = 0.5,
     min_spike_frames: int = 5,
-    frame_interval_ms: float = 50.0
+    frame_interval_ms: float = 50.0,
+    time_bin_resolution_ms: float = 10.0
 ) -> Optional[Tuple[np.ndarray, np.ndarray, np.ndarray, List, List]]:
     """
     Process behavior and neural videos to create thresholded signals.
@@ -285,6 +334,7 @@ def process_behavior_neural_pair(
         threshold: Brightness threshold for normalization (0-1)
         min_spike_frames: Minimum spike duration in frames
         frame_interval_ms: Frame interval in milliseconds
+        time_bin_resolution_ms: Resolution for time bins (default 10ms for efficiency)
         
     Returns:
         Tuple of (behavior_thresholded, neural_thresholded, time_bins, 
@@ -297,16 +347,28 @@ def process_behavior_neural_pair(
     frames_to_skip = 5
     behavior_data = []
     for beh_video, beh_csv in behavior_pairs:
+        print(f"      Processing behavior video: {beh_video.name}")
         beh_brightness = []
         beh_timestamps = []
         reader = VideoReader(str(beh_video))
         beh_timestamps_df = load_behavior_timestamps(beh_csv)
         
+        # Create dict for faster lookups
+        beh_timestamp_dict = dict(zip(
+            beh_timestamps_df['frame_index'],
+            beh_timestamps_df['unix_timestamp_ms']
+        ))
+        
+        frame_count = 0
         try:
             for frame_idx, frame in reader.read_frames():
                 # Skip first 5 frames
                 if frame_idx < frames_to_skip:
                     continue
+                
+                frame_count += 1
+                if frame_count % 1000 == 0:
+                    print(f"        Processed {frame_count} frames...")
                 
                 gray = (
                     cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -316,14 +378,12 @@ def process_behavior_neural_pair(
                 mean_brightness = np.mean(gray)
                 beh_brightness.append(mean_brightness)
                 
-                matches = beh_timestamps_df[beh_timestamps_df['frame_index'] == frame_idx]
-                if len(matches) > 0:
-                    timestamp_ms = matches.iloc[0]['unix_timestamp_ms']
-                    beh_timestamps.append(timestamp_ms)
-                else:
-                    beh_timestamps.append(None)
+                # Use dict lookup instead of filtering DataFrame
+                timestamp_ms = beh_timestamp_dict.get(frame_idx)
+                beh_timestamps.append(timestamp_ms)
         finally:
             reader.release()
+        print(f"        Total frames processed: {frame_count}")
         
         # Filter out None timestamps
         beh_data_filtered = [
@@ -336,16 +396,28 @@ def process_behavior_neural_pair(
     # Ignore first 5 frames of each recording
     neural_data = []
     for neur_video, neur_csv in neural_pairs:
+        print(f"      Processing neural video: {neur_video.name}")
         neur_brightness = []
         neur_timestamps = []
         reader = VideoReader(str(neur_video))
         neur_timestamps_df = load_neural_timestamps(neur_csv)
         
+        # Create dict for faster lookups
+        neur_timestamp_dict = dict(zip(
+            neur_timestamps_df['frame_index'],
+            neur_timestamps_df['unix_timestamp_ms']
+        ))
+        
+        frame_count = 0
         try:
             for frame_idx, frame in reader.read_frames():
                 # Skip first 5 frames
                 if frame_idx < frames_to_skip:
                     continue
+                
+                frame_count += 1
+                if frame_count % 1000 == 0:
+                    print(f"        Processed {frame_count} frames...")
                 
                 gray = (
                     cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -355,14 +427,12 @@ def process_behavior_neural_pair(
                 mean_brightness = np.mean(gray)
                 neur_brightness.append(mean_brightness)
                 
-                matches = neur_timestamps_df[neur_timestamps_df['frame_index'] == frame_idx]
-                if len(matches) > 0:
-                    timestamp_ms = matches.iloc[0]['unix_timestamp_ms']
-                    neur_timestamps.append(timestamp_ms)
-                else:
-                    neur_timestamps.append(None)
+                # Use dict lookup instead of filtering DataFrame
+                timestamp_ms = neur_timestamp_dict.get(frame_idx)
+                neur_timestamps.append(timestamp_ms)
         finally:
             reader.release()
+        print(f"        Total frames processed: {frame_count}")
         
         # Filter out None timestamps
         neur_data_filtered = [
@@ -444,7 +514,9 @@ def process_behavior_neural_pair(
     
     min_time = min(min(all_behavior_times), min(all_neural_times))
     max_time = max(max(all_behavior_times), max(all_neural_times))
-    time_bins = np.arange(min_time, max_time + 1, 1)
+    # Use coarser resolution for efficiency with large datasets
+    time_bins = np.arange(min_time, max_time + time_bin_resolution_ms, time_bin_resolution_ms)
+    print(f"    Created time bins: {len(time_bins)} bins at {time_bin_resolution_ms}ms resolution")
     
     # Interpolate with forward fill (keep previous state instead of zero)
     def interp_with_forward_fill(
@@ -478,7 +550,9 @@ def process_behavior_neural_pair(
     beh_thresholded = (beh_continuous >= threshold).astype(float)
     neur_thresholded = (neur_continuous >= threshold).astype(float)
     
-    min_spike_duration_bins = int(np.ceil(min_spike_frames * frame_interval_ms))
+    # Calculate min spike duration in time bins (accounting for time_bin_resolution_ms)
+    min_spike_duration_ms = min_spike_frames * frame_interval_ms
+    min_spike_duration_bins = int(np.ceil(min_spike_duration_ms / time_bin_resolution_ms))
     
     def filter_spikes(signal: np.ndarray, min_duration: int) -> np.ndarray:
         """
@@ -520,7 +594,8 @@ def main() -> None:
     threshold = 0.5  # Normalized brightness threshold
     min_spike_frames = 5
     frame_interval_ms = 50.0
-    max_time_window_ms = 2000.0  # For matching rises/falls
+    max_time_window_ms = 500.0  # For matching rises/falls (only compare events within this range)
+    time_bin_resolution_ms = 10.0  # Time bin resolution for efficiency (10ms default)
     
     print("Looking for videos in:")
     print(f"  Behavior: {behavior_folder}")
@@ -552,7 +627,8 @@ def main() -> None:
         behavior_pairs, neural_pairs,
         threshold=threshold,
         min_spike_frames=min_spike_frames,
-        frame_interval_ms=frame_interval_ms
+        frame_interval_ms=frame_interval_ms,
+        time_bin_resolution_ms=time_bin_resolution_ms
     )
     
     if result is None:
@@ -602,7 +678,8 @@ def main() -> None:
     else:
         print("  Rise/fall counts match! Calculating delays...")
     
-    # Match rises and falls and calculate delays
+    # Match rises and falls and calculate delays (only events with matches are included)
+    print(f"  Matching events within {max_time_window_ms}ms window...")
     rise_delays, fall_delays = match_rises_falls_and_calculate_delays(
         beh_rises, beh_falls, neur_rises, neur_falls,
         max_time_window_ms=max_time_window_ms
@@ -611,8 +688,12 @@ def main() -> None:
     all_delays = rise_delays + fall_delays
     
     if not all_delays:
-        print("  Warning: Could not match any rises/falls")
+        print("  Warning: Could not match any rises/falls within the time window")
+        print(f"    Behavior: {len(beh_rises)} rises, {len(beh_falls)} falls")
+        print(f"    Neural: {len(neur_rises)} rises, {len(neur_falls)} falls")
         return
+    
+    print(f"  Matched {len(rise_delays)} rises and {len(fall_delays)} falls")
     
     # Calculate statistics
     delay_values = [d['delay_ms'] for d in all_delays]
