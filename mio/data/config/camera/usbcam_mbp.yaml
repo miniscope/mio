@@ -1,0 +1,9 @@
+id: default-camera
+mio_model: mio.models.usbcam.USBCameraRecordingConfig
+mio_version: 0.8.2.dev13+g338e847.d20251030
+camera_index: 0
+output_dir: recordings
+frame_width: 1920
+frame_height: 1080
+fps: 30
+format: MJPEG

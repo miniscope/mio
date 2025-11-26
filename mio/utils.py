@@ -3,13 +3,36 @@ The junk drawer my dogs
 """
 
 import hashlib
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Generator, TypeVar, Union
 
 import cv2
 
 if TYPE_CHECKING:
     pass
+
+T = TypeVar("T")
+
+
+def exact_iter(f: Callable[[], T], sentinel: T) -> Generator[T, None, None]:
+    """
+    A version of :func:`iter` that compares with `is` rather than `==`
+    because truth value of numpy arrays is ambiguous.
+
+    Args:
+        f: Function to call repeatedly
+        sentinel: Sentinel value to stop iteration when `f()` returns this (compared with `is`)
+
+    Yields:
+        Values from `f()` until sentinel is encountered
+    """
+    while True:
+        val = f()
+        if val is sentinel:
+            break
+        else:
+            yield val
 
 
 def hash_file(path: Union[Path, str]) -> str:

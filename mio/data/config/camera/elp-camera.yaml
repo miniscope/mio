@@ -1,0 +1,10 @@
+id: elp-camera
+mio_model: mio.models.usbcam.USBCameraRecordingConfig
+mio_version: 0.8.2.dev13+g338e847.d20251030
+output_dir: user_data/recordings
+frame_width: 1280
+frame_height: 720
+fps: 20
+format: MJPEG
+ntp_server: mio-ntp.local
+ntp_max_offset_seconds: 0.01
