@@ -2,6 +2,7 @@
 NTP utilities for time synchronization checks.
 """
 
+import socket
 from typing import Tuple
 
 import click
@@ -10,6 +11,30 @@ import ntplib
 from mio.logging import init_logger
 
 logger = init_logger("mio.ntp")
+
+
+def _resolve_hostname(hostname: str) -> str:
+    """
+    Resolve hostname to IP address.
+
+    This is necessary because ntplib has issues with mDNS .local hostnames
+    on macOS (where .local is reserved for Bonjour/mDNS), even though they resolve
+    correctly via socket.gethostbyname. Windows handles .local domains differently
+    and doesn't have this issue, but resolving to IP first should work on all platforms.
+
+    Args:
+        hostname: Hostname or IP address
+
+    Returns:
+        IP address as string, or original string if resolution fails
+    """
+    try:
+        ip_address = socket.gethostbyname(hostname)
+        logger.info(f"Resolved {hostname} to {ip_address}")
+        return ip_address
+    except (socket.gaierror, OSError):
+        logger.warning(f"Could not resolve hostname {hostname} to IP address.")
+        return hostname
 
 
 def query_ntp_sync(ntp_server: str, timeout: float = 3.0) -> Tuple[bool, float]:
@@ -25,8 +50,10 @@ def query_ntp_sync(ntp_server: str, timeout: float = 3.0) -> Tuple[bool, float]:
         Returns (False, 0.0) if NTP query fails
     """
     try:
+        # Resolve hostname to IP to work around ntplib issues with mDNS .local hostnames on macOS
+        resolved_server = _resolve_hostname(ntp_server)
         client = ntplib.NTPClient()
-        response = client.request(ntp_server, version=3, timeout=timeout)
+        response = client.request(resolved_server, version=3, timeout=timeout)
 
         offset = abs(response.offset)
 
