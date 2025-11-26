@@ -26,6 +26,8 @@ dependencies = [
     "scikit-video>=1.1.11",
     "scipy>=1.13.0",
     "cv2-enumerate-cameras>=0.1.0",
+    "ntplib>=0.4.0",
+    "pillow>=11.0.0,<11.3.0",
 ]
 
 readme = "README.md"
