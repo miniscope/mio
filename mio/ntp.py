@@ -86,8 +86,12 @@ def prompt_ntp_sync(ntp_server: str, max_offset_seconds: float) -> None:
 
     is_synced = offset <= max_offset_seconds
     if is_synced:
-        logger.info(f"Time is synchronized with NTP server {ntp_server} (offset: {offset:.3f}s)")
+        logger.info(
+            f"Time is synchronized with NTP server {ntp_server} (offset: {offset * 1000:.3f}ms)"
+        )
     else:
-        logger.warning(f"Time offset is {offset:.3f}s (max allowed: {max_offset_seconds:.3f}s).")
+        logger.warning(
+            f"Time offset: {offset * 1000:.3f}ms, max allowed: {max_offset_seconds * 1000:.3f}ms."
+        )
         if not click.confirm("System time may not be synchronized. Proceed anyway?"):
             raise click.Abort()
