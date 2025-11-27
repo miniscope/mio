@@ -1,5 +1,8 @@
 # Changelog
 
+## Upcoming
+- [`#142`](https://github.com/miniscope/mio/pull/142) - Add NTP time synchronization feature. NTP is an optional dependency - install with `pip install mio[ntp]`
+
 ## 0.8
 
 ### 0.8.1 - 2025-09-25 - Bugfix for frame reconstruction, CLI updates, more metadata for `stream`

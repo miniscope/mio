@@ -6,7 +6,11 @@ import socket
 from typing import Tuple
 
 import click
-import ntplib
+
+try:
+    import ntplib
+except ImportError:
+    ntplib = None  # type: ignore[assignment]
 
 from mio.logging import init_logger
 
@@ -48,7 +52,14 @@ def query_ntp_sync(ntp_server: str, timeout: float = 3.0) -> Tuple[bool, float]:
     Returns:
         Tuple of (success: bool, offset_seconds: float)
         Returns (False, 0.0) if NTP query fails
+
+    Raises:
+        ImportError: If ntplib is not installed. Install with: pip install mio[ntp]
     """
+    if ntplib is None:
+        raise ImportError(
+            "ntplib is required for NTP functionality. Install it with: pip install mio[ntp]"
+        )
     try:
         # Resolve hostname to IP to work around ntplib issues with mDNS .local hostnames on macOS
         resolved_server = _resolve_hostname(ntp_server)
@@ -73,6 +84,7 @@ def prompt_ntp_sync(ntp_server: str, max_offset_seconds: float) -> None:
         max_offset_seconds: Maximum allowed time offset in seconds
 
     Raises:
+        ImportError: If ntplib is not installed. Install with: pip install mio[ntp]
         click.Abort: If user chooses not to proceed when sync is insufficient
     """
     logger.info(f"Checking time sync with NTP server: {ntp_server}")
@@ -86,8 +98,12 @@ def prompt_ntp_sync(ntp_server: str, max_offset_seconds: float) -> None:
 
     is_synced = offset <= max_offset_seconds
     if is_synced:
-        logger.info(f"Time is synchronized with NTP server {ntp_server} (offset: {offset * 1000:.3f}ms)")
+        logger.info(
+            f"Time is synchronized with NTP server {ntp_server} (offset: {offset * 1000:.3f}ms)"
+        )
     else:
-        logger.warning(f"Time offset is {offset * 1000:.3f}ms (max allowed: {max_offset_seconds * 1000:.3f}ms).")
+        logger.warning(
+            f"Time offset: {offset * 1000:.3f}ms, max allowed: {max_offset_seconds * 1000:.3f}ms."
+        )
         if not click.confirm("System time may not be synchronized. Proceed anyway?"):
             raise click.Abort()
