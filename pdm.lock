@@ -2,10 +2,10 @@
 # It is not intended for manual editing.
 
 [metadata]
-groups = ["default", "all", "dev", "docs", "plot", "tests"]
+groups = ["default", "all", "dev", "docs", "ntp", "plot", "tests"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:cbd4c00371d4cd714bd62f2731648bb12b00636452366f4b52ac82d459aebc6f"
+content_hash = "sha256:3ccde378b905b67705179d044b4ebe9191d1146655ba1aead653f24fcdc78e01"
 
 [[metadata.targets]]
 requires_python = "~=3.10"
@@ -1543,7 +1543,7 @@ files = [
 name = "ntplib"
 version = "0.4.0"
 summary = "Python NTP library"
-groups = ["default"]
+groups = ["all", "ntp"]
 files = [
     {file = "ntplib-0.4.0-py2.py3-none-any.whl", hash = "sha256:8d27375329ed7ff38755f7b6d4658b28edc147cadf40338a63a0da8133469d60"},
     {file = "ntplib-0.4.0.tar.gz", hash = "sha256:899d8fb5f8c2555213aea95efca02934c7343df6ace9d7628a5176b176906267"},
