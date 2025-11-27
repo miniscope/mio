@@ -58,6 +58,7 @@ repository = "https://github.com/Aharoni-Lab/mio"
 documentation = "https://miniscope-io.readthedocs.io/"
 
 [project.optional-dependencies]
+ntp = ["ntplib>=0.4.0"]
 plot = ["matplotlib>=3.9.2"]
 tests = [
     "pytest>=8.2.2",
@@ -81,7 +82,7 @@ dev = [
     "pre-commit>=3.7.1",
 ]
 all = [
-    "mio[tests,docs,dev]"
+    "mio[tests,docs,dev,ntp]"
 ]
 
 [project.scripts]

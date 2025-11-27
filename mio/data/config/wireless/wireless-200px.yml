@@ -40,6 +40,8 @@ adc_scale:
   vin_div_factor: 11.3
 
 runtime:
+  ntp_server: mio-ntp.local
+  ntp_max_offset_seconds: 0.01
   serial_buffer_queue_size: 10
   frame_buffer_queue_size: 5
   image_buffer_queue_size: 5

@@ -280,6 +280,16 @@ class StreamDevRuntime(MiniscopeConfig):
         "Note that this does *not* control whether header metadata is written during capture, "
         "for enabling/disabling, use the ``metadata`` kwarg in the capture method.",
     )
+    ntp_server: Optional[str] = Field(
+        default=None,
+        description="NTP server address for time synchronization check. "
+        "If specified, the system time will be verified against this server before capture.",
+    )
+    ntp_max_offset_seconds: float = Field(
+        default=0.01,
+        description="Maximum allowed time offset in seconds "
+        "for NTP synchronization check (default: 0.01 = 10ms).",
+    )
 
 
 class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):

@@ -10,6 +10,8 @@ import click
 
 from mio.cli.common import ConfigIDOrPath
 from mio.models.process import FreqencyMaskingConfig
+from mio.models.stream import StreamDevConfig
+from mio.ntp import prompt_ntp_sync
 from mio.stream_daq import StreamDaq
 
 
@@ -91,6 +93,14 @@ def capture(
     """
     Capture video from a StreamDaq device, optionally saving as an encoded video or as raw binary
     """
+
+    # Rather don't like getting config here, but I want to do ntp check in the CLI so it's here.
+    config = StreamDevConfig.from_any(device_config)
+    if config.runtime.ntp_server is not None:
+        prompt_ntp_sync(
+            config.runtime.ntp_server, max_offset_seconds=config.runtime.ntp_max_offset_seconds
+        )
+
     daq_inst = StreamDaq(device_config=device_config)
     okwargs = dict(okwarg)
 
