@@ -25,9 +25,6 @@ dependencies = [
     'typing-extensions>=4.10.0; python_version<"3.13"',
     "scikit-video>=1.1.11",
     "scipy>=1.13.0",
-    "cv2-enumerate-cameras>=0.1.0",
-    "ntplib>=0.4.0",
-    "pillow>=11.0.0,<11.3.0",
 ]
 
 readme = "README.md"
@@ -61,6 +58,7 @@ repository = "https://github.com/Aharoni-Lab/mio"
 documentation = "https://miniscope-io.readthedocs.io/"
 
 [project.optional-dependencies]
+ntp = ["ntplib>=0.4.0"]
 plot = ["matplotlib>=3.9.2"]
 tests = [
     "pytest>=8.2.2",
@@ -84,7 +82,7 @@ dev = [
     "pre-commit>=3.7.1",
 ]
 all = [
-    "mio[tests,docs,dev]"
+    "mio[tests,docs,dev,ntp]"
 ]
 
 [project.scripts]
