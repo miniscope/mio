@@ -120,7 +120,7 @@ class BehaviorCam:
 
         # Create video writer with Unix timestamp filename
         timestamp = int(time.time())  # seconds (for filename)
-        
+
         # Determine container format based on codec
         if self.config.codec.lower() in ["libx264", "h264"]:
             video_ext = ".mp4"
@@ -128,7 +128,7 @@ class BehaviorCam:
         else:
             video_ext = ".avi"
             container_format = "avi"
-        
+
         video_path = Path(output_dir) / f"{timestamp}{video_ext}"
         csv_path = Path(output_dir) / f"{timestamp}.csv"
 

@@ -36,7 +36,7 @@ def usbcam(ctx: click.Context, list_cameras_flag: bool) -> None:
             for idx, info in cameras.items():
                 click.echo(f"  {format_camera_info(idx, info, prefix='Index ')}")
         ctx.exit()
-    
+
     # If no subcommand was invoked and --list wasn't used, show help
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
@@ -107,5 +107,3 @@ def record(config: str, output_dir: Optional[str], index: Optional[int]) -> None
     except Exception as e:
         click.echo(f"Error recording video: {e}", err=True)
         raise click.ClickException(f"Error recording video: {e}") from e
-
-

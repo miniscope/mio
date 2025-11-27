@@ -34,14 +34,6 @@ class USBCameraRecordingConfig(MiniscopeConfig, ConfigYAMLMixin):
         default="yuv420p",
         description="Pixel format for video encoding (e.g., yuvj420p, yuv420p, gray).",
     )
-    vendor_id: int = Field(
-        default=0x32E4,
-        description="USB vendor ID of the camera (for reference/documentation).",
-    )
-    product_id: Optional[int] = Field(
-        default=None,
-        description="USB product ID of the camera (for reference/documentation).",
-    )
     ntp_server: Optional[str] = Field(
         default=None,
         description="NTP server address for time synchronization check. "
