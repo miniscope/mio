@@ -27,13 +27,12 @@ class USBCameraRecordingConfig(MiniscopeConfig, ConfigYAMLMixin):
         "Note: Output video encoding is handled by VideoWriter.",
     )
     codec: str = Field(
-        default="mjpeg",
+        default="libx264",
         description="Video codec for output file (e.g., mjpeg, libx264, rawvideo).",
     )
-    pix_fmt: Optional[str] = Field(
-        default=None,
-        description="Pixel format for video encoding (e.g., yuvj420p, yuv420p, gray). "
-        "If None, automatically determined from codec.",
+    pix_fmt: str = Field(
+        default="yuv420p",
+        description="Pixel format for video encoding (e.g., yuvj420p, yuv420p, gray).",
     )
     vendor_id: int = Field(
         default=0x32E4,

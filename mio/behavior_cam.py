@@ -12,7 +12,7 @@ from typing import Optional, Union
 import cv2
 
 from mio import init_logger
-from mio.devices.usbcam import convert_frame_for_codec, determine_pix_fmt, open_camera
+from mio.devices.usbcam import convert_frame_for_codec, open_camera
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.models.usbcam import USBCameraRecordingConfig
 from mio.types import ConfigSource
@@ -120,7 +120,16 @@ class BehaviorCam:
 
         # Create video writer with Unix timestamp filename
         timestamp = int(time.time())  # seconds (for filename)
-        video_path = Path(output_dir) / f"{timestamp}.avi"
+        
+        # Determine container format based on codec
+        if self.config.codec.lower() in ["libx264", "h264"]:
+            video_ext = ".mp4"
+            container_format = "mp4"
+        else:
+            video_ext = ".avi"
+            container_format = "avi"
+        
+        video_path = Path(output_dir) / f"{timestamp}{video_ext}"
         csv_path = Path(output_dir) / f"{timestamp}.csv"
 
         # Get actual resolution and fps (may differ from requested)
@@ -129,15 +138,15 @@ class BehaviorCam:
         actual_width = self.config.frame_width
         actual_height = self.config.frame_height
 
-        # Determine pixel format from config or auto-detect based on codec
-        pix_fmt = determine_pix_fmt(self.config.codec, self.config.pix_fmt)
+        # Use pixel format from config
+        pix_fmt = self.config.pix_fmt
 
         writer = VideoWriter(
             path=video_path,
             fps=actual_fps,
             output_dict={
                 "-vcodec": self.config.codec,
-                "-f": "avi",
+                "-f": container_format,
                 "-pix_fmt": pix_fmt,
             },
         )

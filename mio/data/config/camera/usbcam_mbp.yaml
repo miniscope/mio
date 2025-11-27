@@ -6,4 +6,5 @@ output_dir: recordings
 frame_width: 1920
 frame_height: 1080
 fps: 30
-format: MJPEG
+codec: libx264
+pix_fmt: yuv420p
