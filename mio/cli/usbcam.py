@@ -14,12 +14,33 @@ from mio.models.usbcam import USBCameraRecordingConfig
 from mio.ntp import prompt_ntp_sync
 
 
-@click.group()
-def usbcam() -> None:
+@click.group(invoke_without_command=True)
+@click.option(
+    "--list",
+    "list_cameras_flag",
+    is_flag=True,
+    help="List available cameras and exit",
+)
+@click.pass_context
+def usbcam(ctx: click.Context, list_cameras_flag: bool) -> None:
     """
     Command group for USB Camera
     """
-    pass
+    # Handle --list flag
+    if list_cameras_flag:
+        cameras = list_available_cameras()
+        if not cameras:
+            click.echo("No cameras found")
+        else:
+            click.echo("Available cameras:")
+            for idx, info in cameras.items():
+                click.echo(f"  {format_camera_info(idx, info, prefix='Index ')}")
+        ctx.exit()
+
+    # If no subcommand was invoked and --list wasn't used, show help
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+        ctx.exit()
 
 
 @usbcam.command()
@@ -86,16 +107,3 @@ def record(config: str, output_dir: Optional[str], index: Optional[int]) -> None
     except Exception as e:
         click.echo(f"Error recording video: {e}", err=True)
         raise click.ClickException(f"Error recording video: {e}") from e
-
-
-@usbcam.command()
-def list_cameras() -> None:
-    """List available cameras"""
-    cameras = list_available_cameras()
-    if not cameras:
-        click.echo("No cameras found")
-        return
-
-    click.echo("Available cameras:")
-    for idx, info in cameras.items():
-        click.echo(f"  {format_camera_info(idx, info, prefix='Index ')}")

@@ -25,8 +25,6 @@ dependencies = [
     'typing-extensions>=4.10.0; python_version<"3.13"',
     "scikit-video>=1.1.11",
     "scipy>=1.13.0",
-    "cv2-enumerate-cameras>=0.1.0",
-    "ntplib>=0.4.0",
 ]
 
 readme = "README.md"
