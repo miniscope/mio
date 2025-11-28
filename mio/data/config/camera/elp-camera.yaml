@@ -5,7 +5,7 @@ output_dir: user_data/recordings
 frame_width: 1280
 frame_height: 720
 fps: 20
-codec: libx264
-pix_fmt: yuv420p
+codec: mjpeg
+pix_fmt: yuvj422p
 ntp_server: mio-ntp.local
 ntp_max_offset_seconds: 0.01

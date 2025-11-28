@@ -148,6 +148,7 @@ class BehaviorCam:
                 "-vcodec": self.config.codec,
                 "-f": container_format,
                 "-pix_fmt": pix_fmt,
+                "-vsync": "0",  # Disable frame sync - write frames as-is (same as StreamDaq)
             },
         )
 
