@@ -2,7 +2,7 @@
 Models for USB camera recording configuration.
 """
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import Field
 
@@ -28,11 +28,23 @@ class USBCameraRecordingConfig(MiniscopeConfig, ConfigYAMLMixin):
     )
     codec: str = Field(
         default="libx264",
-        description="Video codec for output file (e.g., mjpeg, libx264, rawvideo).",
+        description=(
+            "Video codec for output file (e.g., mjpeg, libx264, rawvideo). "
+            "Used by skvideo backend, mapped to fourcc for cv2 backend."
+        ),
     )
-    pix_fmt: str = Field(
+    pix_fmt: Optional[str] = Field(
         default="yuv420p",
-        description="Pixel format for video encoding (e.g., yuvj420p, yuv420p, gray).",
+        description=(
+            "Pixel format for video encoding (e.g., yuvj420p, yuv420p, gray). "
+            "Only used by skvideo backend, ignored by cv2 backend."
+        ),
+    )
+    backend: Literal["skvideo", "cv2"] = Field(
+        default="skvideo",
+        description=(
+            "Video writer backend: 'skvideo' uses FFmpegWriter, " "'cv2' uses cv2.VideoWriter."
+        ),
     )
     ntp_server: Optional[str] = Field(
         default=None,

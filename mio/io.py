@@ -22,7 +22,7 @@ from mio.types import ConfigSource
 
 class VideoWriter:
     """
-    Write data to a video file using FFMpegWriter.
+    Write data to a video file using FFMpegWriter (default) or cv2.VideoWriter.
     """
 
     DEFAULT_OUTPUT = {
@@ -37,17 +37,43 @@ class VideoWriter:
         path: Union[str, Path],
         fps: int,
         output_dict: Union[dict, None] = None,
+        backend: Literal["skvideo", "cv2"] = "skvideo",
     ):
         """
         Initialize the VideoWriter object.
+
+        Args:
+            path: Output video file path
+            fps: Frames per second
+            output_dict: FFmpeg output options (for skvideo backend)
+            backend: Backend to use - "skvideo" (default) or "cv2"
         """
-        if output_dict is None:
-            output_dict = {}
-        output_dict = {**self.DEFAULT_OUTPUT, **output_dict}
+        self.path = Path(path)
+        self.fps = fps
+        self.backend = backend
 
-        input_dict = {"-framerate": str(fps)}
-
-        self.writer = FFmpegWriter(filename=str(path), inputdict=input_dict, outputdict=output_dict)
+        if backend == "cv2":
+            # cv2 backend - will initialize on first frame
+            # Map codec to fourcc
+            codec = output_dict.get("-vcodec", "mjpeg") if output_dict else "mjpeg"
+            fourcc_map = {
+                "mjpeg": "MJPG",
+                "libx264": "mp4v",
+                "h264": "mp4v",
+                "rawvideo": "GREY",
+            }
+            self.fourcc = fourcc_map.get(codec.lower(), "MJPG")
+            self.writer = None  # Initialize on first frame
+            self.frame_shape = None
+        else:
+            # skvideo backend (default)
+            if output_dict is None:
+                output_dict = {}
+            output_dict = {**self.DEFAULT_OUTPUT, **output_dict}
+            input_dict = {"-framerate": str(fps)}
+            self.writer = FFmpegWriter(
+                filename=str(path), inputdict=input_dict, outputdict=output_dict
+            )
 
     def write_frame(self, frame: np.ndarray) -> bool:
         """
@@ -59,14 +85,37 @@ class VideoWriter:
         Returns:
         bool: True if the frame write was attempted and did not raise anything.
         """
-        self.writer.writeFrame(frame)
+        if self.backend == "cv2":
+            if self.writer is None:
+                # Initialize cv2.VideoWriter on first frame
+                height, width = frame.shape[:2]
+                is_color = len(frame.shape) == 3
+                self.writer = cv2.VideoWriter(
+                    str(self.path),
+                    cv2.VideoWriter_fourcc(*self.fourcc),
+                    self.fps,
+                    (width, height),
+                    isColor=is_color,
+                )
+                if not self.writer.isOpened():
+                    raise RuntimeError(f"Failed to open cv2.VideoWriter for {self.path}")
+            # cv2.VideoWriter expects BGR, but frames from convert_frame_for_codec are RGB
+            if len(frame.shape) == 3 and frame.shape[2] == 3:
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            self.writer.write(frame)
+        else:
+            self.writer.writeFrame(frame)
         return True
 
     def close(self) -> None:
         """
         Close the video file.
         """
-        self.writer.close()
+        if self.backend == "cv2":
+            if self.writer is not None:
+                self.writer.release()
+        else:
+            self.writer.close()
 
 
 class VideoReader:

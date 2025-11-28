@@ -138,18 +138,21 @@ class BehaviorCam:
         actual_width = self.config.frame_width
         actual_height = self.config.frame_height
 
-        # Use pixel format from config
-        pix_fmt = self.config.pix_fmt
+        # Build output_dict (pix_fmt only used by skvideo backend, cv2 ignores it)
+        output_dict = {
+            "-vcodec": self.config.codec,
+            "-f": container_format,
+            "-vsync": "0",  # Disable frame sync - write frames as-is (same as StreamDaq)
+        }
+        # Only add pix_fmt for skvideo backend (cv2 doesn't use it)
+        if self.config.backend == "skvideo" and self.config.pix_fmt is not None:
+            output_dict["-pix_fmt"] = self.config.pix_fmt
 
         writer = VideoWriter(
             path=video_path,
             fps=actual_fps,
-            output_dict={
-                "-vcodec": self.config.codec,
-                "-f": container_format,
-                "-pix_fmt": pix_fmt,
-                "-vsync": "0",  # Disable frame sync - write frames as-is (same as StreamDaq)
-            },
+            output_dict=output_dict,
+            backend=self.config.backend,
         )
 
         csv_writer = BufferedCSVWriter(
