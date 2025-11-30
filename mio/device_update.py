@@ -36,7 +36,7 @@ def device_update(
     """
 
     if port:
-        logger.info(f"Using port {port}")
+        logger.debug(f"Using port {port}")
     else:
         ftdi_port_list = find_ftdi_device()
         if len(ftdi_port_list) == 0:
@@ -45,17 +45,17 @@ def device_update(
             raise ValueError("Multiple FTDI devices found. Please specify the port.")
         if len(ftdi_port_list) == 1:
             port = ftdi_port_list[0]
-            logger.info(f"Using port {port}")
+            logger.debug(f"Using port {port}")
 
     command = DevUpdateCommand(device_id=device_id, port=port, key=key, value=value)
-    logger.info(f"Updating {key} to {value} on port {port}")
+    logger.info(f"Updating device id {device_id} with {key}={value}")
 
     try:
         serial_port = serial.Serial(port=command.port, baudrate=2400, timeout=5, stopbits=2)
     except Exception as e:
         logger.exception(e)
         raise e
-    logger.info("Open serial port")
+    logger.debug("Open serial port")
 
     try:
         id_command = (command.device_id + UpdateCommandDefinitions.id_header) & 0xFF
@@ -88,7 +88,7 @@ def device_update(
 
     finally:
         serial_port.close()
-        logger.info("Closed serial port")
+        logger.debug("Closed serial port")
 
 
 def find_ftdi_device() -> list[str]:

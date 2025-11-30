@@ -46,5 +46,6 @@ No special installation should be required.
 
 #### Windows
 
-Currently windows is not implemented - see `mio/vencor/opalkelly/README.md` for
-what was done to implement Linux and Mac to see what might need to be done here, pull requests welcome :)
+Windows Time Service (`w32tm`) may not provide sufficient accuracy for NTP sync checks. For NTP sync check support, install an NTP client. For example, [Meinberg NTP](https://www.meinbergglobal.com/english/sw/ntp.htm) worked well in our setup.
+
+For the `stream` command, you'll need to manually install the [OpalKelly FrontPanel SDK](https://www.opalkelly.com/products/frontpanel/).
