@@ -407,20 +407,20 @@ class RecordingDataBundle:
 if __name__ == "__main__":
     recordings = [
         RecordingData(
-            video_path=Path("user_data/stitch_test/stream1.avi"),
-            csv_path=Path("user_data/stitch_test/stream1.csv"),
+            video_path=Path("user_data/202511_stitch/WL27_DAQ1_25_11_29.avi"),
+            csv_path=Path("user_data/202511_stitch/WL27_DAQ1_25_11_29.csv"),
         ),
         RecordingData(
-            video_path=Path("user_data/stitch_test/stream2.avi"),
-            csv_path=Path("user_data/stitch_test/stream2.csv"),
+            video_path=Path("user_data/202511_stitch/WL27_DAQ2_25_11_29.avi"),
+            csv_path=Path("user_data/202511_stitch/WL27_DAQ2_25_11_29.csv"),
         ),
     ]
     recording_bundle = RecordingDataBundle(
         recordings=recordings,
-        combined_video_writer=VideoWriter(path=Path("user_data/stitch_test/stitched.avi"), fps=20),
-        debug_video_writer=VideoWriter(path=Path("user_data/stitch_test/debug.avi"), fps=20),
-        combined_csv_path=Path("user_data/stitch_test/stitched.csv"),
-        debug_csv_path=Path("user_data/stitch_test/debug.csv"),
+        combined_video_writer=VideoWriter(path=Path("user_data/202511_stitch/stitched.avi"), fps=20),
+        debug_video_writer=VideoWriter(path=Path("user_data/202511_stitch/debug.avi"), fps=20),
+        combined_csv_path=Path("user_data/202511_stitch/stitched.csv"),
+        debug_csv_path=Path("user_data/202511_stitch/debug.csv"),
     )
     # list of imported recordings (video filenames)
     logger.info(f"Imported recordings: {[recording.video_path for recording in recordings]}")
