@@ -535,7 +535,10 @@ def denoise_run(
             if config.end_frame and index > config.end_frame and config.end_frame != -1:
                 break
 
-            raw_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            # Convert to grayscale if needed (handle both color and grayscale input)
+            raw_frame = (
+                cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if len(frame.shape) == 3 else frame
+            )
             input_frame = raw_frame_processor.process_frame(raw_frame)
             patched_frame = noise_patch_processor.process_frame(input_frame)
             freq_masked_frame = freq_mask_processor.process_frame(patched_frame)
