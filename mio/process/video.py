@@ -570,12 +570,16 @@ def denoise_run(
         # Determine output video path: output_dir / "output_<name>.avi"
         output_video_name = f"output_{noise_patch_processor.name}"
         output_video_path = output_dir / f"{output_video_name}.avi"
-        _modify_csv_metadata(
+        modified_csv_df = _modify_csv_metadata(
             video_path,
             output_video_path,
             noise_patch_processor.dropped_frame_indices,
             csv_validation_result,
         )
+
+        # Export frame-timestamp metadata CSV
+        if modified_csv_df is not None:
+            _export_frame_timestamp_csv(output_video_path, modified_csv_df)
 
         if len(noise_patch_processor.output_named_video.video) == 0:
             logger.warning("No output video available for display.")
@@ -609,7 +613,7 @@ def _modify_csv_metadata(
     output_video_path: Path,
     dropped_frame_indices: list[int],
     csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
-) -> None:
+) -> Optional[pd.DataFrame]:
     """
     Modify CSV metadata to match the denoised video by removing rows for dropped frames
     and adjusting reconstructed_frame_index.
@@ -632,27 +636,27 @@ def _modify_csv_metadata(
             logger.warning(
                 "CSV validation failed or CSV not available. Skipping CSV metadata modification."
             )
-            return
+            return None
     else:
         # Fallback: read CSV if validation wasn't done
         if not input_csv_path.exists():
             logger.warning(
                 f"CSV file not found at {input_csv_path}. Skipping CSV metadata modification."
             )
-            return
+            return None
 
         try:
             df = pd.read_csv(input_csv_path)
         except Exception as e:
             logger.error(f"Failed to read CSV file {input_csv_path}: {e}")
-            return
+            return None
 
         if "reconstructed_frame_index" not in df.columns:
             logger.warning(
                 f"CSV file {input_csv_path} does not have 'reconstructed_frame_index' column. "
                 "Skipping CSV metadata modification."
             )
-            return
+            return None
 
     # If no frames were dropped, just copy the CSV as-is
     if not dropped_frame_indices:
@@ -694,6 +698,61 @@ def _modify_csv_metadata(
     try:
         df_filtered.to_csv(output_csv_path, index=False)
         logger.info(f"Successfully modified CSV metadata at {output_csv_path}.")
+        return df_filtered
     except Exception as e:
         logger.error(f"Failed to write output CSV file {output_csv_path}: {e}")
+        raise
+
+
+def _export_frame_timestamp_csv(output_video_path: Path, csv_df: pd.DataFrame) -> None:
+    """
+    Export a frame-timestamp CSV file mapping reconstructed_frame_index to unix timestamps.
+
+    The CSV includes both the first and last buffer timestamps for each frame.
+
+    Parameters:
+    output_video_path (Path): Path to the output video file.
+    csv_df (pd.DataFrame): The modified CSV DataFrame with reconstructed_frame_index
+        and buffer_recv_unix_time.
+    """
+    # Check if required columns exist
+    if "reconstructed_frame_index" not in csv_df.columns:
+        logger.warning(
+            "CSV DataFrame does not have 'reconstructed_frame_index' column. "
+            "Skipping frame-timestamp CSV export."
+        )
+        return
+
+    if "buffer_recv_unix_time" not in csv_df.columns:
+        logger.warning(
+            "CSV DataFrame does not have 'buffer_recv_unix_time' column. "
+            "Skipping frame-timestamp CSV export."
+        )
+        return
+
+    # Group by reconstructed_frame_index and get both first and last buffer timestamps
+    frame_timestamps = (
+        csv_df.groupby("reconstructed_frame_index")["buffer_recv_unix_time"]
+        .agg(["min", "max"])
+        .reset_index()
+    )
+
+    # Rename columns for clarity
+    frame_timestamps.columns = ["frame", "timestamp_first", "timestamp_last"]
+
+    # Sort by frame index
+    frame_timestamps = frame_timestamps.sort_values("frame")
+
+    # Create output path: same name as video but with _metadata.csv suffix
+    output_csv_path = output_video_path.with_name(output_video_path.stem + "_metadata.csv")
+
+    try:
+        frame_timestamps.to_csv(output_csv_path, index=False)
+        logger.info(
+            "Successfully exported frame-timestamp CSV at %s (%d frames).",
+            output_csv_path,
+            len(frame_timestamps),
+        )
+    except Exception as e:
+        logger.error(f"Failed to write frame-timestamp CSV file {output_csv_path}: {e}")
         raise
