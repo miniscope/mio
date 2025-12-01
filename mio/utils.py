@@ -83,7 +83,7 @@ def validate_video_metadata_match(
     video_path (Union[Path, str]): Path to the video file.
 
     Returns:
-    Tuple[bool, Optional[str], Optional[pd.DataFrame]]:
+    Tuple[bool, Optional[str], Optional[pd.DataFrame]]: A tuple containing:
         - bool: True if validation passes, False otherwise
         - Optional[str]: Error message if validation fails, None otherwise
         - Optional[pd.DataFrame]: The CSV DataFrame if successfully read, None otherwise

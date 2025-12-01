@@ -8,6 +8,7 @@ from typing import Optional
 import cv2
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from mio import init_logger
 from mio.io import VideoReader
@@ -82,7 +83,7 @@ class BaseVideoProcessor:
         Export the video to a file.
         """
         if self.output_enable:
-            logger.info(f"Exporting {self.name} video to {self.output_dir}")
+            logger.debug(f"Exporting {self.name} video to {self.output_dir}")
             self.output_named_video.export(
                 output_path=self.output_dir / "output",
                 fps=20,
@@ -163,9 +164,9 @@ class NoisePatchProcessor(BaseVideoProcessor):
                 self.append_output_frame(input_frame)
                 return input_frame
             else:
-                logger.info(
-                    f"Dropping frame {original_frame_index} of original video due to noise."
-                )
+                msg = f"Dropping frame {original_frame_index} of original video due to noise."
+                tqdm.write(msg)
+                logger.debug(msg)
                 logger.debug(f"Adding noise patch for frame {original_frame_index}.")
                 self.noise_patchs.append((noisy_area * np.iinfo(np.uint8).max).astype(np.uint8))
                 self.noisy_frames.append(input_frame)
@@ -207,7 +208,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
             return
 
         if self.noise_patch_config.output_noise_patch:
-            logger.info(f"Exporting {self.name} noise patch to {self.output_dir}")
+            logger.debug(f"Exporting {self.name} noise patch to {self.output_dir}")
             self.noise_patch_named_video.export(
                 output_path=self.output_dir / f"{self.name}",
                 fps=20,
@@ -235,7 +236,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
         Export the noisy frames to a file.
         """
         if self.noise_patch_config.output_noisy_frames:
-            logger.info(f"Exporting {self.name} noisy frames to {self.output_dir}")
+            logger.debug(f"Exporting {self.name} noisy frames to {self.output_dir}")
             self.noisy_frames_named_video.export(
                 output_path=self.output_dir / f"{self.name}",
                 fps=20,
@@ -336,7 +337,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         Export the frequency domain to a file.
         """
         if self.freq_mask_config.output_freq_domain:
-            logger.info(f"Exporting {self.name} frequency domain to {self.output_dir}")
+            logger.debug(f"Exporting {self.name} frequency domain to {self.output_dir}")
             self.freq_domain_named_video.export(
                 output_path=self.output_dir / f"{self.name}",
                 fps=20,
@@ -350,7 +351,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         Export the frequency mask to a file.
         """
         if self.freq_mask_config.output_mask:
-            logger.info(f"Exporting {self.name} frequency mask to {self.output_dir}")
+            logger.debug(f"Exporting {self.name} frequency mask to {self.output_dir}")
             self.freq_mask_named_frame.export(
                 output_path=self.output_dir / f"{self.name}",
                 suffix=True,
@@ -537,8 +538,12 @@ def denoise_run(
     if config.interactive_display.display_freq_mask:
         freq_mask_processor.freq_mask_named_frame.display()
 
+    # Simple progress bar with total frame count
+    total_frames = int(reader.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
     try:
-        for index, frame in reader.read_frames():
+        frame_iter = tqdm(reader.read_frames(), total=total_frames, desc="Processing frames")
+        for index, frame in frame_iter:
             # Apply trim range if specified
             if trim_start is not None or trim_end is not None:
                 if trim_start is not None and index < trim_start:
@@ -580,6 +585,16 @@ def denoise_run(
         noise_patch_processor.batch_export_videos()
         freq_mask_processor.batch_export_videos()
         minimum_projection_processor.batch_export_videos()
+
+        # Log excluded frames
+        dropped_frames = noise_patch_processor.dropped_frame_indices
+        if dropped_frames:
+            logger.info(
+                f"Excluded {len(dropped_frames)} frames due to noise: "
+                f"{dropped_frames[:20]}{'...' if len(dropped_frames) > 20 else ''}"
+            )
+        else:
+            logger.info("No frames were excluded during processing.")
 
         # Always modify CSV metadata to match the output video
         # Determine output video path: output_dir / "output_<name>.avi"
@@ -642,7 +657,8 @@ def _modify_csv_metadata(
     output_video_path (Path): Path to the output video file.
     dropped_frame_indices (list[int]): List of frame indices that were dropped.
     csv_validation_result (Optional[tuple[bool, Optional[pd.DataFrame]]]):
-        Result from CSV validation. If provided and valid, uses the pre-loaded DataFrame.
+        Result from CSV validation. If provided and valid, uses the
+        pre-loaded DataFrame.
     """
     input_video_path_obj = Path(input_video_path)
     input_csv_path = input_video_path_obj.with_suffix(".csv")
@@ -749,8 +765,8 @@ def _export_frame_timestamp_csv(output_video_path: Path, csv_df: pd.DataFrame) -
 
     Parameters:
     output_video_path (Path): Path to the output video file.
-    csv_df (pd.DataFrame): The modified CSV DataFrame with reconstructed_frame_index
-        and buffer_recv_unix_time.
+    csv_df (pd.DataFrame): The modified CSV DataFrame with
+        reconstructed_frame_index and buffer_recv_unix_time.
     """
     # Check if required columns exist
     if "reconstructed_frame_index" not in csv_df.columns:

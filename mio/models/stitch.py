@@ -7,6 +7,7 @@ from typing import List, Optional
 import pandas as pd
 from numpydantic import NDArray
 from pydantic import BaseModel
+from tqdm import tqdm
 
 from mio.logging import init_logger
 
@@ -57,11 +58,13 @@ class FrameInfo(BaseModel):
         else:
             # Get the majority reconstructed_frame_index
             reconstructed_frame_index = frame_metadata["reconstructed_frame_index"].mode()[0]
-            logger.warning(
+            msg = (
                 f"Reconstructed frame index is not the same "
                 f"for all buffers in frame {frame_num}. "
                 f"Using the majority reconstructed_frame_index: {reconstructed_frame_index}"
             )
+            tqdm.write(msg)
+            logger.debug(msg)
 
         buffer_info_list = []
 

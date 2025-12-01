@@ -12,6 +12,7 @@ from typing import List, Optional, Tuple
 import cv2
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from mio.io import BufferedCSVWriter, VideoReader, VideoWriter
 from mio.logging import init_logger
@@ -267,7 +268,8 @@ class RecordingDataBundle:
         """
         stitched_writes = 0
         debug_writes = 0
-        for frame_num in self.combined_frame_num:
+        frame_iter = tqdm(self.combined_frame_num, desc="Stitching frames")
+        for frame_num in frame_iter:
             recording_frame_pairs = []
 
             for recording in self.recordings:
@@ -311,17 +313,21 @@ class RecordingDataBundle:
                     if not all(np.array_equal(base, f) for (_i, f) in others):
                         for idx, frame in others:
                             if base.shape != frame.shape:
-                                logger.debug(
+                                msg = (
                                     f"Frames differ for frame {frame_num}"
                                     f": shape {base.shape} vs {frame.shape}"
                                 )
+                                tqdm.write(msg)
+                                logger.debug(msg)
                                 continue
                             diff_mask = (base != frame).astype(np.uint8) * 255
                             diff_pixels = int(np.count_nonzero(diff_mask))
-                            logger.info(
+                            msg = (
                                 f"Frames are not the same for frame {frame_num} "
                                 f"(Rec {base_idx} vs Rec {idx}): {diff_pixels} px differ"
                             )
+                            tqdm.write(msg)
+                            logger.debug(msg)
 
                             if self.debug_video_writer is not None:
                                 try:
@@ -329,9 +335,9 @@ class RecordingDataBundle:
                                     self.debug_video_writer.write_frame(composite)
                                     debug_writes += 1
                                 except Exception as e:
-                                    logger.warning(
-                                        f"Failed to write composite for frame {frame_num}: {e}"
-                                    )
+                                    msg = f"Failed to write composite for frame {frame_num}: {e}"
+                                    tqdm.write(msg)
+                                    logger.warning(msg)
                             # Write debug metadata row if configured
                             if self.debug_csv_writer is not None:
                                 base_rec, _, base_buffers, base_black = valid_pairs[base_idx]
@@ -360,11 +366,13 @@ class RecordingDataBundle:
                         self.combined_video_writer.write_frame(selected_frame)
                         stitched_writes += 1
                     except Exception as e:
-                        logger.warning(
+                        msg = (
                             f"Failed to write stitched frame {frame_num}: {e}"
                             f" (shape={getattr(selected_frame,'shape',None)}"
                             f" dtype={getattr(selected_frame,'dtype',None)})"
                         )
+                        tqdm.write(msg)
+                        logger.warning(msg)
 
                     # Append metadata rows for the selected recording
                     # Align reconstructed_frame_index
@@ -383,9 +391,13 @@ class RecordingDataBundle:
                             )
                         self._out_frame_index += 1
                     except Exception as e:
-                        logger.debug(f"Failed to collect metadata for frame {frame_num}: {e}")
+                        msg = f"Failed to collect metadata for frame {frame_num}: {e}"
+                        tqdm.write(msg)
+                        logger.debug(msg)
             except Exception as e:
-                logger.debug(f"Error processing frame_num {frame_num}: {e}")
+                msg = f"Error processing frame_num {frame_num}: {e}"
+                tqdm.write(msg)
+                logger.debug(msg)
 
         # finalize writers and csv
         try:
