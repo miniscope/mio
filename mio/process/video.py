@@ -7,6 +7,7 @@ from typing import Optional
 
 import cv2
 import numpy as np
+import pandas as pd
 
 from mio import init_logger
 from mio.io import VideoReader
@@ -482,6 +483,7 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
 def denoise_run(
     video_path: str,
     config: DenoiseConfig,
+    csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
 ) -> None:
     """
     Preprocess a video file and display the results.
@@ -536,9 +538,7 @@ def denoise_run(
                 break
 
             # Convert to grayscale if needed (handle both color and grayscale input)
-            raw_frame = (
-                cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if len(frame.shape) == 3 else frame
-            )
+            raw_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if len(frame.shape) == 3 else frame
             input_frame = raw_frame_processor.process_frame(raw_frame)
             patched_frame = noise_patch_processor.process_frame(input_frame)
             freq_masked_frame = freq_mask_processor.process_frame(patched_frame)
@@ -566,6 +566,17 @@ def denoise_run(
         freq_mask_processor.batch_export_videos()
         minimum_projection_processor.batch_export_videos()
 
+        # Always modify CSV metadata to match the output video
+        # Determine output video path: output_dir / "output_<name>.avi"
+        output_video_name = f"output_{noise_patch_processor.name}"
+        output_video_path = output_dir / f"{output_video_name}.avi"
+        _modify_csv_metadata(
+            video_path,
+            output_video_path,
+            noise_patch_processor.dropped_frame_indices,
+            csv_validation_result,
+        )
+
         if len(noise_patch_processor.output_named_video.video) == 0:
             logger.warning("No output video available for display.")
         elif (
@@ -591,3 +602,98 @@ def denoise_run(
                 end_frame=config.interactive_display.end_frame,
             )
             video_plotter.show()
+
+
+def _modify_csv_metadata(
+    input_video_path: str,
+    output_video_path: Path,
+    dropped_frame_indices: list[int],
+    csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
+) -> None:
+    """
+    Modify CSV metadata to match the denoised video by removing rows for dropped frames
+    and adjusting reconstructed_frame_index.
+
+    Parameters:
+    input_video_path (str): Path to the input video file.
+    output_video_path (Path): Path to the output video file.
+    dropped_frame_indices (list[int]): List of frame indices that were dropped.
+    csv_validation_result (Optional[tuple[bool, Optional[pd.DataFrame]]]):
+        Result from CSV validation. If provided and valid, uses the pre-loaded DataFrame.
+    """
+    input_video_path_obj = Path(input_video_path)
+    input_csv_path = input_video_path_obj.with_suffix(".csv")
+    output_csv_path = output_video_path.with_suffix(".csv")
+
+    # Use pre-validated CSV if available, otherwise read it
+    if csv_validation_result is not None:
+        is_valid, df = csv_validation_result
+        if not is_valid or df is None:
+            logger.warning(
+                "CSV validation failed or CSV not available. Skipping CSV metadata modification."
+            )
+            return
+    else:
+        # Fallback: read CSV if validation wasn't done
+        if not input_csv_path.exists():
+            logger.warning(
+                f"CSV file not found at {input_csv_path}. Skipping CSV metadata modification."
+            )
+            return
+
+        try:
+            df = pd.read_csv(input_csv_path)
+        except Exception as e:
+            logger.error(f"Failed to read CSV file {input_csv_path}: {e}")
+            return
+
+        if "reconstructed_frame_index" not in df.columns:
+            logger.warning(
+                f"CSV file {input_csv_path} does not have 'reconstructed_frame_index' column. "
+                "Skipping CSV metadata modification."
+            )
+            return
+
+    # If no frames were dropped, just copy the CSV as-is
+    if not dropped_frame_indices:
+        logger.info(
+            "Modifying CSV metadata at %s from %s (no frames dropped, copying as-is).",
+            output_csv_path,
+            input_csv_path,
+        )
+        df_filtered = df.copy()
+    else:
+        logger.info(
+            f"Modifying CSV metadata at {output_csv_path} "
+            f"from {input_csv_path} (removing {len(dropped_frame_indices)} dropped frames)."
+        )
+
+        # Convert dropped_frame_indices list to a set
+        dropped_set = set(dropped_frame_indices)
+
+        # Store the original row count before filtering
+        original_count = len(df)
+
+        df_filtered = df[~df["reconstructed_frame_index"].isin(dropped_set)].copy()
+
+        removed_count = original_count - len(df_filtered)
+
+        logger.info(f"Removed {removed_count} buffers from CSV.")
+
+        def adjust_frame_index(frame_idx: int) -> int:
+            # Count how many dropped frames have an index less than the current frame_idx
+            num_dropped_before = sum(1 for dropped_idx in dropped_set if dropped_idx < frame_idx)
+
+            # Subtract the count to get the new index
+            return frame_idx - num_dropped_before
+
+        df_filtered["reconstructed_frame_index"] = df_filtered["reconstructed_frame_index"].apply(
+            adjust_frame_index
+        )
+
+    try:
+        df_filtered.to_csv(output_csv_path, index=False)
+        logger.info(f"Successfully modified CSV metadata at {output_csv_path}.")
+    except Exception as e:
+        logger.error(f"Failed to write output CSV file {output_csv_path}: {e}")
+        raise

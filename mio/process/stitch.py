@@ -417,7 +417,9 @@ if __name__ == "__main__":
     ]
     recording_bundle = RecordingDataBundle(
         recordings=recordings,
-        combined_video_writer=VideoWriter(path=Path("user_data/202511_stitch/stitched.avi"), fps=20),
+        combined_video_writer=VideoWriter(
+            path=Path("user_data/202511_stitch/stitched.avi"), fps=20
+        ),
         debug_video_writer=VideoWriter(path=Path("user_data/202511_stitch/debug.avi"), fps=20),
         combined_csv_path=Path("user_data/202511_stitch/stitched.csv"),
         debug_csv_path=Path("user_data/202511_stitch/debug.csv"),

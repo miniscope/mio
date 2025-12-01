@@ -6,6 +6,7 @@ import click
 
 from mio.models.process import DenoiseConfig
 from mio.process.video import denoise_run
+from mio.utils import validate_video_metadata_match
 
 
 @click.group()
@@ -38,5 +39,27 @@ def denoise(
     """
     Denoise a video file.
     """
+    # Validate video/metadata match at the beginning
+    is_valid, error_msg, csv_df = validate_video_metadata_match(input)
+
+    if not is_valid:
+        if error_msg and "not found" in error_msg.lower():
+            if click.confirm(
+                f"{error_msg}. Do you want to continue without generating output CSV metadata?",
+                default=False,
+            ):
+                click.echo(f"Warning: {error_msg}. Continuing without CSV metadata generation.")
+            else:
+                raise click.ClickException(f"{error_msg}. Cannot proceed without CSV.")
+        else:
+            if click.confirm(
+                f"{error_msg}. This may indicate a mismatch between the video and CSV. "
+                "Do you want to continue anyway?",
+                default=False,
+            ):
+                click.echo(f"Warning: {error_msg}. Proceeding anyway.")
+            else:
+                raise click.ClickException(f"{error_msg}. Cannot proceed.")
+
     denoise_config_parsed = DenoiseConfig.from_any(denoise_config)
-    denoise_run(input, denoise_config_parsed)
+    denoise_run(input, denoise_config_parsed, csv_validation_result=(is_valid, csv_df))
