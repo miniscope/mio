@@ -2,6 +2,8 @@
 Command line interface for offline video pre-processing.
 """
 
+from typing import Optional
+
 import click
 
 from mio.models.process import DenoiseConfig
@@ -32,9 +34,25 @@ def process() -> None:
     type=str,
     help="Path to the YAML processing configuration file.",
 )
+@click.option(
+    "-s",
+    "--trim-start",
+    type=int,
+    default=None,
+    help="Start frame index for trimming (0-based, inclusive).",
+)
+@click.option(
+    "-e",
+    "--trim-end",
+    type=int,
+    default=None,
+    help="End frame index for trimming (0-based, inclusive).",
+)
 def denoise(
     input: str,
     denoise_config: str,
+    trim_start: Optional[int],
+    trim_end: Optional[int],
 ) -> None:
     """
     Denoise a video file.
@@ -62,4 +80,10 @@ def denoise(
                 raise click.ClickException(f"{error_msg}. Cannot proceed.")
 
     denoise_config_parsed = DenoiseConfig.from_any(denoise_config)
-    denoise_run(input, denoise_config_parsed, csv_validation_result=(is_valid, csv_df))
+    denoise_run(
+        input,
+        denoise_config_parsed,
+        csv_validation_result=(is_valid, csv_df),
+        trim_start=trim_start,
+        trim_end=trim_end,
+    )

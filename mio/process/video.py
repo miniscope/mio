@@ -140,12 +140,15 @@ class NoisePatchProcessor(BaseVideoProcessor):
                 "The mean_error method is unstable and not fully tested yet." " Use with caution."
             )
 
-    def process_frame(self, input_frame: np.ndarray) -> Optional[np.ndarray]:
+    def process_frame(
+        self, input_frame: np.ndarray, original_frame_index: int
+    ) -> Optional[np.ndarray]:
         """
         Process a single frame.
 
         Parameters:
-        raw_frame (np.ndarray): The raw frame to process.
+        input_frame (np.ndarray): The frame to process.
+        original_frame_index (int): The original frame index from the video reader.
 
         Returns:
         Optional[np.ndarray]: The processed frame. If the frame is noisy, a None is returned.
@@ -156,17 +159,17 @@ class NoisePatchProcessor(BaseVideoProcessor):
         if self.noise_patch_config.enable:
             invalid, noisy_area = self.noise_detect_helper.find_invalid_area(input_frame)
 
-            # Handle noisy frames
             if not invalid:
                 self.append_output_frame(input_frame)
                 return input_frame
             else:
-                index = len(self.output_video) + len(self.noise_patchs)
-                logger.info(f"Dropping frame {index} of original video due to noise.")
-                logger.debug(f"Adding noise patch for frame {index}.")
+                logger.info(
+                    f"Dropping frame {original_frame_index} of original video due to noise."
+                )
+                logger.debug(f"Adding noise patch for frame {original_frame_index}.")
                 self.noise_patchs.append((noisy_area * np.iinfo(np.uint8).max).astype(np.uint8))
                 self.noisy_frames.append(input_frame)
-                self.dropped_frame_indices.append(index)
+                self.dropped_frame_indices.append(original_frame_index)
             return None
 
         self.append_output_frame(input_frame)
@@ -484,6 +487,8 @@ def denoise_run(
     video_path: str,
     config: DenoiseConfig,
     csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
+    trim_start: Optional[int] = None,
+    trim_end: Optional[int] = None,
 ) -> None:
     """
     Preprocess a video file and display the results.
@@ -534,13 +539,23 @@ def denoise_run(
 
     try:
         for index, frame in reader.read_frames():
+            # Apply trim range if specified
+            if trim_start is not None or trim_end is not None:
+                if trim_start is not None and index < trim_start:
+                    continue
+                if trim_end is not None and index > trim_end:
+                    break
+
+            # Apply config end_frame if specified
             if config.end_frame and index > config.end_frame and config.end_frame != -1:
                 break
 
-            # Convert to grayscale if needed (handle both color and grayscale input)
+            # Convert to grayscale if needed
             raw_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if len(frame.shape) == 3 else frame
             input_frame = raw_frame_processor.process_frame(raw_frame)
-            patched_frame = noise_patch_processor.process_frame(input_frame)
+            patched_frame = noise_patch_processor.process_frame(
+                input_frame, original_frame_index=index
+            )
             freq_masked_frame = freq_mask_processor.process_frame(patched_frame)
             _ = output_frame_processor.process_frame(freq_masked_frame)
 
@@ -575,6 +590,8 @@ def denoise_run(
             output_video_path,
             noise_patch_processor.dropped_frame_indices,
             csv_validation_result,
+            trim_start=trim_start,
+            trim_end=trim_end,
         )
 
         # Export frame-timestamp metadata CSV
@@ -613,6 +630,8 @@ def _modify_csv_metadata(
     output_video_path: Path,
     dropped_frame_indices: list[int],
     csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
+    trim_start: Optional[int] = None,
+    trim_end: Optional[int] = None,
 ) -> Optional[pd.DataFrame]:
     """
     Modify CSV metadata to match the denoised video by removing rows for dropped frames
@@ -658,7 +677,35 @@ def _modify_csv_metadata(
             )
             return None
 
-    # If no frames were dropped, just copy the CSV as-is
+    # Trim CSV if specified
+    if trim_start is not None or trim_end is not None:
+        trim_start_val = trim_start if trim_start is not None else 0
+        trim_end_val = trim_end if trim_end is not None else df["reconstructed_frame_index"].max()
+
+        # Filter to trim range and renumber starting from 0
+        df = df[
+            (df["reconstructed_frame_index"] >= trim_start_val)
+            & (df["reconstructed_frame_index"] <= trim_end_val)
+        ].copy()
+        df["reconstructed_frame_index"] = df["reconstructed_frame_index"] - trim_start_val
+        logger.info(
+            "Trimmed CSV to frames %d-%d and renumbered to start from 0.",
+            trim_start_val,
+            trim_end_val,
+        )
+
+        # Convert dropped frame indices to trimmed coordinates
+        if dropped_frame_indices:
+            dropped_in_range = [
+                idx for idx in dropped_frame_indices if trim_start_val <= idx <= trim_end_val
+            ]
+            dropped_frame_indices = [idx - trim_start_val for idx in dropped_in_range]
+            logger.info(
+                "Adjusted dropped frame indices to trimmed range (%d dropped frames).",
+                len(dropped_frame_indices),
+            )
+
+    # Remove dropped frames
     if not dropped_frame_indices:
         logger.info(
             "Modifying CSV metadata at %s from %s (no frames dropped, copying as-is).",
@@ -672,23 +719,13 @@ def _modify_csv_metadata(
             f"from {input_csv_path} (removing {len(dropped_frame_indices)} dropped frames)."
         )
 
-        # Convert dropped_frame_indices list to a set
         dropped_set = set(dropped_frame_indices)
-
-        # Store the original row count before filtering
-        original_count = len(df)
-
         df_filtered = df[~df["reconstructed_frame_index"].isin(dropped_set)].copy()
+        logger.info(f"Removed {len(df) - len(df_filtered)} buffers from CSV.")
 
-        removed_count = original_count - len(df_filtered)
-
-        logger.info(f"Removed {removed_count} buffers from CSV.")
-
+        # Renumber frame indices to be continuous after removing dropped frames
         def adjust_frame_index(frame_idx: int) -> int:
-            # Count how many dropped frames have an index less than the current frame_idx
             num_dropped_before = sum(1 for dropped_idx in dropped_set if dropped_idx < frame_idx)
-
-            # Subtract the count to get the new index
             return frame_idx - num_dropped_before
 
         df_filtered["reconstructed_frame_index"] = df_filtered["reconstructed_frame_index"].apply(
