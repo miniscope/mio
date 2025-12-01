@@ -36,11 +36,11 @@ minimum_projection:
   normalize: true
   output_result: true
   output_min_proj: true
-interactive_display:
-  show_videos: true
+interactive_display: # Mostly for debugging purposes
+  show_videos: false
   start_frame: 40
   end_frame: 140
-  display_freq_mask: true
+  display_freq_mask: false
 end_frame: -1 #-1 means all frames
 output_result: true
 output_dir: user_data/output
