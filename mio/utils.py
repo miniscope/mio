@@ -141,3 +141,87 @@ def validate_video_metadata_match(
         )
 
     return True, None, df
+
+
+def validate_frame_count_alignment(
+    video_path: Union[Path, str],
+) -> Tuple[bool, Optional[str]]:
+    """
+    Validate that video frame count matches CSV metadata frame count.
+
+    Parameters:
+    video_path (Union[Path, str]): Path to the video file.
+
+    Returns:
+    Tuple[bool, Optional[str]]: A tuple containing:
+        - bool: True if alignment is correct, False otherwise
+        - Optional[str]: Error message if validation fails, None otherwise
+    """
+    video_path_obj = Path(video_path)
+    csv_path_obj = video_path_obj.with_suffix(".csv")
+
+    # Check if CSV exists
+    if not csv_path_obj.exists():
+        return False, f"CSV file not found at {csv_path_obj}"
+
+    # Read CSV
+    try:
+        df = pd.read_csv(csv_path_obj)
+    except Exception as e:
+        return False, f"Failed to read CSV file {csv_path_obj}: {e}"
+
+    # Check if reconstructed_frame_index column exists
+    if "reconstructed_frame_index" not in df.columns:
+        return (
+            False,
+            f"CSV file {csv_path_obj} does not have 'reconstructed_frame_index' column",
+        )
+
+    # Get video frame count
+    try:
+        cap = cv2.VideoCapture(str(video_path_obj))
+        if not cap.isOpened():
+            return False, f"Could not open video file {video_path_obj}"
+        video_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
+    except Exception as e:
+        return False, f"Failed to read video file {video_path_obj}: {e}"
+
+    # Check frame count alignment
+    max_csv_index = df["reconstructed_frame_index"].max()
+    min_csv_index = df["reconstructed_frame_index"].min()
+    unique_indices = set(df["reconstructed_frame_index"].unique())
+
+    # Expected: video has frames 0 to (video_frame_count - 1)
+    expected_max_index = video_frame_count - 1
+    expected_indices = set(range(video_frame_count))
+
+    if max_csv_index != expected_max_index:
+        return (
+            False,
+            f"Frame count mismatch: video has {video_frame_count} frames "
+            f"(indices 0-{expected_max_index}), but CSV max index is {max_csv_index}",
+        )
+
+    if min_csv_index != 0:
+        return (
+            False,
+            f"CSV min index is {min_csv_index}, expected 0",
+        )
+
+    missing_indices = expected_indices - unique_indices
+    if missing_indices:
+        missing_list = sorted(missing_indices)
+        if len(missing_list) > 10:
+            missing_str = (
+                f"{', '.join(map(str, missing_list[:10]))}, ... "
+                f"({len(missing_list)} total missing)"
+            )
+        else:
+            missing_str = ", ".join(map(str, missing_list))
+        return (
+            False,
+            f"Missing frame indices in CSV: {missing_str}",
+        )
+
+    return True, None

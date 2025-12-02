@@ -11,7 +11,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from mio import init_logger
-from mio.io import VideoReader
+from mio.io import VideoReader, VideoWriter
 from mio.models.frames import NamedFrame, NamedVideo
 from mio.models.process import (
     DenoiseConfig,
@@ -76,6 +76,9 @@ class BaseVideoProcessor:
         Parameters:
         frame (np.ndarray): The frame to append.
         """
+        if input_frame is None:
+            logger.warning("Attempted to append None frame, skipping.")
+            return
         self.output_video.append(input_frame)
 
     def export_output_video(self) -> None:
@@ -488,8 +491,6 @@ def denoise_run(
     video_path: str,
     config: DenoiseConfig,
     csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
-    trim_start: Optional[int] = None,
-    trim_end: Optional[int] = None,
 ) -> None:
     """
     Preprocess a video file and display the results.
@@ -497,6 +498,9 @@ def denoise_run(
     Parameters:
     video_path (str): The path to the video file.
     config (DenoiseConfig): The denoise configuration.
+    csv_validation_result (Optional[tuple[bool, Optional[pd.DataFrame]]]):
+        Result from CSV validation. If provided and valid, uses the
+        pre-loaded DataFrame.
     """
     if plt is None:
         raise ModuleNotFoundError(
@@ -544,13 +548,6 @@ def denoise_run(
     try:
         frame_iter = tqdm(reader.read_frames(), total=total_frames, desc="Processing frames")
         for index, frame in frame_iter:
-            # Apply trim range if specified
-            if trim_start is not None or trim_end is not None:
-                if trim_start is not None and index < trim_start:
-                    continue
-                if trim_end is not None and index > trim_end:
-                    break
-
             # Apply config end_frame if specified
             if config.end_frame and index > config.end_frame and config.end_frame != -1:
                 break
@@ -600,14 +597,33 @@ def denoise_run(
         # Determine output video path: output_dir / "output_<name>.avi"
         output_video_name = f"output_{noise_patch_processor.name}"
         output_video_path = output_dir / f"{output_video_name}.avi"
+        
+        # Verify the actual output video frame count matches expected
+        actual_output_frame_count = len(output_frame_processor.output_video)
+        dropped_count = len(noise_patch_processor.dropped_frame_indices)
+        logger.debug(
+            f"Output video will have {actual_output_frame_count} frames "
+            f"(input had {total_frames}, dropped {dropped_count})"
+        )
+        
         modified_csv_df = _modify_csv_metadata(
             video_path,
             output_video_path,
             noise_patch_processor.dropped_frame_indices,
             csv_validation_result,
-            trim_start=trim_start,
-            trim_end=trim_end,
         )
+        
+        # Validate frame count alignment after metadata modification
+        if modified_csv_df is not None:
+            max_metadata_index = modified_csv_df["reconstructed_frame_index"].max()
+            expected_max_index = actual_output_frame_count - 1
+            if max_metadata_index != expected_max_index:
+                logger.warning(
+                    f"Frame index mismatch: metadata max index is {max_metadata_index}, "
+                    f"but output video has {actual_output_frame_count} frames "
+                    f"(expected max index {expected_max_index}). "
+                    f"This may indicate an off-by-one error in frame indexing."
+                )
 
         # Export frame-timestamp metadata CSV
         if modified_csv_df is not None:
@@ -645,8 +661,6 @@ def _modify_csv_metadata(
     output_video_path: Path,
     dropped_frame_indices: list[int],
     csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
-    trim_start: Optional[int] = None,
-    trim_end: Optional[int] = None,
 ) -> Optional[pd.DataFrame]:
     """
     Modify CSV metadata to match the denoised video by removing rows for dropped frames
@@ -659,6 +673,10 @@ def _modify_csv_metadata(
     csv_validation_result (Optional[tuple[bool, Optional[pd.DataFrame]]]):
         Result from CSV validation. If provided and valid, uses the
         pre-loaded DataFrame.
+
+    Returns:
+    Optional[pd.DataFrame]: The modified DataFrame, or None if CSV processing
+        was skipped.
     """
     input_video_path_obj = Path(input_video_path)
     input_csv_path = input_video_path_obj.with_suffix(".csv")
@@ -692,34 +710,6 @@ def _modify_csv_metadata(
                 "Skipping CSV metadata modification."
             )
             return None
-
-    # Trim CSV if specified
-    if trim_start is not None or trim_end is not None:
-        trim_start_val = trim_start if trim_start is not None else 0
-        trim_end_val = trim_end if trim_end is not None else df["reconstructed_frame_index"].max()
-
-        # Filter to trim range and renumber starting from 0
-        df = df[
-            (df["reconstructed_frame_index"] >= trim_start_val)
-            & (df["reconstructed_frame_index"] <= trim_end_val)
-        ].copy()
-        df["reconstructed_frame_index"] = df["reconstructed_frame_index"] - trim_start_val
-        logger.info(
-            "Trimmed CSV to frames %d-%d and renumbered to start from 0.",
-            trim_start_val,
-            trim_end_val,
-        )
-
-        # Convert dropped frame indices to trimmed coordinates
-        if dropped_frame_indices:
-            dropped_in_range = [
-                idx for idx in dropped_frame_indices if trim_start_val <= idx <= trim_end_val
-            ]
-            dropped_frame_indices = [idx - trim_start_val for idx in dropped_in_range]
-            logger.info(
-                "Adjusted dropped frame indices to trimmed range (%d dropped frames).",
-                len(dropped_frame_indices),
-            )
 
     # Remove dropped frames
     if not dropped_frame_indices:
@@ -808,4 +798,206 @@ def _export_frame_timestamp_csv(output_video_path: Path, csv_df: pd.DataFrame) -
         )
     except Exception as e:
         logger.error(f"Failed to write frame-timestamp CSV file {output_csv_path}: {e}")
+        raise
+
+
+def crop_run(
+    video_path: str,
+    output_path: Optional[str] = None,
+    csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
+    trim_start: Optional[int] = None,
+    trim_end: Optional[int] = None,
+) -> None:
+    """
+    Crop a video file by trimming frames.
+
+    Parameters:
+    video_path (str): The path to the input video file.
+    output_path (Optional[str]): The path to the output video file.
+        If None, defaults to input path with "_cropped" suffix.
+    csv_validation_result (Optional[tuple[bool, Optional[pd.DataFrame]]]):
+        Result from CSV validation. If provided and valid, uses the
+        pre-loaded DataFrame.
+    trim_start (Optional[int]): Start frame index for trimming (0-based,
+        inclusive). If None, starts from frame 0.
+    trim_end (Optional[int]): End frame index for trimming (0-based,
+        inclusive). If None, ends at the last frame.
+    """
+    reader = VideoReader(video_path)
+    input_path = Path(video_path)
+
+    # Determine output path
+    if output_path is None:
+        output_path_obj = input_path.parent / f"{input_path.stem}_cropped{input_path.suffix}"
+    else:
+        output_path_obj = Path(output_path)
+
+    # Ensure output directory exists
+    output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+    # Get video properties
+    total_frames = int(reader.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = reader.cap.get(cv2.CAP_PROP_FPS)
+
+    # Determine trim range
+    trim_start_val = trim_start if trim_start is not None else 0
+    trim_end_val = trim_end if trim_end is not None else total_frames - 1
+
+    # Validate trim range
+    if trim_start_val < 0:
+        raise ValueError(f"trim_start must be >= 0, got {trim_start_val}")
+    if trim_end_val >= total_frames:
+        raise ValueError(
+            f"trim_end must be < total_frames ({total_frames}), got {trim_end_val}"
+        )
+    if trim_start_val > trim_end_val:
+        raise ValueError(
+            f"trim_start ({trim_start_val}) must be <= trim_end ({trim_end_val})"
+        )
+
+    expected_output_frames = trim_end_val - trim_start_val + 1
+    logger.info(
+        f"Cropping video: frames {trim_start_val}-{trim_end_val} "
+        f"(inclusive, {expected_output_frames} frames)"
+    )
+
+    # Create video writer
+    writer = VideoWriter(path=output_path_obj, fps=fps)
+
+    frames_written = 0
+    try:
+        frame_iter = tqdm(
+            reader.read_frames(),
+            total=total_frames,
+            desc="Cropping frames"
+        )
+        for index, frame in frame_iter:
+            # Apply trim range
+            if index < trim_start_val:
+                continue
+            if index > trim_end_val:
+                break
+
+            # Convert to grayscale if needed
+            if len(frame.shape) == 3:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+            # Write frame
+            writer.write_frame(frame)
+            frames_written += 1
+
+    finally:
+        reader.release()
+        writer.close()
+
+    logger.info(
+        f"Successfully cropped video: wrote {frames_written} frames to {output_path_obj}"
+    )
+
+    # Validate frame count
+    if frames_written != expected_output_frames:
+        logger.warning(
+            f"Frame count mismatch: expected {expected_output_frames} frames, "
+            f"but wrote {frames_written} frames"
+        )
+
+    # Modify CSV metadata
+    _crop_csv_metadata(
+        video_path,
+        output_path_obj,
+        csv_validation_result,
+        trim_start=trim_start_val,
+        trim_end=trim_end_val,
+    )
+
+
+def _crop_csv_metadata(
+    input_video_path: str,
+    output_video_path: Path,
+    csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
+    trim_start: int = 0,
+    trim_end: Optional[int] = None,
+) -> Optional[pd.DataFrame]:
+    """
+    Crop CSV metadata to match the cropped video by trimming and adjusting
+    reconstructed_frame_index.
+
+    Parameters:
+    input_video_path (str): Path to the input video file.
+    output_video_path (Path): Path to the output video file.
+    csv_validation_result (Optional[tuple[bool, Optional[pd.DataFrame]]]):
+        Result from CSV validation. If provided and valid, uses the
+        pre-loaded DataFrame.
+    trim_start (int): Start frame index for trimming (0-based, inclusive).
+    trim_end (Optional[int]): End frame index for trimming (0-based,
+        inclusive). If None, uses the max index from the CSV.
+
+    Returns:
+    Optional[pd.DataFrame]: The modified DataFrame, or None if CSV processing
+        was skipped.
+    """
+    input_video_path_obj = Path(input_video_path)
+    input_csv_path = input_video_path_obj.with_suffix(".csv")
+    output_csv_path = output_video_path.with_suffix(".csv")
+
+    # Use pre-validated CSV if available, otherwise read it
+    if csv_validation_result is not None:
+        is_valid, df = csv_validation_result
+        if not is_valid or df is None:
+            logger.warning(
+                "CSV validation failed or CSV not available. "
+                "Skipping CSV metadata modification."
+            )
+            return None
+    else:
+        # Fallback: read CSV if validation wasn't done
+        if not input_csv_path.exists():
+            logger.warning(
+                f"CSV file not found at {input_csv_path}. "
+                "Skipping CSV metadata modification."
+            )
+            return None
+
+        try:
+            df = pd.read_csv(input_csv_path)
+        except Exception as e:
+            logger.error(f"Failed to read CSV file {input_csv_path}: {e}")
+            return None
+
+        if "reconstructed_frame_index" not in df.columns:
+            logger.warning(
+                f"CSV file {input_csv_path} does not have "
+                "'reconstructed_frame_index' column. "
+                "Skipping CSV metadata modification."
+            )
+            return None
+
+    # Determine trim end value
+    trim_end_val = (
+        df["reconstructed_frame_index"].max()
+        if trim_end is None
+        else trim_end
+    )
+
+    # Filter to trim range and renumber starting from 0
+    df_filtered = df[
+        (df["reconstructed_frame_index"] >= trim_start)
+        & (df["reconstructed_frame_index"] <= trim_end_val)
+    ].copy()
+    df_filtered["reconstructed_frame_index"] = (
+        df_filtered["reconstructed_frame_index"] - trim_start
+    )
+
+    logger.info(
+        f"Trimmed CSV to frames {trim_start}-{trim_end_val} "
+        f"and renumbered to start from 0 "
+        f"({len(df_filtered)} rows)."
+    )
+
+    try:
+        df_filtered.to_csv(output_csv_path, index=False)
+        logger.info(f"Successfully modified CSV metadata at {output_csv_path}.")
+        return df_filtered
+    except Exception as e:
+        logger.error(f"Failed to write output CSV file {output_csv_path}: {e}")
         raise

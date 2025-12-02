@@ -361,6 +361,9 @@ class RecordingDataBundle:
                                 self._debug_frame_index += 1
                 # For one or more recordings, select one of the recordings for stitched outputs
                 if len(frames) >= 1:
+                    # Use current frame index for this frame (before incrementing)
+                    current_frame_index = self._out_frame_index
+                    
                     try:
                         selected_frame = frames[most_proper_idx]
                         self.combined_video_writer.write_frame(selected_frame)
@@ -373,22 +376,25 @@ class RecordingDataBundle:
                         )
                         tqdm.write(msg)
                         logger.warning(msg)
+                        # Skip metadata update if frame write failed
+                        continue
 
                     # Append metadata rows for the selected recording
-                    # Align reconstructed_frame_index
+                    # Align reconstructed_frame_index with the frame we just wrote
                     try:
                         selected_recording = valid_pairs[most_proper_idx][0]
                         rows = selected_recording.metadata[
                             selected_recording.metadata["frame_num"] == frame_num
                         ].copy()
                         # Align reconstructed_frame_index with stitched video index
-                        rows["reconstructed_frame_index"] = self._out_frame_index
+                        rows["reconstructed_frame_index"] = current_frame_index
                         if self.combined_metadata is None:
                             self.combined_metadata = rows
                         else:
                             self.combined_metadata = pd.concat(
                                 [self.combined_metadata, rows], ignore_index=True
                             )
+                        # Only increment if both write and metadata update succeeded
                         self._out_frame_index += 1
                     except Exception as e:
                         msg = f"Failed to collect metadata for frame {frame_num}: {e}"
