@@ -15,8 +15,8 @@ noise_patch:
   gradient_config:
     threshold: 20
   black_area_config:
-    consecutive_threshold: 5
-    value_threshold: 16
+    consecutive_threshold: 100
+    value_threshold: 0
   output_result: true
   output_noise_patch: true
   output_diff: false
