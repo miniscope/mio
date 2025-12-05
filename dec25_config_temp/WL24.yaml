@@ -4,7 +4,7 @@ mio_version: 0.8.2.dev13+g338e847.d20251030
 devices:
 - device_id: 4
   updates:
-    LED: 30
+    LED: 35
     GAIN: 2
     ROI_X: 50
     ROI_Y: 51
