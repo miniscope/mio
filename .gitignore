@@ -161,5 +161,8 @@ wirefree_example.mp4
 wirefree_example.avi
 .pdm-python
 user_data/*
+
+# The default output directory for the process commands. Not necessary but doesn't hurt to have.
+mio_process/*
 !user_data/.gitkeep
 

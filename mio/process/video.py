@@ -88,9 +88,9 @@ class BaseVideoProcessor:
         if self.output_enable:
             logger.debug(f"Exporting {self.name} video to {self.output_dir}")
             self.output_named_video.export(
-                output_path=self.output_dir / "output",
+                output_path=self.output_dir / self.name,
                 fps=20,
-                suffix=True,
+                suffix=False,
             )
         else:
             logger.info(f"{self.name} output disabled.")
@@ -491,6 +491,7 @@ def denoise_run(
     video_path: str,
     config: DenoiseConfig,
     csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
+    debug_dir: Optional[Path] = None,
 ) -> None:
     """
     Preprocess a video file and display the results.
@@ -501,6 +502,10 @@ def denoise_run(
     csv_validation_result (Optional[tuple[bool, Optional[pd.DataFrame]]]):
         Result from CSV validation. If provided and valid, uses the
         pre-loaded DataFrame.
+    debug_dir (Optional[Path]): Directory for intermediate/debug files.
+        If provided, intermediate files (noisy frames, patches, frequency masks, etc.)
+        will be saved here instead of the main output_dir. Main output files
+        (output video and CSV) will still be saved to output_dir.
     """
     if plt is None:
         raise ModuleNotFoundError(
@@ -515,9 +520,14 @@ def denoise_run(
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
 
+    # Use debug_dir for intermediate files if provided, otherwise use output_dir
+    intermediate_dir = debug_dir if debug_dir is not None else output_dir
+    if debug_dir is not None:
+        intermediate_dir.mkdir(parents=True, exist_ok=True)
+
     raw_frame_processor = PassThroughProcessor(
         name=pathstem + "_raw",
-        output_dir=output_dir,
+        output_dir=intermediate_dir,
     )
 
     output_frame_processor = PassThroughProcessor(
@@ -526,13 +536,13 @@ def denoise_run(
     )
 
     noise_patch_processor = NoisePatchProcessor(
-        output_dir=output_dir,
+        output_dir=output_dir,  # Main output stays in output_dir
         name=pathstem + "_patch",
         noise_patch_config=config.noise_patch,
     )
 
     freq_mask_processor = FreqencyMaskProcessor(
-        output_dir=output_dir,
+        output_dir=intermediate_dir,  # Intermediate files go to debug_dir
         name=pathstem + "_freq_mask",
         freq_mask_config=config.frequency_masking,
         width=reader.width,
@@ -573,13 +583,30 @@ def denoise_run(
                 logger.warning(f"Frame is not a numpy array: {type(frame)}")
         minimum_projection_processor = MinProjSubtractProcessor(
             name=pathstem + "min_proj",
-            output_dir=output_dir,
+            output_dir=intermediate_dir,  # Intermediate files go to debug_dir
             video_frames=output_frames,
             minimum_projection_config=config.minimum_projection,
         )
         minimum_projection_processor.normalize_stack()
 
-        noise_patch_processor.batch_export_videos()
+        # Export main output video (stays in output_dir)
+        noise_patch_processor.export_output_video()
+        
+        # Export intermediate/debug files to debug_dir if provided
+        if debug_dir is not None:
+            # Temporarily change output_dir for intermediate exports
+            original_output_dir = noise_patch_processor.output_dir
+            noise_patch_processor.output_dir = debug_dir
+            noise_patch_processor.export_noise_patch()
+            noise_patch_processor.export_diff_frames()
+            noise_patch_processor.export_noisy_video()
+            noise_patch_processor.output_dir = original_output_dir
+        else:
+            # Export all files to output_dir
+            noise_patch_processor.export_noise_patch()
+            noise_patch_processor.export_diff_frames()
+            noise_patch_processor.export_noisy_video()
+        
         freq_mask_processor.batch_export_videos()
         minimum_projection_processor.batch_export_videos()
 
@@ -594,8 +621,8 @@ def denoise_run(
             logger.info("No frames were excluded during processing.")
 
         # Always modify CSV metadata to match the output video
-        # Determine output video path: output_dir / "output_<name>.avi"
-        output_video_name = f"output_{noise_patch_processor.name}"
+        # Determine output video path: output_dir / "<name>.avi"
+        output_video_name = noise_patch_processor.name
         output_video_path = output_dir / f"{output_video_name}.avi"
         
         # Verify the actual output video frame count matches expected
@@ -807,7 +834,7 @@ def crop_run(
     csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
     trim_start: Optional[int] = None,
     trim_end: Optional[int] = None,
-) -> None:
+) -> Path:
     """
     Crop a video file by trimming frames.
 
@@ -830,7 +857,15 @@ def crop_run(
     if output_path is None:
         output_path_obj = input_path.parent / f"{input_path.stem}_cropped{input_path.suffix}"
     else:
-        output_path_obj = Path(output_path)
+        output_path_obj = Path(output_path).expanduser()
+        # If output_path is a directory or has no extension, treat as directory and generate filename
+        if output_path_obj.is_dir() or not output_path_obj.suffix:
+            # It's a directory (existing or path without extension), generate filename based on input
+            if not output_path_obj.exists():
+                # Create the directory if it doesn't exist
+                output_path_obj.mkdir(parents=True, exist_ok=True)
+            output_path_obj = output_path_obj / f"{input_path.stem}_cropped{input_path.suffix}"
+        # If it has an extension, use it as-is
 
     # Ensure output directory exists
     output_path_obj.parent.mkdir(parents=True, exist_ok=True)
@@ -909,6 +944,8 @@ def crop_run(
         trim_start=trim_start_val,
         trim_end=trim_end_val,
     )
+
+    return output_path_obj
 
 
 def _crop_csv_metadata(
