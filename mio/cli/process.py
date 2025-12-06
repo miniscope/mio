@@ -229,7 +229,7 @@ def crop(
         raise click.ClickException(
             f"Frame count alignment failed after cropping: {alignment_error}"
         )
-    click.echo(f"✓ Frame count alignment verified: {output_path_obj}")
+    click.echo(f"✅ Frame count alignment verified: {output_path_obj}")
 
 
 @process.command()
@@ -326,7 +326,7 @@ def stitch(
         raise click.ClickException(
             f"Frame count alignment failed after stitching: {alignment_error}"
         )
-    click.echo(f"✓ Frame count alignment verified: {output_path_obj}")
+    click.echo(f"✅ Frame count alignment verified: {output_path_obj}")
 
 
 @process.command()
@@ -410,7 +410,7 @@ def workflow(
     stitched_dir = output_dir / "stitched"
     stitched_dir.mkdir(parents=True, exist_ok=True)
     stitched_video = stitched_dir / f"{output_stem}_stitched.avi"
-    logger.info("Stitching videos...")
+    click.echo("Stitching videos...")
 
     # Create RecordingData objects
     recordings: List[RecordingData] = []
@@ -447,7 +447,7 @@ def workflow(
         debug_csv_path=debug_csv_path,
     )
 
-    logger.info(f"Stitching {len(recordings)} recordings...")
+    click.echo(f"Stitching {len(recordings)} recordings...")
     recording_bundle.stitch_recordings()
 
     # Validate frame count alignment after stitching
@@ -456,19 +456,19 @@ def workflow(
         raise click.ClickException(
             f"Frame count alignment failed after stitching: {alignment_error}"
         )
-    logger.info(f"✓ Frame count alignment verified: {output_path_obj}")
-    logger.info(f"✓ Saved stitched video: {output_path_obj}")
-    logger.info(f"✓ Saved stitched metadata: {output_csv_path}")
+    click.echo(f"✅ Frame count alignment verified: {output_path_obj}")
+    click.echo(f"✅ Saved stitched video: {output_path_obj}")
+    click.echo(f"✅ Saved stitched metadata: {output_csv_path}")
 
     if trim_start == 0 and trim_end == 0:
-        logger.info("Skipping trim (both start and end are 0)...")
+        click.echo("Skipping trim (both start and end are 0)...")
         actual_cropped_video = stitched_video
-        logger.info("✓ No trimming needed, using stitched video as-is")
+        click.echo("✅ No trimming needed, using stitched video as-is")
     else:
         cropped_dir = output_dir / "cropped"
         cropped_dir.mkdir(parents=True, exist_ok=True)
         cropped_video = cropped_dir / f"{output_stem}_cropped.avi"
-        logger.info("Trimming video...")
+        click.echo("Trimming video...")
 
         # Get video frame count to calculate trim range
         cap = cv2.VideoCapture(str(stitched_video))
@@ -484,7 +484,7 @@ def workflow(
                 f"Total frames: {total_frames}"
             )
 
-        logger.info(
+        click.echo(
             f"Trimming: removing first {trim_start} frames and last {trim_end} frames "
             f"(keeping frames {crop_start}-{crop_end})"
         )
@@ -508,12 +508,12 @@ def workflow(
             raise click.ClickException(
                 f"Frame count alignment failed after cropping: {alignment_error}"
             )
-        logger.info(f"✓ Frame count alignment verified: {actual_cropped_video}")
-        logger.info(f"✓ Saved cropped video: {actual_cropped_video}")
-        logger.info(f"✓ Saved cropped metadata: {actual_cropped_video.with_suffix('.csv')}")
+        click.echo(f"✅ Frame count alignment verified: {actual_cropped_video}")
+        click.echo(f"✅ Saved cropped video: {actual_cropped_video}")
+        click.echo(f"✅ Saved cropped metadata: {actual_cropped_video.with_suffix('.csv')}")
 
     # Step 3: Denoise
-    logger.info("Denoising video...")
+    click.echo("Denoising video...")
 
     # Validate input before denoising
     is_valid, error_msg, csv_df = validate_video_metadata_match(str(actual_cropped_video))
@@ -585,7 +585,7 @@ def workflow(
             # Try with _metadata suffix
             final_csv = final_video.parent / f"{final_video.stem}_metadata.csv"
         
-        logger.info("Final validation...")
+        click.echo("Final validation...")
         
         # Only validate if CSV exists
         if final_csv.exists():
@@ -594,8 +594,8 @@ def workflow(
                 raise click.ClickException(
                     f"Frame count alignment failed after denoising: {alignment_error}"
                 )
-            logger.info(
-                f"✓ Final frame count alignment verified: {final_video}"
+            click.echo(
+                f"✅ Final frame count alignment verified: {final_video}"
             )
         else:
             logger.warning(
@@ -603,17 +603,8 @@ def workflow(
                 "skipping alignment validation"
             )
         
-        logger.info(f"✓ Saved denoised video: {final_video}")
+        click.echo(f"✅ Saved denoised video: {final_video}")
         if final_csv.exists():
-            logger.info(f"✓ Saved denoised metadata: {final_csv}")
+            click.echo(f"✅ Saved denoised metadata: {final_csv}")
     else:
         logger.warning("Could not find denoised output video for validation.")
-
-    logger.info("Workflow completed")
-    logger.info(f"Stitched: {stitched_video}")
-    if trim_start != 0 or trim_end != 0:
-        logger.info(f"Cropped: {actual_cropped_video}")
-    else:
-        logger.info("Cropped: (skipped)")
-    if output_videos:
-        logger.info(f"Denoised: {final_video}")
