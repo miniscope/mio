@@ -183,7 +183,7 @@ class StreamDaq:
                 f"Frame {header.frame_num}; Buffer {header.buffer_count} "
                 f"(#{header.frame_buffer_count} in frame)\n"
                 f"Expected buffer data length: {expected_payload_size}, got data with shape "
-                f"{data.shape}.\nPadding to expected length",
+                f"{data.shape[0]}.\nPadding to expected length",
             )
 
         if data.shape[0] != expected_data_size:
