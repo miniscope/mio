@@ -11,8 +11,8 @@ device: "OK"
 # bitstream: "XEM7310-A75/USBInterface-3_03mhz-J2_2-3v3-IEEE.bit"
 # bitstream: "XEM7310-A75/USBInterface-5mhz-J2_2-3v3-IEEE.bit"
 # bitstream: "XEM7310-A75/USBInterface-6_67mhz-J2_2-3v3-IEEE.bit"
-bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit" # original
-# bitstream: "XEM7310-A75/USBInterface-12_5mhz-J2_2-3v3-IEEE.bit"
+# bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit" # original
+bitstream: "XEM7310-A75/USBInterface-12_5mhz-J2_2-3v3-IEEE.bit"
 # bitstream: "XEM7310-A75/USBInterface-16_67mhz-J2_2-3v3-IEEE.bit"
 # bitstream: "XEM7310-A75/USBInterface-20mhz-J2_2-3v3-IEEE.bit" 
 
