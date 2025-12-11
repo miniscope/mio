@@ -405,60 +405,84 @@ def workflow(
             output_stem = output_path.stem
 
     import cv2
+    import shutil
 
-    # Step 1: Stitch
-    stitched_dir = output_dir / "stitched"
-    stitched_dir.mkdir(parents=True, exist_ok=True)
-    stitched_video = stitched_dir / f"{output_stem}_stitched.avi"
-    click.echo("Stitching videos...")
-
-    # Create RecordingData objects
-    recordings: List[RecordingData] = []
-    for video_path in inputs:
-        video_path_obj = Path(video_path)
-        csv_path_obj = video_path_obj.with_suffix(".csv")
-        if not csv_path_obj.exists():
+    # Step 1: Stitch (skip if only one input)
+    if len(inputs) == 1:
+        click.echo("Only one input video provided, skipping stitching...")
+        # Use the single input video directly
+        input_video_path = Path(inputs[0])
+        input_csv_path = input_video_path.with_suffix(".csv")
+        
+        if not input_csv_path.exists():
             raise click.ClickException(
-                f"CSV file not found for {video_path}: {csv_path_obj}"
+                f"CSV file not found for {input_video_path}: {input_csv_path}"
             )
-        recordings.append(RecordingData(video_path=video_path_obj, csv_path=csv_path_obj))
+        
+        # Create stitched directory structure for consistency
+        stitched_dir = output_dir / "stitched"
+        stitched_dir.mkdir(parents=True, exist_ok=True)
+        stitched_video = stitched_dir / f"{output_stem}_stitched.avi"
+        
+        # Copy the input video and CSV to the stitched directory
+        click.echo(f"Copying single video to stitched directory: {stitched_video}")
+        shutil.copy2(input_video_path, stitched_video)
+        shutil.copy2(input_csv_path, stitched_video.with_suffix(".csv"))
+        
+        click.echo(f"✅ Using single input video as stitched video: {stitched_video}")
+    else:
+        stitched_dir = output_dir / "stitched"
+        stitched_dir.mkdir(parents=True, exist_ok=True)
+        stitched_video = stitched_dir / f"{output_stem}_stitched.avi"
+        click.echo("Stitching videos...")
 
-    # Create output paths
-    output_path_obj = Path(stitched_video)
-    output_path_obj.parent.mkdir(parents=True, exist_ok=True)
-    output_csv_path = output_path_obj.with_suffix(".csv")
+        # Create RecordingData objects
+        recordings: List[RecordingData] = []
+        for video_path in inputs:
+            video_path_obj = Path(video_path)
+            csv_path_obj = video_path_obj.with_suffix(".csv")
+            if not csv_path_obj.exists():
+                raise click.ClickException(
+                    f"CSV file not found for {video_path}: {csv_path_obj}"
+                )
+            recordings.append(RecordingData(video_path=video_path_obj, csv_path=csv_path_obj))
 
-    # Create debug output paths in stitched/debug/ directory
-    debug_dir = stitched_dir / "debug"
-    debug_dir.mkdir(parents=True, exist_ok=True)
-    debug_video_path = debug_dir / f"{output_stem}_debug.avi"
-    debug_csv_path = debug_dir / f"{output_stem}_debug.csv"
+        # Create output paths
+        output_path_obj = Path(stitched_video)
+        output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+        output_csv_path = output_path_obj.with_suffix(".csv")
 
-    # Create video writers
-    combined_video_writer = VideoWriter(path=output_path_obj, fps=fps)
-    debug_video_writer = VideoWriter(path=debug_video_path, fps=fps)
+        # Create debug output paths in stitched/debug/ directory
+        debug_dir = stitched_dir / "debug"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        debug_video_path = debug_dir / f"{output_stem}_debug.avi"
+        debug_csv_path = debug_dir / f"{output_stem}_debug.csv"
 
-    # Create bundle and stitch
-    recording_bundle = RecordingDataBundle(
-        recordings=recordings,
-        combined_video_writer=combined_video_writer,
-        debug_video_writer=debug_video_writer,
-        combined_csv_path=output_csv_path,
-        debug_csv_path=debug_csv_path,
-    )
+        # Create video writers
+        combined_video_writer = VideoWriter(path=output_path_obj, fps=fps)
+        debug_video_writer = VideoWriter(path=debug_video_path, fps=fps)
 
-    click.echo(f"Stitching {len(recordings)} recordings...")
-    recording_bundle.stitch_recordings()
-
-    # Validate frame count alignment after stitching
-    is_aligned, alignment_error = validate_frame_count_alignment(output_path_obj)
-    if not is_aligned:
-        raise click.ClickException(
-            f"Frame count alignment failed after stitching: {alignment_error}"
+        # Create bundle and stitch
+        recording_bundle = RecordingDataBundle(
+            recordings=recordings,
+            combined_video_writer=combined_video_writer,
+            debug_video_writer=debug_video_writer,
+            combined_csv_path=output_csv_path,
+            debug_csv_path=debug_csv_path,
         )
-    click.echo(f"✅ Frame count alignment verified: {output_path_obj}")
-    click.echo(f"✅ Saved stitched video: {output_path_obj}")
-    click.echo(f"✅ Saved stitched metadata: {output_csv_path}")
+
+        click.echo(f"Stitching {len(recordings)} recordings...")
+        recording_bundle.stitch_recordings()
+
+        # Validate frame count alignment after stitching
+        is_aligned, alignment_error = validate_frame_count_alignment(output_path_obj)
+        if not is_aligned:
+            raise click.ClickException(
+                f"Frame count alignment failed after stitching: {alignment_error}"
+            )
+        click.echo(f"✅ Frame count alignment verified: {output_path_obj}")
+        click.echo(f"✅ Saved stitched video: {output_path_obj}")
+        click.echo(f"✅ Saved stitched metadata: {output_csv_path}")
 
     if trim_start == 0 and trim_end == 0:
         click.echo("Skipping trim (both start and end are 0)...")
