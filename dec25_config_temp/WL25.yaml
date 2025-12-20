@@ -4,7 +4,7 @@ mio_version: 0.6.1.dev99+gb8ff02f
 devices:
 - device_id: 4
   updates:
-    LED: 20
+    LED: 18
     GAIN: 2
     ROI_X: 90
     ROI_Y: 45

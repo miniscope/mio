@@ -5,7 +5,7 @@ devices:
 - device_id: 4
   updates:
     LED: 35
-    GAIN: 2
+    GAIN: 4
     ROI_X: 50
-    ROI_Y: 51
+    ROI_Y: 41
     SUBSAMPLE: 0
