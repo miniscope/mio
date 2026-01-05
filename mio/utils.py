@@ -79,11 +79,15 @@ def validate_video_metadata_match(
     2. If CSV has 'reconstructed_frame_index' column
     3. If all frame indices from the video (0 to frame_count-1) exist in the CSV
 
-    Parameters:
-    video_path (Union[Path, str]): Path to the video file.
+    Parameters
+    ----------
+    video_path : Union[Path, str]
+        Path to the video file.
 
-    Returns:
-    Tuple[bool, Optional[str], Optional[pd.DataFrame]]: A tuple containing:
+    Returns
+    -------
+    Tuple[bool, Optional[str], Optional[pd.DataFrame]]
+        A tuple containing:
         - bool: True if validation passes, False otherwise
         - Optional[str]: Error message if validation fails, None otherwise
         - Optional[pd.DataFrame]: The CSV DataFrame if successfully read, None otherwise
@@ -149,11 +153,15 @@ def validate_frame_count_alignment(
     """
     Validate that video frame count matches CSV metadata frame count.
 
-    Parameters:
-    video_path (Union[Path, str]): Path to the video file.
+    Parameters
+    ----------
+    video_path : Union[Path, str]
+        Path to the video file.
 
-    Returns:
-    Tuple[bool, Optional[str]]: A tuple containing:
+    Returns
+    -------
+    Tuple[bool, Optional[str]]
+        A tuple containing:
         - bool: True if alignment is correct, False otherwise
         - Optional[str]: Error message if validation fails, None otherwise
     """

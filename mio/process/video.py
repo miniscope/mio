@@ -145,17 +145,23 @@ class NoisePatchProcessor(BaseVideoProcessor):
             )
 
     def process_frame(
-        self, input_frame: np.ndarray, original_frame_index: int
+        self, input_frame: np.ndarray, original_frame_index: Optional[int] = None
     ) -> Optional[np.ndarray]:
         """
         Process a single frame.
 
-        Parameters:
-        input_frame (np.ndarray): The frame to process.
-        original_frame_index (int): The original frame index from the video reader.
+        Parameters
+        ----------
+        input_frame : np.ndarray
+            The frame to process.
+        original_frame_index : Optional[int], optional
+            The original frame index from the video reader.
+            If None, a sequential counter will be used for tracking dropped frames.
 
-        Returns:
-        Optional[np.ndarray]: The processed frame. If the frame is noisy, a None is returned.
+        Returns
+        -------
+        Optional[np.ndarray]
+            The processed frame. If the frame is noisy, a None is returned.
         """
         if input_frame is None:
             return None
@@ -167,13 +173,19 @@ class NoisePatchProcessor(BaseVideoProcessor):
                 self.append_output_frame(input_frame)
                 return input_frame
             else:
-                msg = f"Dropping frame {original_frame_index} of original video due to noise."
+                # Use frame index if provided, otherwise use a sequential counter
+                frame_idx = original_frame_index
+                if frame_idx is None:
+                    # Use length of dropped_frame_indices as a sequential counter
+                    frame_idx = len(self.dropped_frame_indices)
+
+                msg = f"Dropping frame {frame_idx} of original video due to noise."
                 tqdm.write(msg)
                 logger.debug(msg)
-                logger.debug(f"Adding noise patch for frame {original_frame_index}.")
+                logger.debug(f"Adding noise patch for frame {frame_idx}.")
                 self.noise_patchs.append((noisy_area * np.iinfo(np.uint8).max).astype(np.uint8))
                 self.noisy_frames.append(input_frame)
-                self.dropped_frame_indices.append(original_frame_index)
+                self.dropped_frame_indices.append(frame_idx)
             return None
 
         self.append_output_frame(input_frame)
@@ -496,13 +508,17 @@ def denoise_run(
     """
     Preprocess a video file and display the results.
 
-    Parameters:
-    video_path (str): The path to the video file.
-    config (DenoiseConfig): The denoise configuration.
-    csv_validation_result (Optional[tuple[bool, Optional[pd.DataFrame]]]):
+    Parameters
+    ----------
+    video_path : str
+        The path to the video file.
+    config : DenoiseConfig
+        The denoise configuration.
+    csv_validation_result : Optional[tuple[bool, Optional[pd.DataFrame]]], optional
         Result from CSV validation. If provided and valid, uses the
         pre-loaded DataFrame.
-    debug_dir (Optional[Path]): Directory for intermediate/debug files.
+    debug_dir : Optional[Path], optional
+        Directory for intermediate/debug files.
         If provided, intermediate files (noisy frames, patches, frequency masks, etc.)
         will be saved here instead of the main output_dir. Main output files
         (output video and CSV) will still be saved to output_dir.
@@ -591,7 +607,7 @@ def denoise_run(
 
         # Export main output video (stays in output_dir)
         noise_patch_processor.export_output_video()
-        
+
         # Export intermediate/debug files to debug_dir if provided
         if debug_dir is not None:
             # Temporarily change output_dir for intermediate exports
@@ -606,7 +622,7 @@ def denoise_run(
             noise_patch_processor.export_noise_patch()
             noise_patch_processor.export_diff_frames()
             noise_patch_processor.export_noisy_video()
-        
+
         freq_mask_processor.batch_export_videos()
         minimum_projection_processor.batch_export_videos()
 
@@ -624,7 +640,7 @@ def denoise_run(
         # Determine output video path: output_dir / "<name>.avi"
         output_video_name = noise_patch_processor.name
         output_video_path = output_dir / f"{output_video_name}.avi"
-        
+
         # Verify the actual output video frame count matches expected
         actual_output_frame_count = len(output_frame_processor.output_video)
         dropped_count = len(noise_patch_processor.dropped_frame_indices)
@@ -632,14 +648,14 @@ def denoise_run(
             f"Output video will have {actual_output_frame_count} frames "
             f"(input had {total_frames}, dropped {dropped_count})"
         )
-        
+
         modified_csv_df = _modify_csv_metadata(
             video_path,
             output_video_path,
             noise_patch_processor.dropped_frame_indices,
             csv_validation_result,
         )
-        
+
         # Validate frame count alignment after metadata modification
         if modified_csv_df is not None:
             max_metadata_index = modified_csv_df["reconstructed_frame_index"].max()
@@ -693,17 +709,22 @@ def _modify_csv_metadata(
     Modify CSV metadata to match the denoised video by removing rows for dropped frames
     and adjusting reconstructed_frame_index.
 
-    Parameters:
-    input_video_path (str): Path to the input video file.
-    output_video_path (Path): Path to the output video file.
-    dropped_frame_indices (list[int]): List of frame indices that were dropped.
-    csv_validation_result (Optional[tuple[bool, Optional[pd.DataFrame]]]):
+    Parameters
+    ----------
+    input_video_path : str
+        Path to the input video file.
+    output_video_path : Path
+        Path to the output video file.
+    dropped_frame_indices : list[int]
+        List of frame indices that were dropped.
+    csv_validation_result : Optional[tuple[bool, Optional[pd.DataFrame]]], optional
         Result from CSV validation. If provided and valid, uses the
         pre-loaded DataFrame.
 
-    Returns:
-    Optional[pd.DataFrame]: The modified DataFrame, or None if CSV processing
-        was skipped.
+    Returns
+    -------
+    Optional[pd.DataFrame]
+        The modified DataFrame, or None if CSV processing was skipped.
     """
     input_video_path_obj = Path(input_video_path)
     input_csv_path = input_video_path_obj.with_suffix(".csv")
@@ -780,10 +801,13 @@ def _export_frame_timestamp_csv(output_video_path: Path, csv_df: pd.DataFrame) -
 
     The CSV includes both the first and last buffer timestamps for each frame.
 
-    Parameters:
-    output_video_path (Path): Path to the output video file.
-    csv_df (pd.DataFrame): The modified CSV DataFrame with
-        reconstructed_frame_index and buffer_recv_unix_time.
+    Parameters
+    ----------
+    output_video_path : Path
+        Path to the output video file.
+    csv_df : pd.DataFrame
+        The modified CSV DataFrame with reconstructed_frame_index and
+        buffer_recv_unix_time.
     """
     # Check if required columns exist
     if "reconstructed_frame_index" not in csv_df.columns:
@@ -838,17 +862,27 @@ def crop_run(
     """
     Crop a video file by trimming frames.
 
-    Parameters:
-    video_path (str): The path to the input video file.
-    output_path (Optional[str]): The path to the output video file.
+    Parameters
+    ----------
+    video_path : str
+        The path to the input video file.
+    output_path : Optional[str], optional
+        The path to the output video file.
         If None, defaults to input path with "_cropped" suffix.
-    csv_validation_result (Optional[tuple[bool, Optional[pd.DataFrame]]]):
+    csv_validation_result : Optional[tuple[bool, Optional[pd.DataFrame]]], optional
         Result from CSV validation. If provided and valid, uses the
         pre-loaded DataFrame.
-    trim_start (Optional[int]): Start frame index for trimming (0-based,
-        inclusive). If None, starts from frame 0.
-    trim_end (Optional[int]): End frame index for trimming (0-based,
-        inclusive). If None, ends at the last frame.
+    trim_start : Optional[int], optional
+        Start frame index for trimming (0-based, inclusive).
+        If None, starts from frame 0.
+    trim_end : Optional[int], optional
+        End frame index for trimming (0-based, inclusive).
+        If None, ends at the last frame.
+
+    Returns
+    -------
+    Path
+        Path to the output video file.
     """
     reader = VideoReader(video_path)
     input_path = Path(video_path)
@@ -858,9 +892,11 @@ def crop_run(
         output_path_obj = input_path.parent / f"{input_path.stem}_cropped{input_path.suffix}"
     else:
         output_path_obj = Path(output_path).expanduser()
-        # If output_path is a directory or has no extension, treat as directory and generate filename
+        # If output_path is a directory or has no extension
+        # treat as directory and generate filename
         if output_path_obj.is_dir() or not output_path_obj.suffix:
-            # It's a directory (existing or path without extension), generate filename based on input
+            # It's a directory (existing or path without extension)
+            # generate filename based on input
             if not output_path_obj.exists():
                 # Create the directory if it doesn't exist
                 output_path_obj.mkdir(parents=True, exist_ok=True)
@@ -882,13 +918,9 @@ def crop_run(
     if trim_start_val < 0:
         raise ValueError(f"trim_start must be >= 0, got {trim_start_val}")
     if trim_end_val >= total_frames:
-        raise ValueError(
-            f"trim_end must be < total_frames ({total_frames}), got {trim_end_val}"
-        )
+        raise ValueError(f"trim_end must be < total_frames ({total_frames}), got {trim_end_val}")
     if trim_start_val > trim_end_val:
-        raise ValueError(
-            f"trim_start ({trim_start_val}) must be <= trim_end ({trim_end_val})"
-        )
+        raise ValueError(f"trim_start ({trim_start_val}) must be <= trim_end ({trim_end_val})")
 
     expected_output_frames = trim_end_val - trim_start_val + 1
     logger.info(
@@ -901,11 +933,7 @@ def crop_run(
 
     frames_written = 0
     try:
-        frame_iter = tqdm(
-            reader.read_frames(),
-            total=total_frames,
-            desc="Cropping frames"
-        )
+        frame_iter = tqdm(reader.read_frames(), total=total_frames, desc="Cropping frames")
         for index, frame in frame_iter:
             # Apply trim range
             if index < trim_start_val:
@@ -925,9 +953,7 @@ def crop_run(
         reader.release()
         writer.close()
 
-    logger.info(
-        f"Successfully cropped video: wrote {frames_written} frames to {output_path_obj}"
-    )
+    logger.info(f"Successfully cropped video: wrote {frames_written} frames to {output_path_obj}")
 
     # Validate frame count
     if frames_written != expected_output_frames:
@@ -959,19 +985,25 @@ def _crop_csv_metadata(
     Crop CSV metadata to match the cropped video by trimming and adjusting
     reconstructed_frame_index.
 
-    Parameters:
-    input_video_path (str): Path to the input video file.
-    output_video_path (Path): Path to the output video file.
-    csv_validation_result (Optional[tuple[bool, Optional[pd.DataFrame]]]):
+    Parameters
+    ----------
+    input_video_path : str
+        Path to the input video file.
+    output_video_path : Path
+        Path to the output video file.
+    csv_validation_result : Optional[tuple[bool, Optional[pd.DataFrame]]], optional
         Result from CSV validation. If provided and valid, uses the
         pre-loaded DataFrame.
-    trim_start (int): Start frame index for trimming (0-based, inclusive).
-    trim_end (Optional[int]): End frame index for trimming (0-based,
-        inclusive). If None, uses the max index from the CSV.
+    trim_start : int, optional
+        Start frame index for trimming (0-based, inclusive). Default is 0.
+    trim_end : Optional[int], optional
+        End frame index for trimming (0-based, inclusive).
+        If None, uses the max index from the CSV.
 
-    Returns:
-    Optional[pd.DataFrame]: The modified DataFrame, or None if CSV processing
-        was skipped.
+    Returns
+    -------
+    Optional[pd.DataFrame]
+        The modified DataFrame, or None if CSV processing was skipped.
     """
     input_video_path_obj = Path(input_video_path)
     input_csv_path = input_video_path_obj.with_suffix(".csv")
@@ -982,16 +1014,14 @@ def _crop_csv_metadata(
         is_valid, df = csv_validation_result
         if not is_valid or df is None:
             logger.warning(
-                "CSV validation failed or CSV not available. "
-                "Skipping CSV metadata modification."
+                "CSV validation failed or CSV not available. " "Skipping CSV metadata modification."
             )
             return None
     else:
         # Fallback: read CSV if validation wasn't done
         if not input_csv_path.exists():
             logger.warning(
-                f"CSV file not found at {input_csv_path}. "
-                "Skipping CSV metadata modification."
+                f"CSV file not found at {input_csv_path}. " "Skipping CSV metadata modification."
             )
             return None
 
@@ -1010,20 +1040,14 @@ def _crop_csv_metadata(
             return None
 
     # Determine trim end value
-    trim_end_val = (
-        df["reconstructed_frame_index"].max()
-        if trim_end is None
-        else trim_end
-    )
+    trim_end_val = df["reconstructed_frame_index"].max() if trim_end is None else trim_end
 
     # Filter to trim range and renumber starting from 0
     df_filtered = df[
         (df["reconstructed_frame_index"] >= trim_start)
         & (df["reconstructed_frame_index"] <= trim_end_val)
     ].copy()
-    df_filtered["reconstructed_frame_index"] = (
-        df_filtered["reconstructed_frame_index"] - trim_start
-    )
+    df_filtered["reconstructed_frame_index"] = df_filtered["reconstructed_frame_index"] - trim_start
 
     logger.info(
         f"Trimmed CSV to frames {trim_start}-{trim_end_val} "

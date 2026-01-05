@@ -363,7 +363,7 @@ class RecordingDataBundle:
                 if len(frames) >= 1:
                     # Use current frame index for this frame (before incrementing)
                     current_frame_index = self._out_frame_index
-                    
+
                     try:
                         selected_frame = frames[most_proper_idx]
                         self.combined_video_writer.write_frame(selected_frame)
