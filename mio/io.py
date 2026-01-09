@@ -161,16 +161,19 @@ class VideoReader:
         Read frames from the video file along with their index.
 
         Yields:
-        Tuple[int, np.ndarray]: The index and the next frame in the video.
+        Tuple[int, np.ndarray]: The 0-based index and the frame data.
         """
         while self.cap.isOpened():
+            # Get frame position BEFORE reading - CAP_PROP_POS_FRAMES returns
+            # the 0-based index of the next frame to be captured/decoded
+            index = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
+
             ret, frame = self.cap.read()
             if not ret:
                 break
 
             frame = ensure_gray_uint8(frame, "VideoReader")
 
-            index = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             self.logger.debug(f"Reading frame {index}")
 
             yield index, frame
