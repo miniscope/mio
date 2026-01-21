@@ -36,8 +36,8 @@ def buffer_to_array(buffer: bytes) -> np.ndarray:
     stripped = pixel_cols[:, 1:-1]
 
     # Cast to 16 bit ndarray
-    # padded = np.pad(stripped, ((0, 0), (6, 0)), mode="constant", constant_values=0)
-    # packed_16bit = np.packbits(padded, axis=1).view(np.uint16).byteswap()
+    padded = np.pad(stripped, ((0, 0), (6, 0)), mode="constant", constant_values=0)
+    packed_16bit = np.packbits(padded, axis=1).view(np.uint16).byteswap()
     # return packed_16bit.flatten()
 
     # cast to an 8 bit ndarray
@@ -46,7 +46,12 @@ def buffer_to_array(buffer: bytes) -> np.ndarray:
 
     return packed_8bit
 
+def buffer_to_array2(buffer: bytes) -> np.ndarray:
+    """
+    Just processing the buffer without removing anuthing
 
+    """
+    return np.frombuffer(buffer, dtype=np.uint8)
 
 class GSBufferHeader(StreamBufferHeader):
     """
@@ -77,9 +82,11 @@ class GSBufferHeader(StreamBufferHeader):
         header_array = np.frombuffer(buffer[header_start:header_end], dtype=np.uint32)
         header = cls.from_format(header_array, header_fmt, construct=True)
         dummy_len = config.dummy_words * 4
-        payload = buffer_to_array(
-            buffer[header_end:-dummy_len]
-        )  # ignoring the last 384 bits, can change after dummy is detected
+
+        # payload = buffer_to_array(buffer[header_end:-384])   ignoring the last 384 bits, can change after dummy is detected
+        payload = buffer_to_array2(buffer[header_end:])
+
+        print(len(payload))
         return header, payload
 
 

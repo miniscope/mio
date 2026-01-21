@@ -22,7 +22,8 @@ def format_frame(frame_data: list[np.ndarray], config: GSDevConfig) -> np.ndarra
     Convert a list of 1D pixel arrays into a full frame, stripping the leading "training" pixels
     """
     pixels = np.concatenate(frame_data)
-    frame = pixels.reshape((config.frame_height, config.frame_width_input))
+    frame = pixels.reshape((config.frame_height, config.frame_width_input)) # original
+
 
     # strip training pixels
     frame = frame[:, 8:]
