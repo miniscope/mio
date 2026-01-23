@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from mio.devices.gs.config import GSDevConfig
 
 
+
 def buffer_to_array(buffer: bytes) -> np.ndarray:
     """
     Given the GS's "12-bit" pixel format,
@@ -37,8 +38,8 @@ def buffer_to_array(buffer: bytes) -> np.ndarray:
     stripped = pixel_cols[:, 1:-1]
 
     # Cast to 16 bit ndarray
-    padded = np.pad(stripped, ((0, 0), (6, 0)), mode="constant", constant_values=0)
-    packed_16bit = np.packbits(padded, axis=1).view(np.uint16).byteswap()
+    # padded = np.pad(stripped, ((0, 0), (6, 0)), mode="constant", constant_values=0)
+    # packed_16bit = np.packbits(padded, axis=1).view(np.uint16).byteswap()
     # return packed_16bit.flatten()
 
     # cast to an 8 bit ndarray
