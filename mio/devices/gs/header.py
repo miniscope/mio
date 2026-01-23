@@ -38,12 +38,12 @@ def buffer_to_array(buffer: bytes) -> np.ndarray:
     stripped = pixel_cols[:, 1:-1]
 
     # Cast to 16 bit ndarray
-    # padded = np.pad(stripped, ((0, 0), (6, 0)), mode="constant", constant_values=0)
-    # packed_16bit = np.packbits(padded, axis=1).view(np.uint16).byteswap()
+    padded = np.pad(stripped, ((0, 0), (6, 0)), mode="constant", constant_values=0)
+    packed_16bit = np.packbits(padded, axis=1).view(np.uint16).byteswap()
     # return packed_16bit.flatten()
 
     # cast to an 8 bit ndarray
-    stripped_8bit = stripped[:, :-2] # current
+    stripped_8bit = packed_16bit[:, :-2] # current
     packed_8bit =  np.packbits(stripped_8bit, axis=1).flatten()
 
     return packed_8bit
