@@ -53,7 +53,23 @@ def buffer_to_array2(buffer: bytes) -> np.ndarray:
     Just processing the buffer without removing anything
 
     """
-    return np.frombuffer(buffer, dtype=np.uint8)
+    # convert to a binary array 8 at a time
+    binary_data = np.unpackbits(np.frombuffer(buffer, dtype=np.uint8))
+    # reshape to a n x 12
+
+    pixel_cols = binary_data.reshape((-1, 12))
+
+    # remove padding pixels (12 bit x n --> 10 bit x n)
+    # Strip MSB and LSB if your format is 1[10-bit data]0
+    stripped = pixel_cols[:, 1:-1]  # Now 10-bit data
+
+    # Cast to 8 bit ndarray (keep top 8 bits of the 10-bit data)
+    stripped_8bit = stripped[:, :-2]  # Take first 8 bits, drop last 2
+    packed_8bit = np.packbits(stripped_8bit, axis=1).flatten()
+
+    return packed_8bit
+
+#     return np.frombuffer(buffer, dtype=np.uint8) # this is the line for fully processed
 
 class GSBufferHeader(StreamBufferHeader):
     """
@@ -85,8 +101,8 @@ class GSBufferHeader(StreamBufferHeader):
         header = cls.from_format(header_array, header_fmt, construct=True)
         dummy_len = config.dummy_words * 4
 
-        payload = buffer_to_array(buffer[header_end:-384]) #  ignoring the last 384 bits, can change after dummy is detected
-        # payload = buffer_to_array2(buffer[header_end:-48])
+        # payload = buffer_to_array(buffer[header_end:-384]) #  ignoring the last 384 bits, can change after dummy is detected
+        payload = buffer_to_array2(buffer[header_end:])
         print(len(payload))
         return header, payload
 

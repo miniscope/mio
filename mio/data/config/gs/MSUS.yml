@@ -26,8 +26,8 @@ preamble: 0x78563412 # new preamble
 # Incoming Pre-Processed Image format. 
 # StreamDaq will calculate buffer size, etc. based on these parameters
 # this should be 320x320x10
-frame_width: 328 # 271 # 320 # 320 328 * 12 PP, with the extra 8 coming from the start_of_frame sequence
-frame_height: 271 # 320 # lines total original 320
+frame_width: 271 # 320 # 320 328 * 12 PP, with the extra 8 coming from the start_of_frame sequence
+frame_height: 320 # 320 # lines total original 320
 pix_depth: 12 #  pixel depth, or, pixel period, original: 10
 max_pixels_per_buffer: 9840 #  original: 10000
 
