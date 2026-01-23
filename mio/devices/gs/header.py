@@ -3,6 +3,7 @@
 import sys
 from typing import TYPE_CHECKING
 
+
 if sys.version_info >= (3, 11):
     from typing import Self
 else:
@@ -48,7 +49,7 @@ def buffer_to_array(buffer: bytes) -> np.ndarray:
 
 def buffer_to_array2(buffer: bytes) -> np.ndarray:
     """
-    Just processing the buffer without removing anuthing
+    Just processing the buffer without removing anything
 
     """
     return np.frombuffer(buffer, dtype=np.uint8)
@@ -83,9 +84,8 @@ class GSBufferHeader(StreamBufferHeader):
         header = cls.from_format(header_array, header_fmt, construct=True)
         dummy_len = config.dummy_words * 4
 
-        # payload = buffer_to_array(buffer[header_end:-384])   ignoring the last 384 bits, can change after dummy is detected
-        payload = buffer_to_array2(buffer[header_end:])
-
+        payload = buffer_to_array(buffer[header_end:-384]) #  ignoring the last 384 bits, can change after dummy is detected
+        # payload = buffer_to_array2(buffer[header_end:-48])
         print(len(payload))
         return header, payload
 

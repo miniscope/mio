@@ -10,7 +10,7 @@ from mio.models.stream import StreamDevConfig
 class GSDevConfig(StreamDevConfig):
     """Device config for an unknown, mystery microscope"""
 
-    pix_depth: int = 8 # 12 originally
+    pix_depth: int = 12 # 12 originally
     max_pixels_per_buffer: int = 10000
 
     model_config = ConfigDict(validate_default=True)
