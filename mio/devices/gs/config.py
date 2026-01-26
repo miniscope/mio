@@ -25,7 +25,7 @@ class GSDevConfig(StreamDevConfig):
     def pix_depth_input(self) -> int:
         """12 bit raw processed to 10 bit pixel values"""
         # return self.pix_depth + 2
-        return self.pix_depth
+        return self.pix_depth + 2
 
     @property
     def buffer_npix(self) -> list[int]:

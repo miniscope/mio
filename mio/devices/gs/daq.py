@@ -23,6 +23,7 @@ def format_frame(frame_data: list[np.ndarray], config: GSDevConfig) -> np.ndarra
     """
     pixels = np.concatenate(frame_data)
     frame = pixels.reshape((config.frame_height, config.frame_width_input)) # original
+    # frame = pixels.reshape(320, 271) # original
 
 
     # strip training pixels
