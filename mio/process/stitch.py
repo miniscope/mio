@@ -19,7 +19,6 @@ from mio.logging import init_logger
 from mio.models.stitch import DebugRecord, FrameInfo
 from mio.models.stream import StreamDevConfig
 from mio.process.stitch_helper import make_combined_list
-from mio.stream_daq import StreamDaq
 
 logger = init_logger(name="stitch")
 
@@ -99,7 +98,6 @@ class RecordingData:
         self.video_path: Path = video_path
         self.csv_path: Path = csv_path
         self._device_config: Optional[StreamDevConfig] = device_config
-        self._daq: Optional[StreamDaq] = None
         self._buffer_npix: Optional[List[int]] = None
         self._video_reader: Optional[VideoReader] = None
         self._metadata: Optional[pd.DataFrame] = None
@@ -119,28 +117,10 @@ class RecordingData:
         return self._metadata
 
     @property
-    def daq(self) -> StreamDaq:
-        """
-        Get the stream daq.
-
-        .. todo::
-            Re-think this, though it is probablynot critical.
-            We just need the buffer_npix list to reconstruct the buffers from the frame.
-            It could make sense to just make buffer_npix static method on StreamDaq.
-        """
-        if self._daq is None:
-            self._daq = StreamDaq(self._device_config)
-        return self._daq
-
-    @property
     def buffer_npix(self) -> List[int]:
-        """
-        Get the buffer npix.
-        """
-        if self.daq is None:
-            raise ValueError("StreamDaq is not initialized")
+        """Get the buffer npix from device config."""
         if self._buffer_npix is None:
-            self._buffer_npix = self.daq.buffer_npix
+            self._buffer_npix = self._device_config.buffer_npix
         return self._buffer_npix
 
     def get_frame_index_from_timestamp(self, timestamp: int) -> int:
