@@ -1,7 +1,21 @@
 # Changelog
 
-## Upcoming
-- [`#142`](https://github.com/miniscope/mio/pull/142) - Add NTP time synchronization feature. NTP is an optional dependency - install with `pip install mio[ntp]`
+## 0.9
+
+### 0.9.0 - 2026-01-27 - Batch device update, NTP sync, driver import fix
+
+#### New features
+- [`#140`](https://github.com/miniscope/mio/pull/140) - Batch upload device parameters via CLI (`mio update -b`)
+- [`#142`](https://github.com/miniscope/mio/pull/142) - Add NTP time synchronization. Optional dependency - install with `pip install mio[ntp]`
+- [`#147`](https://github.com/miniscope/mio/pull/147) - `buffer_npix` is now a property on `StreamDevConfig`
+
+#### Bugfixes
+- [`#137`](https://github.com/miniscope/mio/pull/137) - Fix reconstructed frame index error in `mio stream`
+- [`#148`](https://github.com/miniscope/mio/pull/148) - Make OpalKelly driver import optional so CLI works without device drivers
+
+#### Maintenance
+- [`#149`](https://github.com/miniscope/mio/pull/149) - Pin numpy <2.0 and remove deprecated ruff rules
+- Exclude Python 3.13 on Windows from test matrix, fix docs build errors
 
 ## 0.8
 
