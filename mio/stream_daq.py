@@ -36,18 +36,14 @@ from mio.utils import exact_iter
 HAVE_OK = False
 ok_error = None
 BIT_PER_WORD = 32
+okDev = None  # Set if OpalKelly driver is available
 
 try:
     from mio.devices.opalkelly import okDev
 
     HAVE_OK = True
 except (ImportError, ModuleNotFoundError):
-    module_logger = init_logger("streamDaq")
-    module_logger.warning(
-        "Could not import OpalKelly driver, you can't read from FPGA!\n"
-        "Check out Opal Kelly's website for troubleshooting\n"
-        "https://docs.opalkelly.com/fpsdk/getting-started/"
-    )
+    pass  # okDev stays None; error raised when actually trying to use FPGA
 
 
 class StreamDaq:
@@ -116,16 +112,7 @@ class StreamDaq:
     def buffer_npix(self) -> List[int]:
         """List of pixels per buffer for a frame"""
         if self._buffer_npix is None:
-            px_per_frame = self.config.frame_width * self.config.frame_height
-            byte_per_word = np.iinfo(np.int32).bits / np.iinfo(np.int8).bits
-
-            px_per_buffer = (
-                self.config.buffer_block_length * self.config.block_size
-                - self.config.header_len / np.iinfo(np.int8).bits
-                - self.config.dummy_words * byte_per_word
-            )
-            quotient, remainder = divmod(px_per_frame, px_per_buffer)
-            self._buffer_npix = [int(px_per_buffer)] * int(quotient) + [int(remainder)]
+            self._buffer_npix = self.config.buffer_npix
         return self._buffer_npix
 
     @property
@@ -181,11 +168,16 @@ class StreamDaq:
 
         return data
 
-    def _init_okdev(self, BIT_FILE: Path, read_length: int) -> Union[okDev, okDevMock]:
+    def _init_okdev(self, BIT_FILE: Path, read_length: int) -> Union["okDev", okDevMock]:
         # FIXME: when multiprocessing bug resolved, remove this and just mock in tests
         if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("STREAMDAQ_MOCKRUN"):
             dev = okDevMock(read_length=read_length)
         else:
+            if not HAVE_OK:
+                raise ImportError(
+                    "OpalKelly driver not available. Cannot read from FPGA.\n"
+                    "See: https://docs.opalkelly.com/fpsdk/getting-started/"
+                )
             dev = okDev(read_length=read_length)
 
         dev.upload_bit(str(BIT_FILE))
