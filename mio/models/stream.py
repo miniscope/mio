@@ -445,3 +445,23 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
                 - px_per_word * self.dummy_words
             )
         return self._px_per_buffer
+
+    @property
+    def buffer_npix(self) -> list[int]:
+        """
+        List of pixel counts per buffer for a complete frame.
+
+        A frame is split across multiple buffers. This returns a list where each element
+        is the number of pixels in that buffer. The last buffer may have fewer pixels
+        (the remainder).
+        """
+        px_per_frame = self.frame_width * self.frame_height
+        # Payload size in bytes (= pixels when pix_depth=8)
+        byte_per_word = 4  # 32 bits / 8 bits
+        payload_bytes = int(
+            self.buffer_block_length * self.block_size
+            - self.header_len / 8
+            - self.dummy_words * byte_per_word
+        )
+        quotient, remainder = divmod(px_per_frame, payload_bytes)
+        return [payload_bytes] * int(quotient) + ([int(remainder)] if remainder else [])
