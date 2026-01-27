@@ -128,16 +128,7 @@ class StreamDaq:
     def buffer_npix(self) -> List[int]:
         """List of pixels per buffer for a frame"""
         if self._buffer_npix is None:
-            px_per_frame = self.config.frame_width * self.config.frame_height
-            byte_per_word = np.iinfo(np.int32).bits / np.iinfo(np.int8).bits
-
-            px_per_buffer = (
-                self.config.buffer_block_length * self.config.block_size
-                - self.config.header_len / np.iinfo(np.int8).bits
-                - self.config.dummy_words * byte_per_word
-            )
-            quotient, remainder = divmod(px_per_frame, px_per_buffer)
-            self._buffer_npix = [int(px_per_buffer)] * int(quotient) + [int(remainder)]
+            self._buffer_npix = self.config.buffer_npix
         return self._buffer_npix
 
     @property
