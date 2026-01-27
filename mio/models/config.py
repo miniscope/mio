@@ -130,18 +130,16 @@ class Config(BaseSettings, YAMLMixin):
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         """
-        Read config settings from, in order of priority from high to low, where
-        high priorities override lower priorities:
-        * in the arguments passed to the class constructor (not user configurable)
-        * in environment variables like ``export MIO_LOG_DIR=~/``
-        * in a ``.env`` file in the working directory
-        * in a ``mio_config.yaml`` file in the working directory
-        * in the ``tool.mio.config`` table in a ``pyproject.toml`` file
-          in the working directory
-        * in a user ``mio_config.yaml`` file, configured by `user_dir` in any of the other sources
-        * in the global ``mio_config.yaml`` file in the platform-specific data directory
-          (use ``mio config get global_config`` to find its location)
-        * the default values in the :class:`.GlobalConfig` model
+        Read config settings in order of priority (high to low).
+
+        - Arguments passed to the class constructor (not user configurable)
+        - Environment variables like ``export MIO_LOG_DIR=~/``
+        - ``.env`` file in the working directory
+        - ``mio_config.yaml`` file in the working directory
+        - ``tool.mio.config`` table in ``pyproject.toml`` in the working directory
+        - User ``mio_config.yaml`` file, configured by ``user_dir``
+        - Global ``mio_config.yaml`` (use ``mio config get global_config`` to find location)
+        - Default values in the :class:`.GlobalConfig` model
         """
         _create_default_global_config()
 
