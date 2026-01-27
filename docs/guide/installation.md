@@ -49,3 +49,5 @@ No special installation should be required.
 Windows Time Service (`w32tm`) may not provide sufficient accuracy for NTP sync checks. For NTP sync check support, install an NTP client. For example, [Meinberg NTP](https://www.meinbergglobal.com/english/sw/ntp.htm) worked well in our setup.
 
 For the `stream` command, you'll need to manually install the [OpalKelly FrontPanel SDK](https://www.opalkelly.com/products/frontpanel/).
+
+The combination of Windows and Python 3.13 caused segmentation faults in our test environment. We recommend using Python 3.12 or earlier on Windows.
