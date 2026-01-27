@@ -11,7 +11,7 @@ dynamic = ["version"]
 requires-python = "<4.0,>=3.9"
 dependencies = [
     "opencv-python>=4.7.0.72",
-    "numpy>=1.25.0",
+    "numpy>=1.25.0,<2.0",
     "pandas>=2.1.0",
     "pydantic>=2.3.0",
     "pyserial>=3.5",
@@ -172,13 +172,13 @@ select = [
     "N802"
 ]
 ignore = [
-    "ANN101", "ANN102", "ANN401", "ANN204",
+    "ANN401", "ANN204",
     # explicit strict arg for zip
     "B905",
     # builtin type annotations
     "UP006", "UP035",
-    # | for Union types (only supported >=3.10
-    "UP007", "UP038",
+    # | for Union types (only supported >=3.10)
+    "UP007",
     # docstrings for __init__
     "D107",
 ]
