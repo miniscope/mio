@@ -10,7 +10,7 @@ from mio.models.stream import StreamDevConfig
 class GSDevConfig(StreamDevConfig):
     """Device config for an unknown, mystery microscope"""
 
-    pix_depth: int = 12
+    pix_depth: int = 8 # 12 # 12 to 8 bit conversion
     max_pixels_per_buffer: int = 10000
 
     model_config = ConfigDict(validate_default=True)
@@ -18,12 +18,14 @@ class GSDevConfig(StreamDevConfig):
     @property
     def frame_width_input(self) -> int:
         """8 (12 bit) alignment columns removed from 320 rows of imaging data"""
-        return self.frame_width + 8
+        # return self.frame_width + 8
+        return self.frame_width
 
     @property
     def pix_depth_input(self) -> int:
         """12 bit raw processed to 10 bit pixel values"""
-        return self.pix_depth + 2
+        # return self.pix_depth + 2
+        return self.pix_depth
 
     @property
     def buffer_npix(self) -> list[int]:

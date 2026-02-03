@@ -27,14 +27,14 @@ preamble: 0x78563412 # new preamble
 # StreamDaq will calculate buffer size, etc. based on these parameters
 # this should be 320x320x10
 frame_width: 320  # 328 * 12 PP, with the extra 8 coming from the start_of_frame sequence
-frame_height: 201 # 320 # 320 lines total, set to the ROI number on the firmware!
-pix_depth: 10 # pixel depth, or, pixel period
+frame_height: 328 # 320 # 320 lines total, set to the ROI number on the firmware!
+pix_depth: 8 # pixel depth, or, pixel period
 max_pixels_per_buffer:  10000 #  ORIGINAL: 10000
 
 # Buffer data format. These have to match the firmware value
 header_len: 384 # 12 * 32 (in bits)
 buffer_block_length: 4  # 10 # originally 12 how many words per block length
-block_size: 3960 #  3774 just buffer (header+data-header)
+block_size:   3774 # just buffer (header+data-header)
 num_buffers: 6 # 6 # (maybe change to 10 num of data buffers inside mcu
 dummy_words: 12 # 12 # num of dummy words before header file
 

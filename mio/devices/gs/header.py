@@ -12,9 +12,11 @@ else:
 import numpy as np
 
 from mio.models.stream import StreamBufferHeader, StreamBufferHeaderFormat
+from mio.logging import init_logger
 
 if TYPE_CHECKING:
     from mio.devices.gs.config import GSDevConfig
+
 
 
 def buffer_to_array(buffer: bytes) -> np.ndarray:
@@ -46,7 +48,34 @@ def buffer_to_array(buffer: bytes) -> np.ndarray:
 
     return packed_8bit
 
+def buffer_to_array2(buffer: bytes) -> np.ndarray:
+    """
+    Given the GS's "12-bit" pixel format,
+    where 10-bit pixels are flanked by two pad values
+    e.g. (``1xxxxxxxxxx0``)
 
+    Strip the pads, and return a 16-bit ndarray
+
+    """
+    # convert to a binary array 8 at a time
+    binary_data = np.unpackbits(np.frombuffer(buffer, dtype=np.uint8))
+    # rehape to a n x 12
+
+    pixel_cols = binary_data.reshape((-1, 8))
+
+    # remove padding pixels (12 bit x n --> 10 bit x n)
+    # stripped = pixel_cols[:, 1:-1]
+
+    # Cast to 16 bit ndarray
+    # padded = np.pad(stripped, ((0, 0), (6, 0)), mode="constant", constant_values=0)
+    # packed_16bit = np.packbits(padded, axis=1).view(np.uint16).byteswap()
+    # return packed_16bit.flatten()
+
+    # cast to an 8 bit ndarray
+    # stripped_8bit = stripped[:, :-2] # current
+    packed_8bit =  np.packbits(pixel_cols, axis=1).flatten()
+
+    return packed_8bit
 
 class GSBufferHeader(StreamBufferHeader):
     """
@@ -72,14 +101,18 @@ class GSBufferHeader(StreamBufferHeader):
         cls, buffer: bytes, header_fmt: "GSBufferHeaderFormat", config: "GSDevConfig"
     ) -> tuple[Self, np.ndarray]:
         """Split buffer into a :class:`.GSBufferHeader` and a 1D, 16-bit pixel array."""
+        # _logger = init_logger("gs")
         header_start = len(config.preamble)
         header_end = header_start + ((header_fmt.header_length) * 4)  # = 44 ((384-32)/32)  = 11
+        # _logger.debug("HEADER LEN: %s, expected: %s", len(buffer), header_fmt.header_length * 4)
         header_array = np.frombuffer(buffer[header_start:header_end], dtype=np.uint32)
         header = cls.from_format(header_array, header_fmt, construct=True)
+        # _logger.debug("HEADER: buffer: %s, frame: %s", header.frame_buffer_count, header.frame_num)
         dummy_len = config.dummy_words * 4
-        payload = buffer_to_array(
-            buffer[header_end:-dummy_len]
-        )  # ignoring the last 384 bits, can change after dummy is detected
+        # payload = buffer_to_array(
+        #    buffer[header_end:-dummy_len]
+        # )  # ignoring the last 384 bits, can change after dummy is detected
+        payload = buffer_to_array2( buffer[header_end:-dummy_len])
         return header, payload
 
 
