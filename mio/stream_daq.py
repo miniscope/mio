@@ -10,7 +10,7 @@ import sys
 import time
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Callable, Generator, List, Literal, Optional, Tuple, Union
+from typing import Generator, List, Literal, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -31,6 +31,7 @@ from mio.models.stream import (
 from mio.plots.headers import StreamPlotter
 from mio.process.frame_helper import FrequencyMaskHelper
 from mio.types import ConfigSource
+from mio.utils import exact_iter
 
 HAVE_OK = False
 ok_error = None
@@ -43,19 +44,6 @@ try:
     HAVE_OK = True
 except (ImportError, ModuleNotFoundError):
     pass  # okDev stays None; error raised when actually trying to use FPGA
-
-
-def exact_iter(f: Callable, sentinel: Any) -> Generator[Any, None, None]:
-    """
-    A version of :func:`iter` that compares with `is` rather than `==`
-    because truth value of numpy arrays is ambiguous.
-    """
-    while True:
-        val = f()
-        if val is sentinel:
-            break
-        else:
-            yield val
 
 
 class StreamDaq:
