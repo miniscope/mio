@@ -26,10 +26,10 @@ class USBCameraRecordingConfig(MiniscopeConfig, ConfigYAMLMixin):
         description="Video format for camera capture (e.g., MJPEG, YUY2). "
         "Note: Output video encoding is handled by VideoWriter.",
     )
-    codec: str = Field(
+    codec: Literal["mjpeg", "libx264", "h264", "rawvideo"] = Field(
         default="libx264",
         description=(
-            "Video codec for output file (e.g., mjpeg, libx264, rawvideo). "
+            "Video codec for output file. "
             "Used by skvideo backend, mapped to fourcc for cv2 backend."
         ),
     )

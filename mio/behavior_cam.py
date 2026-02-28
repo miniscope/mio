@@ -122,7 +122,7 @@ class BehaviorCam:
         timestamp = int(time.time())  # seconds (for filename)
 
         # Determine container format based on codec
-        if self.config.codec.lower() in ["libx264", "h264"]:
+        if self.config.codec in ("libx264", "h264"):
             video_ext = ".mp4"
             container_format = "mp4"
         else:

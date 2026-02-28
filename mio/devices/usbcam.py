@@ -3,7 +3,7 @@ USB Camera device helper functions.
 """
 
 import time
-from typing import Dict
+from typing import Dict, Literal
 
 import cv2
 import numpy as np
@@ -14,7 +14,10 @@ CAMERA_INIT_DELAY_SECONDS = 0.1  # Delay after setting camera properties before 
 CAMERA_INIT_RETRY_ATTEMPTS = 3  # Number of retry attempts when reading initial frame
 
 
-def convert_frame_for_codec(frame: np.ndarray, codec: str) -> np.ndarray:
+Codec = Literal["mjpeg", "libx264", "h264", "rawvideo"]
+
+
+def convert_frame_for_codec(frame: np.ndarray, codec: Codec) -> np.ndarray:
     """
     Convert frame color space based on codec requirements.
 
@@ -25,7 +28,7 @@ def convert_frame_for_codec(frame: np.ndarray, codec: str) -> np.ndarray:
     Returns:
         Converted frame ready for video writer
     """
-    if codec.lower() == "rawvideo":
+    if codec == "rawvideo":
         # Rawvideo expects grayscale
         if len(frame.shape) == 3:
             return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
