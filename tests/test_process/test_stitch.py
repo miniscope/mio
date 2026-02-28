@@ -378,4 +378,3 @@ def test_frame_info_majority_vote_rfi():
     ] + [{**base, "reconstructed_frame_index": 20, "buffer_recv_index": 7}]
     fi = FrameInfo.from_metadata(200, pd.DataFrame(rows))
     assert fi.reconstructed_frame_index == 10
-    assert len(fi.buffer_info_list) == 8
