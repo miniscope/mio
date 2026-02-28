@@ -8,6 +8,10 @@ from typing import Dict, Literal, TypedDict
 import cv2
 import numpy as np
 
+from mio.logging import init_logger
+
+logger = init_logger("usbcam")
+
 # Constants
 MAX_CAMERA_INDEX = 5
 CAMERA_INIT_DELAY_SECONDS = 0.1  # Delay after setting camera properties before reading
@@ -128,7 +132,7 @@ def list_cameras() -> Dict[int, CameraInfo]:
     """
     available_cameras: Dict[int, CameraInfo] = {}
 
-    # Check standard indices
+    logger.info(f"Scanning for cameras (indices 0-{MAX_CAMERA_INDEX - 1})...")
     for i in range(MAX_CAMERA_INDEX):
         cap = cv2.VideoCapture(i)
         if cap.isOpened():
@@ -141,6 +145,10 @@ def list_cameras() -> Dict[int, CameraInfo]:
                     "resolution": resolution,
                     "fps": fps,
                 }
+            else:
+                logger.debug(f"Camera at index {i} opened but failed to read frame")
             cap.release()
+        else:
+            logger.debug(f"No camera found at index {i}")
 
     return available_cameras
