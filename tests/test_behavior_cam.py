@@ -14,12 +14,12 @@ TEST_HEIGHT = 720
 TEST_FPS = 20
 
 
-def _make_npz(path: Path, num_frames: int = NUM_TEST_FRAMES) -> Path:
+def _make_npz(path: Path, num_frames: int = NUM_TEST_FRAMES, fps: float = TEST_FPS) -> Path:
     """Generate a synthetic .npz matching elp-camera config."""
     frames = np.random.default_rng().integers(
         0, 255, size=(num_frames, TEST_HEIGHT, TEST_WIDTH, 3), dtype=np.uint8
     )
-    timestamps = np.arange(num_frames, dtype=np.float64) / TEST_FPS
+    timestamps = np.arange(num_frames, dtype=np.float64) / fps
     np.savez(path, frames=frames, timestamps=timestamps)
     return path
 
@@ -121,14 +121,14 @@ def test_frame_count_matches_csv(backend_config, set_usbcam_input, tmp_path):
 
 
 @pytest.mark.xfail(reason="skvideo backend drops frames — CSV count != video frame count", strict=False)
-def test_frame_count_realtime(backend_config, set_usbcam_input, tmp_path):
+@pytest.mark.parametrize("input_fps", [20, 19, 18, 15])
+def test_frame_count_realtime(backend_config, set_usbcam_input, tmp_path, input_fps):
     """Verify frame count with realtime replay to simulate real camera timing.
 
-    Known bug: skvideo backend may produce fewer video frames than CSV rows
-    under real-time write pressure.
+    Real cameras often deliver slightly fewer FPS than configured.
+    Known bug: skvideo backend may produce fewer video frames than CSV rows.
     """
-    num_frames = STRESS_NUM_FRAMES
-    npz_path = _make_npz(tmp_path / "realtime_input.npz", num_frames=num_frames)
+    npz_path = _make_npz(tmp_path / "realtime_input.npz", num_frames=STRESS_NUM_FRAMES, fps=input_fps)
     set_usbcam_input(npz_path, realtime=True)
 
     behavior_cam = BehaviorCam(recording_config=backend_config, camera_index=0)
@@ -148,6 +148,7 @@ def test_frame_count_realtime(backend_config, set_usbcam_input, tmp_path):
     reader.release()
 
     assert video_frame_count == csv_row_count, (
-        f"Frame count mismatch ({backend_config.backend} backend, realtime): "
+        f"Frame count mismatch ({backend_config.backend} backend, "
+        f"input {input_fps}fps vs configured {TEST_FPS}fps): "
         f"video has {video_frame_count} frames but CSV has {csv_row_count} rows"
     )
