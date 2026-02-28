@@ -101,7 +101,7 @@ def record(config: str, output_dir: Optional[str], index: Optional[int]) -> None
 
     behavior_cam = BehaviorCam(recording_config=recording_config, camera_index=camera_index)
     try:
-        behavior_cam.capture(output_dir=output_dir)
+        behavior_cam.capture()
     except Exception as e:
         click.echo(f"Error recording video: {e}", err=True)
         raise click.ClickException(f"Error recording video: {e}") from e

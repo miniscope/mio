@@ -220,10 +220,10 @@ class BehaviorCam:
                 current_time = time.time()
                 window_elapsed = current_time - last_fps_log_time
                 if window_elapsed >= FPS_LOG_INTERVAL_SECONDS:
-                    fps = frames_in_window / window_elapsed
+                    measured_fps = frames_in_window / window_elapsed
                     total_elapsed = current_time - start_time
                     self.logger.info(
-                        f"\nFPS:\t{fps:.2f}\nFrames:\t{frames_written} \n"
+                        f"\nFPS:\t{measured_fps:.2f}\nFrames:\t{frames_written} \n"
                         f"Time:\t{total_elapsed:.1f}s \n"
                     )
                     last_fps_log_time = current_time
@@ -269,4 +269,9 @@ class BehaviorCam:
                 cv2.destroyAllWindows()
                 cv2.waitKey(100)
 
-            self.logger.info(f"Saved recording to {video_path} ({frames_written} frames written)")
+            if writer_used:
+                self.logger.info(
+                    f"Saved recording to {video_path} ({frames_written} frames written)"
+                )
+            else:
+                self.logger.warning("No frames were written, recording file removed")
