@@ -182,7 +182,7 @@ class BehaviorCam:
         p_camera.start()
 
         self.logger.info(f"Recording to {video_path}")
-        self.logger.info("Press Ctrl+C to stop recording")
+        self.logger.info("Press 'q' to stop recording")
 
         frames_written = 0
         first_frame = True
@@ -243,11 +243,13 @@ class BehaviorCam:
                     last_fps_log_time = current_time
                     frames_in_window = 0
 
-                # Show preview
+                # Show preview and check for 'q' key
                 if show_video:
                     try:
                         cv2.imshow("Recording", frame)
-                        cv2.waitKey(1)
+                        if cv2.waitKey(1) & 0xFF == ord("q"):
+                            self.logger.info("Recording stopped by user ('q' key)")
+                            break
                     except cv2.error as e:
                         self.logger.exception(f"Error displaying frame: {e}")
 
