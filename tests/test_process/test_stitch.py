@@ -10,9 +10,16 @@ import cv2
 import pandas as pd
 import pytest
 
+import numpy as np
+
 from mio.io import VideoWriter
-from mio.models.stitch import DebugRecord
-from mio.process.stitch import RecordingData, RecordingDataBundle
+from mio.models.stitch import DebugRecord, FrameInfo
+from mio.process.stitch import (
+    RecordingData,
+    RecordingDataBundle,
+    most_proper_frame,
+    most_proper_metadata,
+)
 from mio.process.video import crop_run
 from mio.utils import hash_video, validate_video_metadata_match
 
@@ -334,3 +341,41 @@ def test_crop_invalid_range(tmp_path):
 
     with pytest.raises(ValueError, match="trim_start.*must be <= trim_end"):
         crop_run(video, output_path=str(tmp_path / "out.avi"), trim_start=30, trim_end=10)
+
+
+def test_metadata_tie_detection():
+    """Equal metadata scores are detected as a tie (triggers edge scoring)."""
+    _pair = lambda nb, bp: (None, None, nb, bp)
+    _, candidates, is_tie = most_proper_metadata([_pair(8, 0), _pair(8, 0)])
+    assert candidates == [0, 1]
+    assert is_tie is True
+
+
+def test_edge_scoring_selects_less_sharp():
+    """Sobel edge scoring picks the less sharp frame (higher score = less gradient)."""
+    uniform = np.ones((50, 50), dtype=np.uint8) * 128
+    edgy = np.zeros((50, 50), dtype=np.uint8)
+    edgy[:, 25:] = 255
+    idx, scores = most_proper_frame([uniform, edgy])
+    assert idx == 0
+    assert scores[0] > scores[1]
+
+
+def test_frame_info_majority_vote_rfi():
+    """When a frame_num maps to multiple rfi values, majority wins."""
+    base = {
+        "frame_num": 200,
+        "buffer_count": 1,
+        "frame_buffer_count": 8,
+        "timestamp": 2000,
+        "pixel_count": 5000,
+        "black_padding_px": 0,
+        "buffer_recv_unix_time": 2.0,
+    }
+    rows = [
+        {**base, "reconstructed_frame_index": 10, "buffer_recv_index": i}
+        for i in range(7)
+    ] + [{**base, "reconstructed_frame_index": 20, "buffer_recv_index": 7}]
+    fi = FrameInfo.from_metadata(200, pd.DataFrame(rows))
+    assert fi.reconstructed_frame_index == 10
+    assert len(fi.buffer_info_list) == 8
