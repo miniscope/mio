@@ -15,6 +15,7 @@ import numpy as np
 from mio.io import VideoWriter
 from mio.models.stitch import DebugRecord, FrameInfo
 from mio.process.stitch import (
+    CandidateFrame,
     RecordingData,
     RecordingDataBundle,
     most_proper_frame,
@@ -345,9 +346,9 @@ def test_crop_invalid_range(tmp_path):
 
 def test_metadata_tie_detection():
     """Equal metadata scores are detected as a tie (triggers edge scoring)."""
-    _pair = lambda nb, bp: (None, None, nb, bp)
-    _, candidates, is_tie = most_proper_metadata([_pair(8, 0), _pair(8, 0)])
-    assert candidates == [0, 1]
+    _cand = lambda nb, bp: CandidateFrame(recording=None, frame=None, num_buffers=nb, sum_black_padding=bp)
+    _, tied, is_tie = most_proper_metadata([_cand(8, 0), _cand(8, 0)])
+    assert tied == [0, 1]
     assert is_tie is True
 
 

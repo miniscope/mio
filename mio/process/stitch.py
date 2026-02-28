@@ -6,6 +6,7 @@ the best buffers from each stream using gradient noise detection.
 This is still hardcoded around the StreamDevConfig metadata fields.
 """
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -34,8 +35,18 @@ def score_edges(frame: np.ndarray) -> float:
     return -float(total_grad)
 
 
+@dataclass
+class CandidateFrame:
+    """A single candidate frame from one recording for a given frame_num."""
+
+    recording: "RecordingData"
+    frame: np.ndarray
+    num_buffers: int
+    sum_black_padding: int
+
+
 def most_proper_metadata(
-    valid_pairs: List[Tuple["RecordingData", np.ndarray, int, int]],
+    candidates: List[CandidateFrame],
 ) -> Tuple[int, List[int], bool]:
     """
     Select less broken frames using metadata scoring.
@@ -44,20 +55,19 @@ def most_proper_metadata(
     index of a best-scoring candidate, the list of tied candidate indices,
     and whether there was a tie.
     """
-    if not valid_pairs:
+    if not candidates:
         return 0, [], False
 
     scored = [
-        (i, score_metadata(num_buffers=v[2], sum_black_padding=v[3]))
-        for i, v in enumerate(valid_pairs)
+        (i, score_metadata(num_buffers=c.num_buffers, sum_black_padding=c.sum_black_padding))
+        for i, c in enumerate(candidates)
     ]
-    # Sort descending by score tuple
     scored.sort(key=lambda t: t[1], reverse=True)
     top_score = scored[0][1]
-    candidates = [i for i, s in scored if s == top_score]
-    best_idx = candidates[0]
-    is_tie = len(candidates) > 1
-    return best_idx, candidates, is_tie
+    tied = [i for i, s in scored if s == top_score]
+    best_idx = tied[0]
+    is_tie = len(tied) > 1
+    return best_idx, tied, is_tie
 
 
 def most_proper_frame(frame_list: List[np.ndarray]) -> Tuple[int, List[float]]:
@@ -149,11 +159,9 @@ class RecordingDataBundle:
             self._combined_frame_num = combined
         return self._combined_frame_num
 
-    def _collect_candidates(
-        self, frame_num: int
-    ) -> List[Tuple[RecordingData, np.ndarray, int, int]]:
+    def _collect_candidates(self, frame_num: int) -> List[CandidateFrame]:
         """Read frames and metadata scores for all recordings that have *frame_num*."""
-        valid_pairs: List[Tuple[RecordingData, np.ndarray, int, int]] = []
+        candidates: List[CandidateFrame] = []
         for recording in self.recordings:
             if frame_num not in recording.metadata["frame_num"].values:
                 continue
@@ -170,25 +178,23 @@ class RecordingDataBundle:
                 if "black_padding_px" in rows.columns
                 else 0
             )
-            valid_pairs.append((recording, frame, num_buffers, sum_black))
-        return valid_pairs
+            candidates.append(CandidateFrame(recording, frame, num_buffers, sum_black))
+        return candidates
 
     @staticmethod
-    def _select_best(
-        valid_pairs: List[Tuple[RecordingData, np.ndarray, int, int]],
-    ) -> Tuple[int, bool]:
+    def _select_best(candidates: List[CandidateFrame]) -> Tuple[int, bool]:
         """Pick the best candidate index using metadata scoring + edge tiebreak."""
-        best_idx, candidates, is_tie = most_proper_metadata(valid_pairs)
+        best_idx, tied, is_tie = most_proper_metadata(candidates)
         if is_tie:
-            candidate_frames = [valid_pairs[i][1] for i in candidates]
-            rel_idx, _ = most_proper_frame(candidate_frames)
-            best_idx = candidates[int(rel_idx)]
+            tied_frames = [candidates[i].frame for i in tied]
+            rel_idx, _ = most_proper_frame(tied_frames)
+            best_idx = tied[int(rel_idx)]
         return best_idx, is_tie
 
     def _write_debug(
         self,
         frame_num: int,
-        valid_pairs: List[Tuple[RecordingData, np.ndarray, int, int]],
+        candidates: List[CandidateFrame],
         selected_idx: int,
         is_tie: bool,
     ) -> int:
@@ -196,27 +202,26 @@ class RecordingDataBundle:
 
         Returns the number of debug frames written.
         """
-        frames = [vp[1] for vp in valid_pairs]
-        if len(frames) <= 1:
+        if len(candidates) <= 1:
             return 0
 
-        base = frames[selected_idx]
-        others = [(i, f) for i, f in enumerate(frames) if i != selected_idx]
-        if all(np.array_equal(base, f) for _, f in others):
+        selected = candidates[selected_idx]
+        others = [(i, c) for i, c in enumerate(candidates) if i != selected_idx]
+        if all(np.array_equal(selected.frame, c.frame) for _, c in others):
             return 0
 
         writes = 0
-        for idx, frame in others:
-            if base.shape != frame.shape:
+        for idx, cand in others:
+            if selected.frame.shape != cand.frame.shape:
                 msg = (
                     f"Frames differ for frame {frame_num}"
-                    f": shape {base.shape} vs {frame.shape}"
+                    f": shape {selected.frame.shape} vs {cand.frame.shape}"
                 )
                 tqdm.write(msg)
                 logger.debug(msg)
                 continue
 
-            diff_mask = (base != frame).astype(np.uint8) * 255
+            diff_mask = (selected.frame != cand.frame).astype(np.uint8) * 255
             diff_pixels = int(np.count_nonzero(diff_mask))
             msg = (
                 f"Frames are not the same for frame {frame_num} "
@@ -227,7 +232,7 @@ class RecordingDataBundle:
 
             if self.debug_video_writer is not None:
                 try:
-                    composite = np.vstack([base, frame, diff_mask])
+                    composite = np.vstack([selected.frame, cand.frame, diff_mask])
                     self.debug_video_writer.write_frame(composite)
                     writes += 1
                 except Exception as e:
@@ -236,21 +241,19 @@ class RecordingDataBundle:
                     logger.warning(msg)
 
             if self.debug_csv_writer is not None:
-                base_rec, _, base_buffers, base_black = valid_pairs[selected_idx]
-                rec_i, _, nbuff_i, nblack_i = valid_pairs[idx]
                 record = DebugRecord(
                     debug_frame_index=self._debug_frame_index,
                     stitched_frame_index=self._out_frame_index,
                     frame_num=frame_num,
-                    selected_video=base_rec.video_path.name,
-                    compare_video=rec_i.video_path.name,
-                    selected_num_buffers=base_buffers,
-                    selected_black_padding=base_black,
-                    compare_num_buffers=nbuff_i,
-                    compare_black_padding=nblack_i,
+                    selected_video=selected.recording.video_path.name,
+                    compare_video=cand.recording.video_path.name,
+                    selected_num_buffers=selected.num_buffers,
+                    selected_black_padding=selected.sum_black_padding,
+                    compare_num_buffers=cand.num_buffers,
+                    compare_black_padding=cand.sum_black_padding,
                     diff_pixels=diff_pixels,
-                    selected_edge_score=score_edges(base),
-                    compare_edge_score=score_edges(frame),
+                    selected_edge_score=score_edges(selected.frame),
+                    compare_edge_score=score_edges(cand.frame),
                     metadata_tie=bool(is_tie),
                 )
                 self.debug_csv_writer.append(record.model_dump())
@@ -261,30 +264,29 @@ class RecordingDataBundle:
     def _write_stitched(
         self,
         frame_num: int,
-        valid_pairs: List[Tuple[RecordingData, np.ndarray, int, int]],
+        candidates: List[CandidateFrame],
         selected_idx: int,
     ) -> bool:
         """Write the selected frame and its metadata to the stitched outputs.
 
         Returns True on success, False on failure.
         """
-        selected_frame = valid_pairs[selected_idx][1]
+        selected = candidates[selected_idx]
         try:
-            self.combined_video_writer.write_frame(selected_frame)
+            self.combined_video_writer.write_frame(selected.frame)
         except Exception as e:
             msg = (
                 f"Failed to write stitched frame {frame_num}: {e}"
-                f" (shape={getattr(selected_frame, 'shape', None)}"
-                f" dtype={getattr(selected_frame, 'dtype', None)})"
+                f" (shape={getattr(selected.frame, 'shape', None)}"
+                f" dtype={getattr(selected.frame, 'dtype', None)})"
             )
             tqdm.write(msg)
             logger.warning(msg)
             return False
 
         try:
-            selected_recording = valid_pairs[selected_idx][0]
-            rows = selected_recording.metadata[
-                selected_recording.metadata["frame_num"] == frame_num
+            rows = selected.recording.metadata[
+                selected.recording.metadata["frame_num"] == frame_num
             ].copy()
             rows["reconstructed_frame_index"] = self._out_frame_index
             if self.combined_metadata is None:
