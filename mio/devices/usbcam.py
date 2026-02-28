@@ -3,7 +3,7 @@ USB Camera device helper functions.
 """
 
 import time
-from typing import Dict, Literal
+from typing import Dict, Literal, TypedDict
 
 import cv2
 import numpy as np
@@ -15,6 +15,14 @@ CAMERA_INIT_RETRY_ATTEMPTS = 3  # Number of retry attempts when reading initial 
 
 
 Codec = Literal["mjpeg", "libx264", "h264", "rawvideo"]
+
+
+class CameraInfo(TypedDict):
+    """Camera information from OpenCV discovery."""
+
+    name: str
+    resolution: str
+    fps: int
 
 
 def convert_frame_for_codec(frame: np.ndarray, codec: Codec) -> np.ndarray:
@@ -80,9 +88,8 @@ def open_camera(
     # Verify camera is working by reading a test frame
     # Retry a few times as some cameras need a moment to start
     ret = False
-    frame = None
     for _ in range(CAMERA_INIT_RETRY_ATTEMPTS):
-        ret, frame = cap.read()
+        ret, _ = cap.read()
         if ret:
             break
         time.sleep(CAMERA_INIT_DELAY_SECONDS)
@@ -98,34 +105,28 @@ def open_camera(
     return cap
 
 
-def format_camera_info(idx: int, info: Dict[str, str], prefix: str = "[") -> str:
+def format_camera_info(idx: int, info: CameraInfo) -> str:
     """
     Format camera information for display.
 
     Args:
         idx: Camera index
-        info: Camera info dictionary
-        prefix: Prefix for index (default: "[" for "[0]",
-            use "Index " for "Index 0:" format)
+        info: Camera info from discovery
 
     Returns:
         Formatted string for display
     """
-    name = info.get("name", "Camera")
-    resolution = info.get("resolution", "Unknown")
-    fps = info.get("fps", "Unknown")
-    index_str = f"[{idx}]" if prefix == "[" else f"{prefix}{idx}:"
-    return f"{index_str} {name} - {resolution} @ {fps} fps"
+    return f"[{idx}] {info['name']} - {info['resolution']} @ {info['fps']} fps"
 
 
-def list_cameras() -> Dict[int, Dict[str, str]]:
+def list_cameras() -> Dict[int, CameraInfo]:
     """
     List available cameras with name, resolution, and fps.
 
     Returns:
         Dictionary mapping camera index (0, 1, 2...) to camera info.
     """
-    available_cameras: Dict[int, Dict[str, str]] = {}
+    available_cameras: Dict[int, CameraInfo] = {}
 
     # Check standard indices
     for i in range(MAX_CAMERA_INDEX):
@@ -138,11 +139,8 @@ def list_cameras() -> Dict[int, Dict[str, str]]:
                 available_cameras[i] = {
                     "name": f"Camera {i}",
                     "resolution": resolution,
-                    "fps": str(fps),
+                    "fps": fps,
                 }
             cap.release()
-        else:
-            # Stop checking after first failure (no more cameras)
-            break
 
     return available_cameras

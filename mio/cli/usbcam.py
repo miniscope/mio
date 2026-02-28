@@ -33,7 +33,7 @@ def usbcam(ctx: click.Context, list_cameras: bool) -> None:
         else:
             click.echo("Available cameras:")
             for idx, info in cameras.items():
-                click.echo(f"  {format_camera_info(idx, info, prefix='Index ')}")
+                click.echo(f"  {format_camera_info(idx, info)}")
         ctx.exit()
 
     if ctx.invoked_subcommand is None:
