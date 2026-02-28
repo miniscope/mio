@@ -23,7 +23,7 @@ def convert_frame_for_codec(frame: np.ndarray, codec: Codec) -> np.ndarray:
 
     Args:
         frame: Input frame (BGR from OpenCV)
-        codec: Video codec (e.g., "mjpeg", "rawvideo", "libx264")
+        codec: Video codec for output encoding
 
     Returns:
         Converted frame ready for video writer
@@ -39,8 +39,10 @@ def convert_frame_for_codec(frame: np.ndarray, codec: Codec) -> np.ndarray:
         if len(frame.shape) == 3:
             return cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         else:
-            # If grayscale, convert to RGB
-            return cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+            raise ValueError(
+                f"Expected BGR (3-channel) frame for codec '{codec}', "
+                f"got shape {frame.shape}. Use 'rawvideo' for grayscale."
+            )
 
 
 def open_camera(
