@@ -131,7 +131,7 @@ class RecordingDataBundle:
         self.combined_video_writer: VideoWriter = combined_video_writer
         self.debug_video_writer: Optional[VideoWriter] = debug_video_writer
         self.combined_csv_path: Optional[Path] = combined_csv_path
-        self.combined_metadata: Optional[pd.DataFrame] = None
+        self._metadata_parts: List[pd.DataFrame] = []
         self._combined_frame_num: Optional[List[int]] = None
         self._out_frame_index: int = 0
         # Debug CSV writer
@@ -289,12 +289,7 @@ class RecordingDataBundle:
                 selected.recording.metadata["frame_num"] == frame_num
             ].copy()
             rows["reconstructed_frame_index"] = self._out_frame_index
-            if self.combined_metadata is None:
-                self.combined_metadata = rows
-            else:
-                self.combined_metadata = pd.concat(
-                    [self.combined_metadata, rows], ignore_index=True
-                )
+            self._metadata_parts.append(rows)
             self._out_frame_index += 1
         except Exception as e:
             msg = f"Failed to collect metadata for frame {frame_num}: {e}"
@@ -314,8 +309,10 @@ class RecordingDataBundle:
             if self.debug_csv_writer is not None:
                 self.debug_csv_writer.close()
         finally:
-            if self.combined_csv_path is not None and self.combined_metadata is not None:
-                self.combined_metadata.to_csv(self.combined_csv_path, index=False)
+            if self.combined_csv_path is not None and self._metadata_parts:
+                pd.concat(self._metadata_parts, ignore_index=True).to_csv(
+                    self.combined_csv_path, index=False
+                )
 
     def stitch_recordings(self) -> None:
         """Stitch recordings by iterating unique frame_nums and selecting the best frame."""
