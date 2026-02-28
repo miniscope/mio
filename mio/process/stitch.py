@@ -57,9 +57,6 @@ def most_proper_metadata(
     index of a best-scoring candidate, the list of tied candidate indices,
     and whether there was a tie.
     """
-    if not candidates:
-        return 0, [], False
-
     scored = [
         (i, score_metadata(num_buffers=c.num_buffers, sum_black_padding=c.sum_black_padding))
         for i, c in enumerate(candidates)
@@ -155,11 +152,7 @@ class RecordingDataBundle:
             if frame is None:
                 continue
             num_buffers = int(len(rows))
-            sum_black = (
-                int(rows["black_padding_px"].fillna(0).sum())
-                if "black_padding_px" in rows.columns
-                else 0
-            )
+            sum_black = int(rows["black_padding_px"].fillna(0).sum())
             candidates.append(
                 CandidateFrame(
                     recording=recording,
@@ -202,15 +195,6 @@ class RecordingDataBundle:
 
         writes = 0
         for idx, cand in others:
-            if selected.frame.shape != cand.frame.shape:
-                msg = (
-                    f"Frames differ for frame {frame_num}"
-                    f": shape {selected.frame.shape} vs {cand.frame.shape}"
-                )
-                tqdm.write(msg)
-                logger.debug(msg)
-                continue
-
             diff_mask = (selected.frame != cand.frame).astype(np.uint8) * 255
             diff_pixels = int(np.count_nonzero(diff_mask))
             msg = (
@@ -221,14 +205,9 @@ class RecordingDataBundle:
             logger.debug(msg)
 
             if self.debug_video_writer is not None:
-                try:
-                    composite = np.vstack([selected.frame, cand.frame, diff_mask])
-                    self.debug_video_writer.write_frame(composite)
-                    writes += 1
-                except Exception as e:
-                    msg = f"Failed to write composite for frame {frame_num}: {e}"
-                    tqdm.write(msg)
-                    logger.warning(msg)
+                composite = np.vstack([selected.frame, cand.frame, diff_mask])
+                self.debug_video_writer.write_frame(composite)
+                writes += 1
 
             if self.debug_csv_writer is not None:
                 record = DebugRecord(
@@ -256,51 +235,27 @@ class RecordingDataBundle:
         frame_num: int,
         candidates: List[CandidateFrame],
         selected_idx: int,
-    ) -> bool:
-        """Write the selected frame and its metadata to the stitched outputs.
-
-        Returns True on success, False on failure.
-        """
+    ) -> None:
+        """Write the selected frame and its metadata to the stitched outputs."""
         selected = candidates[selected_idx]
-        try:
-            self.combined_video_writer.write_frame(selected.frame)
-        except Exception as e:
-            msg = (
-                f"Failed to write stitched frame {frame_num}: {e}"
-                f" (shape={getattr(selected.frame, 'shape', None)}"
-                f" dtype={getattr(selected.frame, 'dtype', None)})"
-            )
-            tqdm.write(msg)
-            logger.warning(msg)
-            return False
+        self.combined_video_writer.write_frame(selected.frame)
 
-        try:
-            rows = selected.metadata_rows.copy()
-            rows["reconstructed_frame_index"] = self._out_frame_index
-            self._metadata_parts.append(rows)
-            self._out_frame_index += 1
-        except Exception as e:
-            msg = f"Failed to collect metadata for frame {frame_num}: {e}"
-            tqdm.write(msg)
-            logger.debug(msg)
-            return False
-
-        return True
+        rows = selected.metadata_rows.copy()
+        rows["reconstructed_frame_index"] = self._out_frame_index
+        self._metadata_parts.append(rows)
+        self._out_frame_index += 1
 
     def _finalize(self) -> None:
         """Close writers and flush combined CSV."""
-        try:
-            if hasattr(self.combined_video_writer, "close"):
-                self.combined_video_writer.close()
-            if self.debug_video_writer is not None:
-                self.debug_video_writer.close()
-            if self.debug_csv_writer is not None:
-                self.debug_csv_writer.close()
-        finally:
-            if self.combined_csv_path is not None and self._metadata_parts:
-                pd.concat(self._metadata_parts, ignore_index=True).to_csv(
-                    self.combined_csv_path, index=False
-                )
+        self.combined_video_writer.close()
+        if self.debug_video_writer is not None:
+            self.debug_video_writer.close()
+        if self.debug_csv_writer is not None:
+            self.debug_csv_writer.close()
+        if self.combined_csv_path is not None and self._metadata_parts:
+            pd.concat(self._metadata_parts, ignore_index=True).to_csv(
+                self.combined_csv_path, index=False
+            )
 
     def stitch_recordings(self) -> None:
         """Stitch recordings by iterating unique frame_nums and selecting the best frame."""
@@ -315,8 +270,8 @@ class RecordingDataBundle:
                     continue
                 selected_idx, is_tie = self._select_best(valid_pairs)
                 debug_writes += self._write_debug(frame_num, valid_pairs, selected_idx, is_tie)
-                if self._write_stitched(frame_num, valid_pairs, selected_idx):
-                    stitched_writes += 1
+                self._write_stitched(frame_num, valid_pairs, selected_idx)
+                stitched_writes += 1
             except Exception as e:
                 msg = f"Error processing frame_num {frame_num}: {e}"
                 tqdm.write(msg)
