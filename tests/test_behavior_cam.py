@@ -110,17 +110,15 @@ def test_usbcam_mock_read_all_frames(set_usbcam_input, tmp_path):
 
     assert frames_read == 5
 
-def test_usbcam_mock_set_get():
+def test_usbcam_mock_set_get(tmp_path):
     """USBCamMock.set()/get() should store and retrieve properties."""
     from mio.devices.mocks import USBCamMock
 
     # Need DATA_FILE set; use a minimal npz
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(suffix=".npz") as f:
-        np.savez(f.name, frames=np.zeros((1, 2, 2, 3), dtype=np.uint8), timestamps=np.array([0.0]))
-        USBCamMock.DATA_FILE = Path(f.name)
-        mock = USBCamMock()
+    npz_path = tmp_path / "mock_props.npz"
+    np.savez(npz_path, frames=np.zeros((1, 2, 2, 3), dtype=np.uint8), timestamps=np.array([0.0]))
+    USBCamMock.DATA_FILE = npz_path
+    mock = USBCamMock()
 
     assert mock.get(cv2.CAP_PROP_FPS) == 0.0  # default
     mock.set(cv2.CAP_PROP_FPS, 30.0)
