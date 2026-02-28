@@ -18,8 +18,8 @@ from mio.process.stitch import (
     CandidateFrame,
     RecordingData,
     RecordingDataBundle,
-    most_proper_frame,
     most_proper_metadata,
+    score_edges,
 )
 from mio.process.video import crop_run
 from mio.utils import hash_video, validate_video_metadata_match
@@ -346,7 +346,10 @@ def test_crop_invalid_range(tmp_path):
 
 def test_metadata_tie_detection():
     """Equal metadata scores are detected as a tie (triggers edge scoring)."""
-    _cand = lambda nb, bp: CandidateFrame(recording=None, frame=None, num_buffers=nb, sum_black_padding=bp)
+    _cand = lambda nb, bp: CandidateFrame(
+        recording=None, frame=None, num_buffers=nb,
+        sum_black_padding=bp, metadata_rows=None, edge_score=0.0,
+    )
     _, tied, is_tie = most_proper_metadata([_cand(8, 0), _cand(8, 0)])
     assert tied == [0, 1]
     assert is_tie is True
@@ -357,9 +360,7 @@ def test_edge_scoring_selects_less_sharp():
     uniform = np.ones((50, 50), dtype=np.uint8) * 128
     edgy = np.zeros((50, 50), dtype=np.uint8)
     edgy[:, 25:] = 255
-    idx, scores = most_proper_frame([uniform, edgy])
-    assert idx == 0
-    assert scores[0] > scores[1]
+    assert score_edges(uniform) > score_edges(edgy)
 
 
 def test_frame_info_majority_vote_rfi():

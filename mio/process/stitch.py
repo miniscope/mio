@@ -43,6 +43,8 @@ class CandidateFrame:
     frame: np.ndarray
     num_buffers: int
     sum_black_padding: int
+    metadata_rows: pd.DataFrame
+    edge_score: float
 
 
 def most_proper_metadata(
@@ -68,24 +70,6 @@ def most_proper_metadata(
     best_idx = tied[0]
     is_tie = len(tied) > 1
     return best_idx, tied, is_tie
-
-
-def most_proper_frame(frame_list: List[np.ndarray]) -> Tuple[int, List[float]]:
-    """
-    Select using the edge-based scoring function score_edges(frame).
-    Returns the best index and the list of scores.
-    """
-    if not frame_list:
-        return 0, []
-
-    # Ensure all frames are 2D arrays with identical shapes
-    shapes = [f.shape for f in frame_list if isinstance(f, np.ndarray)]
-    if len(shapes) != len(frame_list) or len(set(shapes)) != 1:
-        return 0, [float("-inf")] * len(frame_list)
-
-    scores = [score_edges(f) for f in frame_list]
-    best_idx = int(np.argmax(scores))
-    return best_idx, scores
 
 
 class RecordingData:
@@ -163,7 +147,8 @@ class RecordingDataBundle:
         """Read frames and metadata scores for all recordings that have *frame_num*."""
         candidates: List[CandidateFrame] = []
         for recording in self.recordings:
-            if frame_num not in recording.metadata["frame_num"].values:
+            rows = recording.metadata[recording.metadata["frame_num"] == frame_num]
+            if rows.empty:
                 continue
             frame_info = FrameInfo.from_metadata(
                 frame_num=frame_num, metadata=recording.metadata
@@ -171,14 +156,22 @@ class RecordingDataBundle:
             frame = recording.video_reader.read_frame(frame_info.reconstructed_frame_index)
             if frame is None:
                 continue
-            rows = recording.metadata[recording.metadata["frame_num"] == frame_num]
             num_buffers = int(len(rows))
             sum_black = (
                 int(rows["black_padding_px"].fillna(0).sum())
                 if "black_padding_px" in rows.columns
                 else 0
             )
-            candidates.append(CandidateFrame(recording, frame, num_buffers, sum_black))
+            candidates.append(
+                CandidateFrame(
+                    recording=recording,
+                    frame=frame,
+                    num_buffers=num_buffers,
+                    sum_black_padding=sum_black,
+                    metadata_rows=rows,
+                    edge_score=score_edges(frame),
+                )
+            )
         return candidates
 
     @staticmethod
@@ -186,9 +179,8 @@ class RecordingDataBundle:
         """Pick the best candidate index using metadata scoring + edge tiebreak."""
         best_idx, tied, is_tie = most_proper_metadata(candidates)
         if is_tie:
-            tied_frames = [candidates[i].frame for i in tied]
-            rel_idx, _ = most_proper_frame(tied_frames)
-            best_idx = tied[int(rel_idx)]
+            tied_scores = [candidates[i].edge_score for i in tied]
+            best_idx = tied[int(np.argmax(tied_scores))]
         return best_idx, is_tie
 
     def _write_debug(
@@ -252,8 +244,8 @@ class RecordingDataBundle:
                     compare_num_buffers=cand.num_buffers,
                     compare_black_padding=cand.sum_black_padding,
                     diff_pixels=diff_pixels,
-                    selected_edge_score=score_edges(selected.frame),
-                    compare_edge_score=score_edges(cand.frame),
+                    selected_edge_score=selected.edge_score,
+                    compare_edge_score=cand.edge_score,
                     metadata_tie=bool(is_tie),
                 )
                 self.debug_csv_writer.append(record.model_dump())
@@ -285,9 +277,7 @@ class RecordingDataBundle:
             return False
 
         try:
-            rows = selected.recording.metadata[
-                selected.recording.metadata["frame_num"] == frame_num
-            ].copy()
+            rows = selected.metadata_rows.copy()
             rows["reconstructed_frame_index"] = self._out_frame_index
             self._metadata_parts.append(rows)
             self._out_frame_index += 1
