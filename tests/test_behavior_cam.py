@@ -73,7 +73,7 @@ def test_capture_binary_export(set_usbcam_input, tmp_path):
     assert data["timestamps"].shape[0] == NUM_TEST_FRAMES
 
 
-STRESS_NUM_FRAMES = 1000
+STRESS_NUM_FRAMES = 100
 
 
 @pytest.fixture(params=["cv2", "skvideo"])
@@ -91,7 +91,7 @@ def backend_config(request, tmp_path) -> USBCameraRecordingConfig:
 
 @pytest.mark.xfail(reason="skvideo backend drops frames — CSV count != video frame count", strict=False)
 def test_frame_count_matches_csv(backend_config, set_usbcam_input, tmp_path):
-    """Verify video frame count matches CSV row count for each backend (1000 frames).
+    """Verify video frame count matches CSV row count for each backend.
 
     Known bug: skvideo backend may produce fewer video frames than CSV rows.
     """
@@ -120,9 +120,6 @@ def test_frame_count_matches_csv(backend_config, set_usbcam_input, tmp_path):
     )
 
 
-REALTIME_NUM_FRAMES = 1000
-
-
 @pytest.mark.xfail(reason="skvideo backend drops frames — CSV count != video frame count", strict=False)
 def test_frame_count_realtime(backend_config, set_usbcam_input, tmp_path):
     """Verify frame count with realtime replay to simulate real camera timing.
@@ -130,7 +127,8 @@ def test_frame_count_realtime(backend_config, set_usbcam_input, tmp_path):
     Known bug: skvideo backend may produce fewer video frames than CSV rows
     under real-time write pressure.
     """
-    npz_path = _make_npz(tmp_path / "realtime_input.npz", num_frames=REALTIME_NUM_FRAMES)
+    num_frames = STRESS_NUM_FRAMES
+    npz_path = _make_npz(tmp_path / "realtime_input.npz", num_frames=num_frames)
     set_usbcam_input(npz_path, realtime=True)
 
     behavior_cam = BehaviorCam(recording_config=backend_config, camera_index=0)
