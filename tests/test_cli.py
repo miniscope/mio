@@ -1,10 +1,13 @@
+import csv
 import sys
 
+import numpy as np
 import pytest
 from click.testing import CliRunner
 
 from mio.cli.config import config, _list
 from mio.cli.stream import capture
+from mio.cli.usbcam import test as usbcam_test
 from mio import Config
 from mio.utils import hash_video
 from mio.models import config as _config_mod
@@ -171,3 +174,47 @@ def test_cli_capture(
     assert result.exit_code == 0
     output_hash = hash_video(path_stem.with_suffix(".avi"))
     assert output_hash == video_hash
+
+
+@pytest.mark.timeout(30)
+def test_cli_usbcam_test(set_usbcam_input, tmp_path, config_override):
+    """
+    `mio usbcam test` should run BehaviorCam with mock data and produce video + CSV output.
+    """
+    num_frames = 10
+    width, height, fps = 1280, 720, 20
+
+    frames = np.random.default_rng(42).integers(
+        0, 255, size=(num_frames, height, width, 3), dtype=np.uint8
+    )
+    timestamps = np.arange(num_frames, dtype=np.float64) / fps
+    npz_path = tmp_path / "test_input.npz"
+    np.savez(npz_path, frames=frames, timestamps=timestamps)
+
+    set_usbcam_input(npz_path)
+
+    # Override config to write output to tmp_path and disable NTP
+    from mio import BASE_DIR
+
+    elp_config_path = BASE_DIR / "data" / "config" / "camera" / "elp-camera.yaml"
+    config_path = config_override(
+        elp_config_path, {"output_dir": str(tmp_path), "ntp_server": None}
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        usbcam_test,
+        ["--config", str(config_path), "--source", str(npz_path)],
+    )
+
+    assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
+
+    video_files = list(tmp_path.glob("*.mp4")) + list(tmp_path.glob("*.avi"))
+    csv_files = list(tmp_path.glob("*.csv"))
+
+    assert len(video_files) == 1, f"Expected 1 video file, found {len(video_files)}"
+    assert len(csv_files) == 1, f"Expected 1 CSV file, found {len(csv_files)}"
+
+    with open(csv_files[0]) as f:
+        csv_row_count = sum(1 for _ in csv.DictReader(f))
+    assert csv_row_count == num_frames
