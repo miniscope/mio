@@ -1,11 +1,13 @@
 import csv
+import threading
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
 from mio.behavior_cam import BehaviorCam
-from mio.io import VideoReader
+from mio.io import VideoReader, VideoWriter
 from mio.models.usbcam import USBCameraRecordingConfig
 
 NUM_TEST_FRAMES = 10
@@ -73,6 +75,71 @@ def test_capture_binary_export(set_usbcam_input, tmp_path):
     assert data["timestamps"].shape[0] == NUM_TEST_FRAMES
 
 
+def test_videowriter_close_writes_moov_atom(tmp_path):
+    """Verify VideoWriter.close() produces a valid mp4 with moov atom.
+
+    Without proper close (stdin.close + wait), FFmpeg may exit before
+    writing the moov atom, making the file unreadable.
+    """
+    video_path = tmp_path / "test.mp4"
+    writer = VideoWriter(
+        path=video_path,
+        fps=20,
+        output_dict={"-vcodec": "libx264", "-f": "mp4", "-pix_fmt": "yuv420p", "-vsync": "0"},
+        backend="skvideo",
+    )
+
+    frames = np.random.default_rng().integers(
+        0, 255, size=(NUM_TEST_FRAMES, TEST_HEIGHT, TEST_WIDTH, 3), dtype=np.uint8
+    )
+    for frame in frames:
+        writer.write_frame(frame)
+
+    writer.close()
+
+    # If moov atom is missing, VideoCapture will fail to open or report 0 frames
+    cap = cv2.VideoCapture(str(video_path))
+    assert cap.isOpened(), "Failed to open video — moov atom likely missing"
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+    assert frame_count == NUM_TEST_FRAMES, (
+        f"Expected {NUM_TEST_FRAMES} frames, got {frame_count}"
+    )
+
+
+def test_capture_interrupt_produces_valid_output(set_usbcam_input, tmp_path):
+    """Verify output is valid when capture is interrupted mid-recording."""
+    num_frames = 100
+    npz_path = _make_npz(tmp_path / "interrupt_input.npz", num_frames=num_frames)
+    set_usbcam_input(npz_path, realtime=True)
+
+    config = USBCameraRecordingConfig.from_id("elp-camera")
+    config.output_dir = str(tmp_path / "output")
+    config.ntp_server = None
+
+    cam = BehaviorCam(recording_config=config, camera_index=0)
+
+    # Interrupt capture after 2 seconds (~40 frames at 20fps)
+    timer = threading.Timer(2.0, cam.terminate.set)
+    timer.start()
+    cam.capture(show_video=False)
+
+    video_files = list(Path(config.output_dir).glob("*.mp4")) + list(
+        Path(config.output_dir).glob("*.avi")
+    )
+    assert len(video_files) == 1
+
+    # Verify the partial recording is readable (moov atom present)
+    cap = cv2.VideoCapture(str(video_files[0]))
+    assert cap.isOpened(), "Interrupted recording not readable — moov atom likely missing"
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+    assert frame_count > 0, "No frames in interrupted recording"
+    assert frame_count < num_frames, (
+        f"Expected partial recording but got all {num_frames} frames"
+    )
+
+
 STRESS_NUM_FRAMES = 100
 
 
@@ -89,7 +156,6 @@ def backend_config(request, tmp_path) -> USBCameraRecordingConfig:
     return config
 
 
-@pytest.mark.xfail(reason="skvideo backend drops frames — CSV count != video frame count", strict=False)
 def test_frame_count_matches_csv(backend_config, set_usbcam_input, tmp_path):
     """Verify video frame count matches CSV row count for each backend.
 
@@ -120,7 +186,6 @@ def test_frame_count_matches_csv(backend_config, set_usbcam_input, tmp_path):
     )
 
 
-@pytest.mark.xfail(reason="skvideo backend drops frames — CSV count != video frame count", strict=False)
 @pytest.mark.parametrize("input_fps", [20, 19, 18, 15])
 def test_frame_count_realtime(backend_config, set_usbcam_input, tmp_path, input_fps):
     """Verify frame count with realtime replay to simulate real camera timing.

@@ -299,14 +299,19 @@ class BehaviorCam:
                 )
 
                 # Verify video frame count matches CSV row count
-                cap = cv2.VideoCapture(str(video_path))
-                video_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                cap.release()
+                try:
+                    cap = cv2.VideoCapture(str(video_path))
+                    video_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    cap.release()
 
-                if video_frame_count != frames_written:
+                    if video_frame_count != frames_written:
+                        self.logger.warning(
+                            f"Frame count mismatch: video has {video_frame_count} frames "
+                            f"but CSV has {frames_written} rows"
+                        )
+                except Exception as e:
                     self.logger.warning(
-                        f"Frame count mismatch: video has {video_frame_count} frames "
-                        f"but CSV has {frames_written} rows"
+                        f"Could not verify video frame count ({self.config.backend} backend): {e}"
                     )
             else:
                 self.logger.warning("No frames were written, recording file removed")
