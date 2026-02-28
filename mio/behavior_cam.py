@@ -10,9 +10,11 @@ from pathlib import Path
 from typing import Optional, Union
 
 import cv2
+import numpy as np
 
 from mio import init_logger
 from mio.devices.usbcam import convert_frame_for_codec, open_camera
+from mio.exceptions import EndOfRecordingException
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.models.usbcam import USBCameraRecordingConfig
 from mio.types import ConfigSource
@@ -79,7 +81,11 @@ class BehaviorCam:
 
         try:
             while not self.terminate.is_set():
-                ret, frame = cap.read()
+                try:
+                    ret, frame = cap.read()
+                except EndOfRecordingException:
+                    locallogs.info("End of recorded data")
+                    break
                 if ret:
                     # Get timestamp for this frame (float unix time in seconds)
                     unix_time = time.time()
@@ -106,6 +112,7 @@ class BehaviorCam:
         self,
         output_dir: Optional[str] = None,
         show_video: bool = True,
+        capture_binary: Optional[Path] = None,
     ) -> None:
         """
         Start frame capture and recording.
@@ -113,6 +120,7 @@ class BehaviorCam:
         Args:
             output_dir: Output directory (defaults to config.output_dir)
             show_video: If True, display video preview window
+            capture_binary: If set, save raw frames and timestamps to this ``.npz`` path
         """
         self.terminate.clear()
 
@@ -182,6 +190,8 @@ class BehaviorCam:
         last_fps_log_time = None
         frames_in_window = 0
         writer_used = False
+        binary_frames = [] if capture_binary else None
+        binary_timestamps = [] if capture_binary else None
 
         try:
             for frame_data in exact_iter(frame_queue.get, None):
@@ -212,6 +222,10 @@ class BehaviorCam:
                         "unix_time": unix_time,
                     }
                 )
+
+                if capture_binary:
+                    binary_frames.append(frame)
+                    binary_timestamps.append(unix_time)
 
                 frames_written += 1
                 frames_in_window += 1
@@ -264,6 +278,16 @@ class BehaviorCam:
                 if video_path.exists():
                     video_path.unlink()
             csv_writer.close()
+
+            if capture_binary and binary_frames:
+                np.savez(
+                    capture_binary,
+                    frames=np.array(binary_frames, dtype=np.uint8),
+                    timestamps=np.array(binary_timestamps, dtype=np.float64),
+                )
+                self.logger.info(
+                    f"Saved binary data to {capture_binary} ({len(binary_frames)} frames)"
+                )
 
             if show_video:
                 cv2.destroyAllWindows()

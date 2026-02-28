@@ -2,6 +2,8 @@
 CLI commands for recording video from USB camera.
 """
 
+import os
+from pathlib import Path
 from typing import Optional
 
 import click
@@ -66,7 +68,15 @@ def usbcam(ctx: click.Context, list_cameras: bool) -> None:
     type=int,
     help="Specify camera index (optional)",
 )
-def record(config: str, output_dir: Optional[str], index: Optional[int]) -> None:
+@click.option(
+    "-b",
+    "--binary_export",
+    is_flag=True,
+    help="Save raw frames to a .npz file alongside the video",
+)
+def record(
+    config: str, output_dir: Optional[str], index: Optional[int], binary_export: bool
+) -> None:
     """Record video with Unix timestamp filename"""
     recording_config = USBCameraRecordingConfig.from_any(config)
 
@@ -99,9 +109,49 @@ def record(config: str, output_dir: Optional[str], index: Optional[int]) -> None
         )
         camera_index = int(selected_index)
 
+    # Compute binary export path if requested
+    if binary_export:
+        import time as _time
+
+        binary_output = Path(recording_config.output_dir) / f"{int(_time.time())}.npz"
+    else:
+        binary_output = None
+
     behavior_cam = BehaviorCam(recording_config=recording_config, camera_index=camera_index)
     try:
-        behavior_cam.capture()
+        behavior_cam.capture(capture_binary=binary_output)
     except Exception as e:
         click.echo(f"Error recording video: {e}", err=True)
         raise click.ClickException(f"Error recording video: {e}") from e
+
+
+@usbcam.command()
+@click.option(
+    "-c",
+    "--config",
+    required=True,
+    type=ConfigIDOrPath(),
+    help="Either a config `id` or a path to USB camera config YAML file.",
+)
+@click.option(
+    "-s",
+    "--source",
+    required=True,
+    help="Path to .npz file with recorded frames",
+    type=click.Path(exists=True),
+)
+@click.option(
+    "-b",
+    "--binary_export",
+    is_flag=True,
+    help="Save raw frames to a .npz file alongside the video",
+)
+@click.pass_context
+def test(ctx: click.Context, config: str, source: str, binary_export: bool) -> None:
+    """
+    Run BehaviorCam in testing mode, using USBCamMock rather than the actual device.
+    """
+    os.environ["BEHAVIORCAM_MOCKRUN"] = "just_placeholder"
+    os.environ["PYTEST_USBCAM_DATA_FILE"] = str(source)
+
+    ctx.invoke(record, config=config, output_dir=None, index=0, binary_export=binary_export)

@@ -64,6 +64,25 @@ def set_okdev_input(monkeypatch):
 
 
 @pytest.fixture()
+def set_usbcam_input(monkeypatch):
+    """
+    closure fixture to set the environment variable used by BehaviorCam to set the
+    USBCamMock data source
+    """
+
+    def _set_usbcam_input(file: Union[str, Path], realtime: bool = False):
+        from mio.devices.mocks import USBCamMock
+
+        monkeypatch.setattr(USBCamMock, "DATA_FILE", file)
+        monkeypatch.setattr(USBCamMock, "REALTIME", realtime)
+        os.environ["PYTEST_USBCAM_DATA_FILE"] = str(file)
+        if realtime:
+            os.environ["PYTEST_USBCAM_REALTIME"] = "1"
+
+    return _set_usbcam_input
+
+
+@pytest.fixture()
 def config_override(tmp_path) -> Callable[[Path, dict], Path]:
     """
     Create a config file with some of its properties overridden
