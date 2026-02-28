@@ -17,17 +17,16 @@ from mio.ntp import prompt_ntp_sync
 @click.group(invoke_without_command=True)
 @click.option(
     "--list",
-    "list_cameras_flag",
+    "list_cameras",
     is_flag=True,
     help="List available cameras and exit",
 )
 @click.pass_context
-def usbcam(ctx: click.Context, list_cameras_flag: bool) -> None:
+def usbcam(ctx: click.Context, list_cameras: bool) -> None:
     """
     Command group for USB Camera
     """
-    # Handle --list flag
-    if list_cameras_flag:
+    if list_cameras:
         cameras = list_available_cameras()
         if not cameras:
             click.echo("No cameras found")
@@ -37,7 +36,6 @@ def usbcam(ctx: click.Context, list_cameras_flag: bool) -> None:
                 click.echo(f"  {format_camera_info(idx, info, prefix='Index ')}")
         ctx.exit()
 
-    # If no subcommand was invoked and --list wasn't used, show help
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
         ctx.exit()
