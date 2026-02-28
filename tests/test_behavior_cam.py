@@ -1,5 +1,11 @@
 import csv
+import os
+import signal
+import subprocess
+import sys
+import textwrap
 import threading
+import time
 from pathlib import Path
 
 import cv2
@@ -143,6 +149,63 @@ def test_capture_interrupt_produces_valid_output(set_usbcam_input, tmp_path):
     assert frame_count < num_frames, (
         f"Expected partial recording ({num_frames} input frames at 20fps realtime) "
         f"but got all {frame_count} frames — interrupt may not have fired in time"
+    )
+
+
+@pytest.mark.timeout(60)
+@pytest.mark.parametrize("config_id", ["elp-camera", "elp-camera-skvideo"])
+def test_sigint_produces_valid_output(tmp_path, config_id):
+    """Test that a real signal (SIGINT / CTRL_BREAK) produces a valid video.
+
+    Runs capture in a subprocess and sends it a signal to simulate Ctrl+C.
+    """
+    npz_path = tmp_path / "input.npz"
+    _make_npz(npz_path, num_frames=600)
+    output_dir = tmp_path / "output"
+
+    script = textwrap.dedent(f"""\
+        import os
+        os.environ["BEHAVIORCAM_MOCKRUN"] = "1"
+        os.environ["PYTEST_USBCAM_DATA_FILE"] = {str(npz_path)!r}
+        os.environ["PYTEST_USBCAM_REALTIME"] = "1"
+        from mio.behavior_cam import BehaviorCam
+        from mio.models.usbcam import USBCameraRecordingConfig
+        config = USBCameraRecordingConfig.from_id("{config_id}")
+        config.output_dir = {str(output_dir)!r}
+        config.ntp_server = None
+        cam = BehaviorCam(recording_config=config, camera_index=0)
+        cam.capture(show_video=False)
+    """)
+
+    kwargs: dict = {}
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        kwargs["start_new_session"] = True
+
+    proc = subprocess.Popen([sys.executable, "-c", script], **kwargs)
+
+    # Wait for capture to start producing frames
+    time.sleep(15)
+
+    # Send signal — like real Ctrl+C
+    if sys.platform == "win32":
+        proc.send_signal(signal.CTRL_BREAK_EVENT)
+    else:
+        os.killpg(os.getpgid(proc.pid), signal.SIGINT)
+
+    proc.wait(timeout=30)
+
+    videos = list(output_dir.glob("*.mp4")) + list(output_dir.glob("*.avi"))
+    assert len(videos) == 1
+
+    cap = cv2.VideoCapture(str(videos[0]))
+    assert cap.isOpened(), "Video not readable after signal — moov atom likely missing"
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+    assert frame_count > 0, "No frames in recording after signal"
+    assert frame_count < 600, (
+        f"Expected partial recording but got {frame_count} frames — signal may not have fired in time"
     )
 
 
