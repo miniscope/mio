@@ -107,9 +107,12 @@ def test_videowriter_close_writes_moov_atom(tmp_path):
     )
 
 
+@pytest.mark.timeout(60)
 def test_capture_interrupt_produces_valid_output(set_usbcam_input, tmp_path):
     """Verify output is valid when capture is interrupted mid-recording."""
-    num_frames = 100
+    # 600 frames at 20fps = 30s of realtime playback.
+    # Timer fires at 15s, allowing for slow multiprocess startup on Windows CI (~5s).
+    num_frames = 600
     npz_path = _make_npz(tmp_path / "interrupt_input.npz", num_frames=num_frames)
     set_usbcam_input(npz_path, realtime=True)
 
@@ -119,8 +122,7 @@ def test_capture_interrupt_produces_valid_output(set_usbcam_input, tmp_path):
 
     cam = BehaviorCam(recording_config=config, camera_index=0)
 
-    # Interrupt capture after 2 seconds (~40 frames at 20fps)
-    timer = threading.Timer(2.0, cam.terminate.set)
+    timer = threading.Timer(15.0, cam.terminate.set)
     timer.start()
     cam.capture(show_video=False)
 
