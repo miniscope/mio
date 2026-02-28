@@ -60,6 +60,7 @@ def open_camera(
     frame_width: int,
     frame_height: int,
     fps: int,
+    capture_format: str = "MJPEG",
 ) -> cv2.VideoCapture:
     """
     Open and configure a camera with the specified settings.
@@ -69,6 +70,7 @@ def open_camera(
         frame_width: Desired frame width
         frame_height: Desired frame height
         fps: Desired frames per second
+        capture_format: Camera capture format (e.g., "MJPEG", "YUY2")
 
     Returns:
         Configured VideoCapture object
@@ -80,6 +82,8 @@ def open_camera(
     if not cap.isOpened():
         raise RuntimeError(f"Failed to open camera at index {camera_index}")
 
+    fourcc = cv2.VideoWriter_fourcc(*capture_format)
+    cap.set(cv2.CAP_PROP_FOURCC, fourcc)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, frame_width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, frame_height)
     cap.set(cv2.CAP_PROP_FPS, fps)

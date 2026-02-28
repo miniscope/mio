@@ -69,6 +69,7 @@ class BehaviorCam:
                 frame_width=self.config.frame_width,
                 frame_height=self.config.frame_height,
                 fps=self.config.fps,
+                capture_format=self.config.format,
             )
         except RuntimeError:
             frame_queue.put(None)

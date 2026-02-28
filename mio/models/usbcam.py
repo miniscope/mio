@@ -23,9 +23,9 @@ class USBCameraRecordingConfig(MiniscopeConfig, ConfigYAMLMixin):
     frame_width: int = Field(default=1920, description="Width of the recorded video.")
     frame_height: int = Field(default=1080, description="Height of the recorded video.")
     fps: int = Field(default=20, description="Frames per second of the recorded video.")
-    format: str = Field(
+    format: Literal["MJPEG", "YUY2"] = Field(
         default="MJPEG",
-        description="Video format for camera capture (e.g., MJPEG, YUY2). "
+        description="Video format for camera capture. "
         "Note: Output video encoding is handled by VideoWriter.",
     )
     codec: Codec = Field(
