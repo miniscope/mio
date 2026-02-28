@@ -74,8 +74,13 @@ def usbcam(ctx: click.Context, list_cameras: bool) -> None:
     is_flag=True,
     help="Save raw frames to a .npz file alongside the video",
 )
+@click.option("--no-display", is_flag=True, help="Don't show video preview in real time")
 def record(
-    config: str, output_dir: Optional[str], index: Optional[int], binary_export: bool
+    config: str,
+    output_dir: Optional[str],
+    index: Optional[int],
+    binary_export: bool,
+    no_display: bool,
 ) -> None:
     """Record video with Unix timestamp filename"""
     recording_config = USBCameraRecordingConfig.from_any(config)
@@ -119,7 +124,7 @@ def record(
 
     behavior_cam = BehaviorCam(recording_config=recording_config, camera_index=camera_index)
     try:
-        behavior_cam.capture(capture_binary=binary_output)
+        behavior_cam.capture(show_video=not no_display, capture_binary=binary_output)
     except Exception as e:
         click.echo(f"Error recording video: {e}", err=True)
         raise click.ClickException(f"Error recording video: {e}") from e
@@ -146,12 +151,22 @@ def record(
     is_flag=True,
     help="Save raw frames to a .npz file alongside the video",
 )
+@click.option("--no-display", is_flag=True, help="Don't show video preview in real time")
 @click.pass_context
-def test(ctx: click.Context, config: str, source: str, binary_export: bool) -> None:
+def test(
+    ctx: click.Context, config: str, source: str, binary_export: bool, no_display: bool
+) -> None:
     """
     Run BehaviorCam in testing mode, using USBCamMock rather than the actual device.
     """
     os.environ["BEHAVIORCAM_MOCKRUN"] = "just_placeholder"
     os.environ["PYTEST_USBCAM_DATA_FILE"] = str(source)
 
-    ctx.invoke(record, config=config, output_dir=None, index=0, binary_export=binary_export)
+    ctx.invoke(
+        record,
+        config=config,
+        output_dir=None,
+        index=0,
+        binary_export=binary_export,
+        no_display=no_display,
+    )

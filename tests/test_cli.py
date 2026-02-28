@@ -204,7 +204,7 @@ def test_cli_usbcam_test(set_usbcam_input, tmp_path, config_override):
     runner = CliRunner()
     result = runner.invoke(
         usbcam_test,
-        ["--config", str(config_path), "--source", str(npz_path)],
+        ["--config", str(config_path), "--source", str(npz_path), "--no-display"],
     )
 
     assert result.exit_code == 0, f"CLI failed: {result.output}\n{result.exception}"
