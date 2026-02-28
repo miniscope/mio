@@ -131,6 +131,9 @@ def test_capture_interrupt_produces_valid_output(set_usbcam_input, tmp_path):
     )
     assert len(video_files) == 1
 
+    # Confirm the interrupt actually fired
+    assert cam.terminate.is_set(), "terminate event was never set — timer did not fire"
+
     # Verify the partial recording is readable (moov atom present)
     cap = cv2.VideoCapture(str(video_files[0]))
     assert cap.isOpened(), "Interrupted recording not readable — moov atom likely missing"
@@ -138,7 +141,8 @@ def test_capture_interrupt_produces_valid_output(set_usbcam_input, tmp_path):
     cap.release()
     assert frame_count > 0, "No frames in interrupted recording"
     assert frame_count < num_frames, (
-        f"Expected partial recording but got all {num_frames} frames"
+        f"Expected partial recording ({num_frames} input frames at 20fps realtime) "
+        f"but got all {frame_count} frames — interrupt may not have fired in time"
     )
 
 
