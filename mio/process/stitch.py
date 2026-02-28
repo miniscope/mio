@@ -150,9 +150,7 @@ class RecordingDataBundle:
             rows = recording.metadata[recording.metadata["frame_num"] == frame_num]
             if rows.empty:
                 continue
-            frame_info = FrameInfo.from_metadata(
-                frame_num=frame_num, metadata=recording.metadata
-            )
+            frame_info = FrameInfo.from_metadata(frame_num=frame_num, metadata=recording.metadata)
             frame = recording.video_reader.read_frame(frame_info.reconstructed_frame_index)
             if frame is None:
                 continue
@@ -316,9 +314,7 @@ class RecordingDataBundle:
                 if not valid_pairs:
                     continue
                 selected_idx, is_tie = self._select_best(valid_pairs)
-                debug_writes += self._write_debug(
-                    frame_num, valid_pairs, selected_idx, is_tie
-                )
+                debug_writes += self._write_debug(frame_num, valid_pairs, selected_idx, is_tie)
                 if self._write_stitched(frame_num, valid_pairs, selected_idx):
                     stitched_writes += 1
             except Exception as e:
