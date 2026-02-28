@@ -3,12 +3,13 @@ USB Camera device helper functions.
 """
 
 import time
-from typing import Dict, Literal, TypedDict
+from typing import Dict, TypedDict
 
 import cv2
 import numpy as np
 
 from mio.logging import init_logger
+from mio.models.usbcam import Codec
 
 logger = init_logger("usbcam")
 
@@ -16,9 +17,6 @@ logger = init_logger("usbcam")
 MAX_CAMERA_INDEX = 5
 CAMERA_INIT_DELAY_SECONDS = 0.1  # Delay after setting camera properties before reading
 CAMERA_INIT_RETRY_ATTEMPTS = 3  # Number of retry attempts when reading initial frame
-
-
-Codec = Literal["mjpeg", "libx264", "h264", "rawvideo"]
 
 
 class CameraInfo(TypedDict):

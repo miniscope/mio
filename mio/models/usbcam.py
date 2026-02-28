@@ -9,6 +9,8 @@ from pydantic import Field
 from mio.models import MiniscopeConfig
 from mio.models.mixins import ConfigYAMLMixin
 
+Codec = Literal["mjpeg", "libx264", "h264", "rawvideo"]
+
 
 class USBCameraRecordingConfig(MiniscopeConfig, ConfigYAMLMixin):
     """
@@ -26,7 +28,7 @@ class USBCameraRecordingConfig(MiniscopeConfig, ConfigYAMLMixin):
         description="Video format for camera capture (e.g., MJPEG, YUY2). "
         "Note: Output video encoding is handled by VideoWriter.",
     )
-    codec: Literal["mjpeg", "libx264", "h264", "rawvideo"] = Field(
+    codec: Codec = Field(
         default="libx264",
         description=(
             "Video codec for output file. "
