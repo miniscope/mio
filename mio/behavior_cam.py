@@ -177,7 +177,6 @@ class BehaviorCam:
         self.logger.info("Press Ctrl+C to stop recording")
 
         frames_written = 0
-        frame_index = 0
         first_frame = True
         start_time = None
         last_fps_log_time = None
@@ -186,15 +185,6 @@ class BehaviorCam:
 
         try:
             for frame_data in exact_iter(frame_queue.get, None):
-                if frame_data is None:
-                    # Early termination signal from camera process (camera failed)
-                    if frames_written == 0:
-                        raise RuntimeError(
-                            "Camera failed to initialize or read frames. "
-                            "Please check camera connection and settings."
-                        )
-                    break
-
                 frame, unix_time = frame_data
 
                 # Get actual dimensions from first frame and initialize timing
@@ -218,13 +208,12 @@ class BehaviorCam:
                 # Write frame metadata to CSV
                 csv_writer.append(
                     {
-                        "frame_index": frame_index,
+                        "frame_index": frames_written,
                         "unix_time": unix_time,
                     }
                 )
 
                 frames_written += 1
-                frame_index += 1
                 frames_in_window += 1
 
                 # Log FPS at regular intervals (FPS for the last window)
