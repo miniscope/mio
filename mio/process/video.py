@@ -250,7 +250,6 @@ class NoisePatchProcessor(BaseVideoProcessor):
                 fps=20,
                 suffix=True,
             )
-            # Can be anything. Just for now.
             with open(self.output_dir / f"{self.name}_dropped_frames.txt", "w") as f:
                 for index in self.dropped_frame_indices:
                     f.write(f"{index}\n")
@@ -535,7 +534,6 @@ def denoise_run(
     if not output_dir.exists():
         output_dir.mkdir(parents=True)
 
-    # Use debug_dir for intermediate files if provided, otherwise use output_dir
     intermediate_dir = debug_dir if debug_dir is not None else output_dir
     if debug_dir is not None:
         intermediate_dir.mkdir(parents=True, exist_ok=True)
@@ -551,13 +549,13 @@ def denoise_run(
     )
 
     noise_patch_processor = NoisePatchProcessor(
-        output_dir=output_dir,  # Main output stays in output_dir
+        output_dir=output_dir,
         name=pathstem + "_patch",
         noise_patch_config=config.noise_patch,
     )
 
     freq_mask_processor = FreqencyMaskProcessor(
-        output_dir=intermediate_dir,  # Intermediate files go to debug_dir
+        output_dir=intermediate_dir,
         name=pathstem + "_freq_mask",
         freq_mask_config=config.frequency_masking,
         width=reader.width,
@@ -567,18 +565,17 @@ def denoise_run(
     if config.interactive_display.display_freq_mask:
         freq_mask_processor.freq_mask_named_frame.display()
 
-    # Simple progress bar with total frame count
     total_frames = int(reader.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     try:
         frame_iter = tqdm(reader.read_frames(), total=total_frames, desc="Processing frames")
         for index, frame in frame_iter:
-            # Apply config end_frame if specified
             if config.end_frame and index > config.end_frame and config.end_frame != -1:
                 break
 
-            # Convert to grayscale if needed
-            raw_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if len(frame.shape) == 3 else frame
+            if len(frame.shape) != 2:
+                raise ValueError(f"Frame {index} has shape {frame.shape}, expected 2D grayscale.")
+            raw_frame = frame
             input_frame = raw_frame_processor.process_frame(raw_frame)
             patched_frame = noise_patch_processor.process_frame(
                 input_frame, original_frame_index=index
@@ -592,34 +589,22 @@ def denoise_run(
         output_frames = output_frame_processor.output_video
         minimum_projection_processor = MinProjSubtractProcessor(
             name=pathstem + "min_proj",
-            output_dir=intermediate_dir,  # Intermediate files go to debug_dir
+            output_dir=intermediate_dir,
             video_frames=output_frames,
             minimum_projection_config=config.minimum_projection,
         )
         minimum_projection_processor.normalize_stack()
 
-        # Export main output video (stays in output_dir)
         noise_patch_processor.export_output_video()
 
-        # Export intermediate/debug files to debug_dir if provided
-        if debug_dir is not None:
-            # Temporarily change output_dir for intermediate exports
-            original_output_dir = noise_patch_processor.output_dir
-            noise_patch_processor.output_dir = debug_dir
-            noise_patch_processor.export_noise_patch()
-            noise_patch_processor.export_diff_frames()
-            noise_patch_processor.export_noisy_video()
-            noise_patch_processor.output_dir = original_output_dir
-        else:
-            # Export all files to output_dir
-            noise_patch_processor.export_noise_patch()
-            noise_patch_processor.export_diff_frames()
-            noise_patch_processor.export_noisy_video()
+        noise_patch_processor.output_dir = intermediate_dir
+        noise_patch_processor.export_noise_patch()
+        noise_patch_processor.export_diff_frames()
+        noise_patch_processor.export_noisy_video()
 
         freq_mask_processor.batch_export_videos()
         minimum_projection_processor.batch_export_videos()
 
-        # Log excluded frames
         dropped_frames = noise_patch_processor.dropped_frame_indices
         if dropped_frames:
             logger.info(
@@ -629,12 +614,9 @@ def denoise_run(
         else:
             logger.info("No frames were excluded during processing.")
 
-        # Always modify CSV metadata to match the output video
-        # Determine output video path: output_dir / "<name>.avi"
         output_video_name = noise_patch_processor.name
         output_video_path = output_dir / f"{output_video_name}.avi"
 
-        # Verify the actual output video frame count matches expected
         actual_output_frame_count = len(output_frame_processor.output_video)
         dropped_count = len(noise_patch_processor.dropped_frame_indices)
         logger.debug(
@@ -649,7 +631,6 @@ def denoise_run(
             csv_df=csv_df,
         )
 
-        # Validate frame count alignment after metadata modification
         if modified_csv_df is not None:
             max_metadata_index = modified_csv_df["reconstructed_frame_index"].max()
             expected_max_index = actual_output_frame_count - 1
@@ -661,7 +642,6 @@ def denoise_run(
                     f"This may indicate an off-by-one error in frame indexing."
                 )
 
-        # Export frame-timestamp metadata CSV
         if modified_csv_df is not None:
             _export_frame_timestamp_csv(output_video_path, modified_csv_df)
 
@@ -725,31 +705,8 @@ def _modify_csv_metadata(
     input_csv_path = input_video_path_obj.with_suffix(".csv")
     output_csv_path = output_video_path.with_suffix(".csv")
 
-    # Use pre-validated CSV if available, otherwise read it
-    if csv_df is not None:
-        df = csv_df
-    else:
-        # Fallback: read CSV if validation wasn't done
-        if not input_csv_path.exists():
-            logger.warning(
-                f"CSV file not found at {input_csv_path}. Skipping CSV metadata modification."
-            )
-            return None
+    df = csv_df if csv_df is not None else pd.read_csv(input_csv_path)
 
-        try:
-            df = pd.read_csv(input_csv_path)
-        except Exception as e:
-            logger.error(f"Failed to read CSV file {input_csv_path}: {e}")
-            return None
-
-        if "reconstructed_frame_index" not in df.columns:
-            logger.warning(
-                f"CSV file {input_csv_path} does not have 'reconstructed_frame_index' column. "
-                "Skipping CSV metadata modification."
-            )
-            return None
-
-    # Remove dropped frames
     if not dropped_frame_indices:
         logger.info(
             "Modifying CSV metadata at %s from %s (no frames dropped, copying as-is).",
@@ -767,7 +724,6 @@ def _modify_csv_metadata(
         df_filtered = df[~df["reconstructed_frame_index"].isin(dropped_set)].copy()
         logger.info(f"Removed {len(df) - len(df_filtered)} buffers from CSV.")
 
-        # Renumber frame indices to be continuous after removing dropped frames
         def adjust_frame_index(frame_idx: int) -> int:
             num_dropped_before = sum(1 for dropped_idx in dropped_set if dropped_idx < frame_idx)
             return frame_idx - num_dropped_before
@@ -806,21 +762,17 @@ def _export_frame_timestamp_csv(output_video_path: Path, csv_df: pd.DataFrame) -
         )
         return
 
-    # Group by reconstructed_frame_index and get both first and last buffer timestamps
     frame_timestamps = (
         csv_df.groupby("reconstructed_frame_index")["buffer_recv_unix_time"]
         .agg(["min", "max"])
         .reset_index()
     )
 
-    # Rename columns for clarity
     frame_timestamps.columns = ["frame", "timestamp_first", "timestamp_last"]
 
-    # Sort by frame index
     frame_timestamps = frame_timestamps.sort_values("frame")
 
-    # Create output path: same name as video but with _metadata.csv suffix
-    output_csv_path = output_video_path.with_name(output_video_path.stem + "_metadata.csv")
+    output_csv_path = output_video_path.with_name(output_video_path.stem + "_timestamp.csv")
 
     try:
         frame_timestamps.to_csv(output_csv_path, index=False)
@@ -869,34 +821,23 @@ def crop_run(
     reader = VideoReader(video_path)
     input_path = Path(video_path)
 
-    # Determine output path
     if output_path is None:
         output_path_obj = input_path.parent / f"{input_path.stem}_cropped{input_path.suffix}"
     else:
         output_path_obj = Path(output_path).expanduser()
-        # If output_path is a directory or has no extension
-        # treat as directory and generate filename
         if output_path_obj.is_dir() or not output_path_obj.suffix:
-            # It's a directory (existing or path without extension)
-            # generate filename based on input
             if not output_path_obj.exists():
-                # Create the directory if it doesn't exist
                 output_path_obj.mkdir(parents=True, exist_ok=True)
             output_path_obj = output_path_obj / f"{input_path.stem}_cropped{input_path.suffix}"
-        # If it has an extension, use it as-is
 
-    # Ensure output directory exists
     output_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
-    # Get video properties
     total_frames = int(reader.cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = reader.cap.get(cv2.CAP_PROP_FPS)
 
-    # Determine trim range
     trim_start_val = trim_start if trim_start is not None else 0
     trim_end_val = trim_end if trim_end is not None else total_frames - 1
 
-    # Validate trim range
     if trim_start_val < 0:
         raise ValueError(f"trim_start must be >= 0, got {trim_start_val}")
     if trim_end_val >= total_frames:
@@ -910,24 +851,20 @@ def crop_run(
         f"(inclusive, {expected_output_frames} frames)"
     )
 
-    # Create video writer
     writer = VideoWriter(path=output_path_obj, fps=fps)
 
     frames_written = 0
     try:
         frame_iter = tqdm(reader.read_frames(), total=total_frames, desc="Cropping frames")
         for index, frame in frame_iter:
-            # Apply trim range
             if index < trim_start_val:
                 continue
             if index > trim_end_val:
                 break
 
-            # Convert to grayscale if needed
             if len(frame.shape) == 3:
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-            # Write frame
             writer.write_frame(frame)
             frames_written += 1
 
@@ -937,14 +874,12 @@ def crop_run(
 
     logger.info(f"Successfully cropped video: wrote {frames_written} frames to {output_path_obj}")
 
-    # Validate frame count
     if frames_written != expected_output_frames:
         logger.warning(
             f"Frame count mismatch: expected {expected_output_frames} frames, "
             f"but wrote {frames_written} frames"
         )
 
-    # Modify CSV metadata
     _crop_csv_metadata(
         video_path,
         output_path_obj,
@@ -991,35 +926,10 @@ def _crop_csv_metadata(
     input_csv_path = input_video_path_obj.with_suffix(".csv")
     output_csv_path = output_video_path.with_suffix(".csv")
 
-    # Use pre-validated CSV if available, otherwise read it
-    if csv_df is not None:
-        df = csv_df
-    else:
-        # Fallback: read CSV if validation wasn't done
-        if not input_csv_path.exists():
-            logger.warning(
-                f"CSV file not found at {input_csv_path}. " "Skipping CSV metadata modification."
-            )
-            return None
+    df = csv_df if csv_df is not None else pd.read_csv(input_csv_path)
 
-        try:
-            df = pd.read_csv(input_csv_path)
-        except Exception as e:
-            logger.error(f"Failed to read CSV file {input_csv_path}: {e}")
-            return None
-
-        if "reconstructed_frame_index" not in df.columns:
-            logger.warning(
-                f"CSV file {input_csv_path} does not have "
-                "'reconstructed_frame_index' column. "
-                "Skipping CSV metadata modification."
-            )
-            return None
-
-    # Determine trim end value
     trim_end_val = df["reconstructed_frame_index"].max() if trim_end is None else trim_end
 
-    # Filter to trim range and renumber starting from 0
     df_filtered = df[
         (df["reconstructed_frame_index"] >= trim_start)
         & (df["reconstructed_frame_index"] <= trim_end_val)
