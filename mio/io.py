@@ -112,9 +112,7 @@ class VideoReader:
         """
         if self._cap is None:
             self._cap = cv2.VideoCapture(str(self.video_path))
-            # Prefer native output when available (avoid implicit BGR conversion)
-            with contextlib.suppress(Exception):
-                self._cap.set(cv2.CAP_PROP_CONVERT_RGB, False)
+            self._cap.set(cv2.CAP_PROP_CONVERT_RGB, 0.0)
         return self._cap
 
     def read_frames(self) -> Iterator[Tuple[int, np.ndarray]]:

@@ -862,8 +862,10 @@ def crop_run(
             if index > end_idx:
                 break
 
-            if len(frame.shape) == 3:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if len(frame.shape) != 2:
+                raise ValueError(
+                    f"Frame {index} has shape {frame.shape}, expected 2D grayscale."
+                )
 
             writer.write_frame(frame)
             frames_written += 1

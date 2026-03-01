@@ -9,6 +9,8 @@ from typing import List, Optional, Union
 import cv2
 import pandas as pd
 
+from mio.exceptions import VideoMetadataError
+
 DEFAULT_PROCESS_DIR = "mio_process"
 
 
@@ -77,8 +79,6 @@ def validate_video_metadata_match(
 
     Returns the validated DataFrame on success.
     """
-    from mio.exceptions import VideoMetadataError
-
     video_path_obj = Path(video_path)
     csv_path_obj = video_path_obj.with_suffix(".csv")
 
