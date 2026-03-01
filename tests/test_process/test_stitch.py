@@ -34,6 +34,10 @@ EXPECTED_DEBUG_VIDEO_HASH = (
 )
 EXPECTED_STITCHED_FRAME_COUNT = 54
 EXPECTED_DEBUG_ROWS = 4
+EXPECTED_CROP_VIDEO_HASH = (
+    "432642b1528fcd9ad553cfb3cc3862bef931301bd11d44dc3c2372fc379fa629"
+)
+EXPECTED_CROP_FRAME_COUNT = 30
 
 
 @pytest.fixture(scope="module")
@@ -249,11 +253,6 @@ def test_stitch_padding_tiebreaker(tmp_path):
     rows = df_out[df_out["frame_num"] == 2520]
     assert len(rows) > 0
     assert all(rows["black_padding_px"] == 0)
-
-EXPECTED_CROP_VIDEO_HASH = (
-    "432642b1528fcd9ad553cfb3cc3862bef931301bd11d44dc3c2372fc379fa629"
-)
-EXPECTED_CROP_FRAME_COUNT = 30
 
 
 def test_crop_video_hash(tmp_path):

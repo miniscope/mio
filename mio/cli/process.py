@@ -91,7 +91,10 @@ def denoise(
     output_dir: Optional[str],
 ) -> None:
     """
-    Denoise a video file.
+    Denoise a video file by detecting and removing frames with noisy areas.
+
+    Processing steps (noisy area detection, frequency masking, minimum
+    projection subtraction) are configured via the YAML config file.
     """
     csv_df = _validate_with_prompt(input)
 
@@ -149,7 +152,9 @@ def crop(
     trim_end: int,
 ) -> None:
     """
-    Crop a video file by trimming frames from both ends.
+    Crop a video by removing frames from the start and/or end.
+
+    Also trims and renumbers the companion CSV metadata to match.
     """
     csv_df = _validate_with_prompt(input)
 
@@ -179,7 +184,7 @@ def crop(
     required=True,
     multiple=True,
     type=click.Path(exists=True, dir_okay=False),
-    help="Paths to video files to stitch (can be specified multiple times).",
+    help="Paths to video files. Each requires a .csv with the same stem name.",
 )
 @click.option(
     "-o",
@@ -193,13 +198,13 @@ def crop(
     "--debug-video",
     type=click.Path(dir_okay=False),
     default=None,
-    help="Path to optional debug video file.",
+    help="Output path for debug video showing frame comparisons.",
 )
 @click.option(
     "--debug-csv",
     type=click.Path(dir_okay=False),
     default=None,
-    help="Path to optional debug CSV file.",
+    help="Output path for debug CSV with selection metadata.",
 )
 @click.option(
     "--fps",
@@ -215,7 +220,10 @@ def stitch(
     fps: int,
 ) -> None:
     """
-    Stitch multiple video recordings together.
+    Stitch multiple video recordings into one by selecting the best frame
+    for each device timestamp using metadata scoring and edge detection.
+
+    Currently tested with 2 inputs. More may work but are untested.
     """
     if len(inputs) < 2:
         raise click.ClickException("At least 2 input videos are required for stitching.")
@@ -259,7 +267,7 @@ def stitch(
     required=True,
     multiple=True,
     type=click.Path(exists=True, dir_okay=False),
-    help="Paths to video files to stitch (can be specified multiple times).",
+    help="Paths to video files. Each requires a .csv with the same stem name.",
 )
 @click.option(
     "-o",

@@ -863,9 +863,7 @@ def crop_run(
                 break
 
             if len(frame.shape) != 2:
-                raise ValueError(
-                    f"Frame {index} has shape {frame.shape}, expected 2D grayscale."
-                )
+                raise ValueError(f"Frame {index} has shape {frame.shape}, expected 2D grayscale.")
 
             writer.write_frame(frame)
             frames_written += 1
