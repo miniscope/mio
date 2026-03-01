@@ -94,6 +94,11 @@ class VideoReader:
         self.logger.info(f"Opened video at {video_path}")
 
     @property
+    def frame_count(self) -> int:
+        """Total number of frames in the video."""
+        return int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    @property
     def height(self) -> int:
         """
         The height of the video frames.

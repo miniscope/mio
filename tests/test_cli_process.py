@@ -10,7 +10,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from mio.cli.process import process
-from mio.utils import hash_video, validate_video_metadata_match
+from mio.utils import hash_video, validate_frame_count_alignment, validate_video_metadata_match
 
 STITCH_DATA_DIR = Path(__file__).parent / "data" / "stitch"
 
@@ -128,3 +128,21 @@ def test_cli_crop_no_trim(tmp_path):
     )
     assert result.exit_code == 0, result.output
     assert "No trimming" in result.output
+
+
+def test_validate_video_metadata_match_missing_csv(tmp_path):
+    """Validation reports missing CSV."""
+    video = tmp_path / "fake.avi"
+    video.touch()
+    is_valid, msg, df = validate_video_metadata_match(video)
+    assert not is_valid
+    assert "not found" in msg
+
+
+def test_validate_frame_count_alignment_missing_csv(tmp_path):
+    """Alignment check reports missing CSV."""
+    video = tmp_path / "fake.avi"
+    video.touch()
+    is_valid, msg = validate_frame_count_alignment(video)
+    assert not is_valid
+    assert "not found" in msg
