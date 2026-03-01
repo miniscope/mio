@@ -82,6 +82,17 @@ class RecordingData:
         self._video_reader: Optional[VideoReader] = None
         self._metadata: Optional[pd.DataFrame] = None
 
+    @classmethod
+    def from_video_paths(cls, video_paths: List[Path]) -> List["RecordingData"]:
+        """Build a list of RecordingData from video paths, inferring companion CSVs."""
+        recordings: List[RecordingData] = []
+        for video_path in video_paths:
+            csv_path = video_path.with_suffix(".csv")
+            if not csv_path.exists():
+                raise FileNotFoundError(f"CSV file not found for {video_path}: {csv_path}")
+            recordings.append(cls(video_path=video_path, csv_path=csv_path))
+        return recordings
+
     @property
     def video_reader(self) -> VideoReader:
         """Get or create the video reader."""

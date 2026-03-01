@@ -4,7 +4,7 @@ Command line interface for offline video pre-processing.
 
 import shutil
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import click
 
@@ -50,18 +50,6 @@ def _validate_with_prompt(video_path: str) -> Optional[object]:
                 logger.warning(f"{e}. Proceeding anyway.")
                 return e.csv_df
             raise click.ClickException(f"{e}. Cannot proceed.") from None
-
-
-def _build_recordings(inputs: tuple) -> List[RecordingData]:
-    """Build RecordingData list from input video paths, checking for companion CSVs."""
-    recordings: List[RecordingData] = []
-    for video_path in inputs:
-        video_path_obj = Path(video_path)
-        csv_path_obj = video_path_obj.with_suffix(".csv")
-        if not csv_path_obj.exists():
-            raise click.ClickException(f"CSV file not found for {video_path}: {csv_path_obj}")
-        recordings.append(RecordingData(video_path=video_path_obj, csv_path=csv_path_obj))
-    return recordings
 
 
 @click.group()
@@ -245,7 +233,7 @@ def stitch(
     if len(inputs) < 2:
         raise click.ClickException("At least 2 input videos are required for stitching.")
 
-    recordings = _build_recordings(inputs)
+    recordings = RecordingData.from_video_paths([Path(p) for p in inputs])
 
     first_input_path = Path(inputs[0])
     output_arg = output if output is not None else DEFAULT_PROCESS_DIR
@@ -418,7 +406,7 @@ def workflow(
             f"✅ [stitch] Using single input video as stitched output: {stitched_video_path}"
         )
     else:
-        recordings = _build_recordings(inputs)
+        recordings = RecordingData.from_video_paths([Path(p) for p in inputs])
 
         output_csv_path = stitched_video_path.with_suffix(".csv")
 
@@ -459,18 +447,16 @@ def workflow(
         cropped_video = cropped_dir / f"{output_stem}_cropped.avi"
         click.echo("Trimming video...")
 
+        try:
+            csv_df = validate_video_metadata_match(str(stitched_video_path))
+        except VideoMetadataError as e:
+            raise click.ClickException(f"Cannot crop: {e}") from None
+
         reader = VideoReader(str(stitched_video_path))
         total_frames = reader.frame_count
         reader.release()
-
         crop_start = trim_start
-        crop_end = total_frames - trim_end - 1  # -1 because trim_end is inclusive
-
-        if crop_start >= crop_end:
-            raise click.ClickException(
-                f"Invalid trim range: start={crop_start}, end={crop_end}. "
-                f"Total frames: {total_frames}"
-            )
+        crop_end = total_frames - trim_end - 1
 
         click.echo(
             f"Trimming: removing first {trim_start} frames and last {trim_end} frames "
@@ -478,17 +464,15 @@ def workflow(
         )
 
         try:
-            csv_df = validate_video_metadata_match(str(stitched_video_path))
-        except VideoMetadataError as e:
-            raise click.ClickException(f"Cannot crop: {e}") from None
-
-        actual_cropped_video = crop_run(
-            str(stitched_video_path),
-            output_path=str(cropped_video),
-            csv_df=csv_df,
-            trim_start=crop_start,
-            trim_end=crop_end,
-        )
+            actual_cropped_video = crop_run(
+                str(stitched_video_path),
+                output_path=str(cropped_video),
+                csv_df=csv_df,
+                trim_start=crop_start,
+                trim_end=crop_end,
+            )
+        except ValueError as e:
+            raise click.ClickException(str(e)) from None
 
         try:
             validate_video_metadata_match(actual_cropped_video)
@@ -522,49 +506,15 @@ def workflow(
 
     debug_dir = denoised_dir / "debug"
 
-    denoise_run(
+    final_video = denoise_run(
         str(actual_cropped_video),
         denoise_config_parsed,
         csv_df=csv_df,
         debug_dir=debug_dir,
     )
 
-    output_dir_denoise = Path(denoise_config_parsed.output_dir)
-    if not output_dir_denoise.is_absolute():
-        output_dir_denoise = Path.cwd() / output_dir_denoise
-
-    cropped_stem = Path(actual_cropped_video).stem
-    output_videos = list(output_dir_denoise.glob(f"{cropped_stem}_patch.avi"))
-    if not output_videos:
-        output_videos = list(output_dir_denoise.glob(f"{cropped_stem}_output.avi"))
-    if not output_videos:
-        output_videos = list(output_dir_denoise.glob(f"{cropped_stem}_freq_mask.avi"))
-    if not output_videos:
-        output_videos = list(output_dir_denoise.glob("*.avi"))
-
-    if output_videos:
-        final_video = output_videos[0]
-        final_csv = final_video.with_suffix(".csv")
-        if not final_csv.exists():
-            final_csv = output_dir_denoise / f"{cropped_stem}_patch.csv"
-        if not final_csv.exists():
-            final_csv = output_dir_denoise / f"{final_video.stem}_metadata.csv"
-        if not final_csv.exists():
-            final_csv = final_video.parent / f"{final_video.stem}_metadata.csv"
-
-        click.echo("Final validation...")
-
-        if final_csv.exists():
-            try:
-                validate_video_metadata_match(final_video)
-            except VideoMetadataError as e:
-                raise click.ClickException(
-                    f"Frame count alignment failed after denoising: {e}"
-                ) from None
-            click.echo(f"✅ [denoise] Frame count alignment verified: {final_video}")
-        else:
-            logger.warning(
-                f"CSV file not found for {final_video}, " "skipping alignment validation"
-            )
-    else:
-        logger.warning("Could not find denoised output video for validation.")
+    try:
+        validate_video_metadata_match(final_video)
+    except VideoMetadataError as e:
+        raise click.ClickException(f"Frame count alignment failed after denoising: {e}") from None
+    click.echo(f"✅ [denoise] Frame count alignment verified: {final_video}")

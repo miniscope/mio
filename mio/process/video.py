@@ -504,7 +504,7 @@ def denoise_run(
     config: DenoiseConfig,
     csv_df: Optional[pd.DataFrame] = None,
     debug_dir: Optional[Path] = None,
-) -> None:
+) -> Path:
     """
     Preprocess a video file and display the results.
 
@@ -522,6 +522,11 @@ def denoise_run(
         If provided, intermediate files (noisy frames, patches, frequency masks, etc.)
         will be saved here instead of the main output_dir. Main output files
         (output video and CSV) will still be saved to output_dir.
+
+    Returns
+    -------
+    Path
+        Path to the output video file.
     """
     if plt is None:
         raise ModuleNotFoundError(
@@ -531,6 +536,7 @@ def denoise_run(
 
     reader = VideoReader(video_path)
     pathstem = Path(video_path).stem
+    output_video_path: Optional[Path] = None
 
     output_dir = Path.cwd() / config.output_dir
     if not output_dir.exists():
@@ -691,6 +697,8 @@ def denoise_run(
                 end_frame=config.interactive_display.end_frame,
             )
             video_plotter.show()
+
+    return output_video_path
 
 
 def _modify_csv_metadata(
