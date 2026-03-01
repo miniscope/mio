@@ -37,7 +37,7 @@ def test_noise_patch_processor(video_frame, tmp_path):
     denoise_config.noise_patch.output_result = True
 
     processor = NoisePatchProcessor("denoise_example", denoise_config.noise_patch, tmp_path)
-    processed_frame = processor.process_frame(video_frame)
+    processed_frame = processor.process_frame(video_frame, original_frame_index=0)
 
     assert isinstance(processed_frame, np.ndarray)
     assert processor.name == "denoise_example"
@@ -60,7 +60,7 @@ def test_noise_patch_processor_no_methods(random_8bit_video_frame, tmp_path):
     denoise_config.noise_patch.method = []
 
     processor = NoisePatchProcessor("denoise_example", denoise_config.noise_patch, tmp_path)
-    processed_frame = processor.process_frame(random_8bit_video_frame)
+    processed_frame = processor.process_frame(random_8bit_video_frame, original_frame_index=0)
     assert processed_frame is random_8bit_video_frame
 
 def test_freqency_mask_processor(video_frame, tmp_path):

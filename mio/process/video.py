@@ -145,7 +145,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
             )
 
     def process_frame(
-        self, input_frame: np.ndarray, original_frame_index: Optional[int] = None
+        self, input_frame: np.ndarray, original_frame_index: int
     ) -> Optional[np.ndarray]:
         """
         Process a single frame.
@@ -154,9 +154,8 @@ class NoisePatchProcessor(BaseVideoProcessor):
         ----------
         input_frame : np.ndarray
             The frame to process.
-        original_frame_index : Optional[int], optional
+        original_frame_index : int
             The original frame index from the video reader.
-            If None, a sequential counter will be used for tracking dropped frames.
 
         Returns
         -------
@@ -173,19 +172,13 @@ class NoisePatchProcessor(BaseVideoProcessor):
                 self.append_output_frame(input_frame)
                 return input_frame
             else:
-                # Use frame index if provided, otherwise use a sequential counter
-                frame_idx = original_frame_index
-                if frame_idx is None:
-                    # Use length of dropped_frame_indices as a sequential counter
-                    frame_idx = len(self.dropped_frame_indices)
-
-                msg = f"Dropping frame {frame_idx} of original video due to noise."
+                msg = f"Dropping frame {original_frame_index} of original video due to noise."
                 tqdm.write(msg)
                 logger.debug(msg)
-                logger.debug(f"Adding noise patch for frame {frame_idx}.")
+                logger.debug(f"Adding noise patch for frame {original_frame_index}.")
                 self.noise_patchs.append((noisy_area * np.iinfo(np.uint8).max).astype(np.uint8))
                 self.noisy_frames.append(input_frame)
-                self.dropped_frame_indices.append(frame_idx)
+                self.dropped_frame_indices.append(original_frame_index)
             return None
 
         self.append_output_frame(input_frame)
