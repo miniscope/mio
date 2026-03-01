@@ -8,6 +8,7 @@ from typing import List, Optional
 
 import click
 
+from mio.exceptions import VideoMetadataError
 from mio.io import VideoReader, VideoWriter
 from mio.logging import init_logger
 from mio.models.process import DenoiseConfig
@@ -66,17 +67,21 @@ def denoise(
     Denoise a video file.
     """
     # Validate video/metadata match at the beginning
-    is_valid, error_msg, csv_df = validate_video_metadata_match(input)
-
-    if not is_valid:
-        if error_msg and "not found" in error_msg.lower():
+    csv_df = None
+    try:
+        csv_df = validate_video_metadata_match(input)
+    except VideoMetadataError as e:
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
             if click.confirm(
                 f"{error_msg}. Do you want to continue without generating output CSV metadata?",
                 default=False,
             ):
                 logger.warning(f"{error_msg}. Continuing without CSV metadata generation.")
             else:
-                raise click.ClickException(f"{error_msg}. Cannot proceed without CSV.")
+                raise click.ClickException(
+                    f"{error_msg}. Cannot proceed without CSV."
+                ) from None
         else:
             if click.confirm(
                 f"{error_msg}. This may indicate a mismatch between the video and CSV. "
@@ -84,8 +89,9 @@ def denoise(
                 default=False,
             ):
                 logger.warning(f"{error_msg}. Proceeding anyway.")
+                csv_df = e.csv_df
             else:
-                raise click.ClickException(f"{error_msg}. Cannot proceed.")
+                raise click.ClickException(f"{error_msg}. Cannot proceed.") from None
 
     denoise_config_parsed = DenoiseConfig.from_any(denoise_config)
 
@@ -101,7 +107,7 @@ def denoise(
     denoise_run(
         input,
         denoise_config_parsed,
-        csv_validation_result=(is_valid, csv_df),
+        csv_df=csv_df,
     )
 
 
@@ -162,17 +168,21 @@ def crop(
         click.echo("No trimming specified (both start and end are 0). Copying entire video.")
 
     # Validate video/metadata match at the beginning
-    is_valid, error_msg, csv_df = validate_video_metadata_match(input)
-
-    if not is_valid:
-        if error_msg and "not found" in error_msg.lower():
+    csv_df = None
+    try:
+        csv_df = validate_video_metadata_match(input)
+    except VideoMetadataError as e:
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
             if click.confirm(
-                f"{error_msg}. Do you want to continue without generating " "output CSV metadata?",
+                f"{error_msg}. Do you want to continue without generating output CSV metadata?",
                 default=False,
             ):
-                logger.warning(f"{error_msg}. " "Continuing without CSV metadata generation.")
+                logger.warning(f"{error_msg}. Continuing without CSV metadata generation.")
             else:
-                raise click.ClickException(f"{error_msg}. Cannot proceed without CSV.")
+                raise click.ClickException(
+                    f"{error_msg}. Cannot proceed without CSV."
+                ) from None
         else:
             if click.confirm(
                 f"{error_msg}. This may indicate a mismatch between the "
@@ -180,8 +190,9 @@ def crop(
                 default=False,
             ):
                 logger.warning(f"{error_msg}. Proceeding anyway.")
+                csv_df = e.csv_df
             else:
-                raise click.ClickException(f"{error_msg}. Cannot proceed.")
+                raise click.ClickException(f"{error_msg}. Cannot proceed.") from None
 
     # Resolve output path - use organized mio_process directory if not specified
     input_path = Path(input)
@@ -191,17 +202,18 @@ def crop(
     output_path_obj = crop_run(
         input,
         output_path=str(output_path),
-        csv_validation_result=(is_valid, csv_df),
+        csv_df=csv_df,
         trim_start=trim_start_val,
         trim_end=trim_end_val,
     )
 
     # Validate frame count alignment after cropping
-    is_aligned, alignment_error = validate_frame_count_alignment(output_path_obj)
-    if not is_aligned:
+    try:
+        validate_frame_count_alignment(output_path_obj)
+    except VideoMetadataError as e:
         raise click.ClickException(
-            f"Frame count alignment failed after cropping: {alignment_error}"
-        )
+            f"Frame count alignment failed after cropping: {e}"
+        ) from None
     click.echo(f"✅ Frame count alignment verified: {output_path_obj}")
 
 
@@ -290,11 +302,12 @@ def stitch(
     recording_bundle.stitch_recordings()
 
     # Validate frame count alignment after stitching
-    is_aligned, alignment_error = validate_frame_count_alignment(output_path_obj)
-    if not is_aligned:
+    try:
+        validate_frame_count_alignment(output_path_obj)
+    except VideoMetadataError as e:
         raise click.ClickException(
-            f"Frame count alignment failed after stitching: {alignment_error}"
-        )
+            f"Frame count alignment failed after stitching: {e}"
+        ) from None
     click.echo(f"✅ Frame count alignment verified: {output_path_obj}")
 
 
@@ -379,10 +392,12 @@ def workflow(
 
     for video_path in inputs:
         video_path_obj = Path(video_path)
-        is_valid, error_msg, csv_df = validate_video_metadata_match(str(video_path_obj))
-
-        if not is_valid:
-            mismatch_details = extract_mismatch_details(video_path_obj, is_valid, error_msg, csv_df)
+        try:
+            validate_video_metadata_match(str(video_path_obj))
+        except VideoMetadataError as e:
+            mismatch_details = extract_mismatch_details(
+                video_path_obj, False, str(e), e.csv_df
+            )
             validation_failures.append((video_path_obj, mismatch_details))
 
     # If there are validation failures, show dialogue
@@ -514,11 +529,12 @@ def workflow(
         recording_bundle.stitch_recordings()
 
         # Validate frame count alignment after stitching
-        is_aligned, alignment_error = validate_frame_count_alignment(output_path_obj)
-        if not is_aligned:
+        try:
+            validate_frame_count_alignment(output_path_obj)
+        except VideoMetadataError as e:
             raise click.ClickException(
-                f"Frame count alignment failed after stitching: {alignment_error}"
-            )
+                f"Frame count alignment failed after stitching: {e}"
+            ) from None
         click.echo(f"✅ Frame count alignment verified: {output_path_obj}")
         click.echo(f"✅ Saved stitched video: {output_path_obj}")
         click.echo(f"✅ Saved stitched metadata: {output_csv_path}")
@@ -553,24 +569,26 @@ def workflow(
         )
 
         # Validate input before cropping
-        is_valid, error_msg, csv_df = validate_video_metadata_match(str(stitched_video))
-        if not is_valid:
-            raise click.ClickException(f"Cannot crop: {error_msg}")
+        try:
+            csv_df = validate_video_metadata_match(str(stitched_video))
+        except VideoMetadataError as e:
+            raise click.ClickException(f"Cannot crop: {e}") from None
 
         actual_cropped_video = crop_run(
             str(stitched_video),
             output_path=str(cropped_video),
-            csv_validation_result=(is_valid, csv_df),
+            csv_df=csv_df,
             trim_start=crop_start,
             trim_end=crop_end,
         )
 
         # Validate frame count alignment after cropping
-        is_aligned, alignment_error = validate_frame_count_alignment(actual_cropped_video)
-        if not is_aligned:
+        try:
+            validate_frame_count_alignment(actual_cropped_video)
+        except VideoMetadataError as e:
             raise click.ClickException(
-                f"Frame count alignment failed after cropping: {alignment_error}"
-            )
+                f"Frame count alignment failed after cropping: {e}"
+            ) from None
         click.echo(f"✅ Frame count alignment verified: {actual_cropped_video}")
         click.echo(f"✅ Saved cropped video: {actual_cropped_video}")
         click.echo(f"✅ Saved cropped metadata: {actual_cropped_video.with_suffix('.csv')}")
@@ -579,17 +597,21 @@ def workflow(
     click.echo("Denoising video...")
 
     # Validate input before denoising
-    is_valid, error_msg, csv_df = validate_video_metadata_match(str(actual_cropped_video))
-    if not is_valid:
-        if error_msg and "not found" in error_msg.lower():
-            raise click.ClickException(f"{error_msg}. Cannot proceed without CSV.")
+    csv_df = None
+    try:
+        csv_df = validate_video_metadata_match(str(actual_cropped_video))
+    except VideoMetadataError as e:
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            raise click.ClickException(f"{error_msg}. Cannot proceed without CSV.") from None
         else:
             if not click.confirm(
                 f"{error_msg}. This may indicate a mismatch between the video and CSV. "
                 "Do you want to continue anyway?",
                 default=False,
             ):
-                raise click.ClickException(f"{error_msg}. Cannot proceed.")
+                raise click.ClickException(f"{error_msg}. Cannot proceed.") from None
+            csv_df = e.csv_df
 
     denoise_config_parsed = DenoiseConfig.from_any(denoise_config)
 
@@ -605,7 +627,7 @@ def workflow(
     denoise_run(
         str(actual_cropped_video),
         denoise_config_parsed,
-        csv_validation_result=(is_valid, csv_df),
+        csv_df=csv_df,
         debug_dir=debug_dir,
     )
 
@@ -646,11 +668,12 @@ def workflow(
 
         # Only validate if CSV exists
         if final_csv.exists():
-            is_aligned, alignment_error = validate_frame_count_alignment(final_video)
-            if not is_aligned:
+            try:
+                validate_frame_count_alignment(final_video)
+            except VideoMetadataError as e:
                 raise click.ClickException(
-                    f"Frame count alignment failed after denoising: {alignment_error}"
-                )
+                    f"Frame count alignment failed after denoising: {e}"
+                ) from None
             click.echo(f"✅ Final frame count alignment verified: {final_video}")
         else:
             logger.warning(

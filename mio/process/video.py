@@ -502,7 +502,7 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
 def denoise_run(
     video_path: str,
     config: DenoiseConfig,
-    csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
+    csv_df: Optional[pd.DataFrame] = None,
     debug_dir: Optional[Path] = None,
 ) -> None:
     """
@@ -514,9 +514,9 @@ def denoise_run(
         The path to the video file.
     config : DenoiseConfig
         The denoise configuration.
-    csv_validation_result : Optional[tuple[bool, Optional[pd.DataFrame]]], optional
-        Result from CSV validation. If provided and valid, uses the
-        pre-loaded DataFrame.
+    csv_df : Optional[pd.DataFrame], optional
+        Pre-validated CSV DataFrame. If provided, uses this instead of
+        reading from disk.
     debug_dir : Optional[Path], optional
         Directory for intermediate/debug files.
         If provided, intermediate files (noisy frames, patches, frequency masks, etc.)
@@ -653,7 +653,7 @@ def denoise_run(
             video_path,
             output_video_path,
             noise_patch_processor.dropped_frame_indices,
-            csv_validation_result,
+            csv_df=csv_df,
         )
 
         # Validate frame count alignment after metadata modification
@@ -703,7 +703,7 @@ def _modify_csv_metadata(
     input_video_path: str,
     output_video_path: Path,
     dropped_frame_indices: list[int],
-    csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
+    csv_df: Optional[pd.DataFrame] = None,
 ) -> Optional[pd.DataFrame]:
     """
     Modify CSV metadata to match the denoised video by removing rows for dropped frames
@@ -717,9 +717,9 @@ def _modify_csv_metadata(
         Path to the output video file.
     dropped_frame_indices : list[int]
         List of frame indices that were dropped.
-    csv_validation_result : Optional[tuple[bool, Optional[pd.DataFrame]]], optional
-        Result from CSV validation. If provided and valid, uses the
-        pre-loaded DataFrame.
+    csv_df : Optional[pd.DataFrame], optional
+        Pre-validated CSV DataFrame. If provided, uses this instead of
+        reading from disk.
 
     Returns
     -------
@@ -731,13 +731,8 @@ def _modify_csv_metadata(
     output_csv_path = output_video_path.with_suffix(".csv")
 
     # Use pre-validated CSV if available, otherwise read it
-    if csv_validation_result is not None:
-        is_valid, df = csv_validation_result
-        if not is_valid or df is None:
-            logger.warning(
-                "CSV validation failed or CSV not available. Skipping CSV metadata modification."
-            )
-            return None
+    if csv_df is not None:
+        df = csv_df
     else:
         # Fallback: read CSV if validation wasn't done
         if not input_csv_path.exists():
@@ -855,7 +850,7 @@ def _export_frame_timestamp_csv(output_video_path: Path, csv_df: pd.DataFrame) -
 def crop_run(
     video_path: str,
     output_path: Optional[str] = None,
-    csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
+    csv_df: Optional[pd.DataFrame] = None,
     trim_start: Optional[int] = None,
     trim_end: Optional[int] = None,
 ) -> Path:
@@ -869,9 +864,9 @@ def crop_run(
     output_path : Optional[str], optional
         The path to the output video file.
         If None, defaults to input path with "_cropped" suffix.
-    csv_validation_result : Optional[tuple[bool, Optional[pd.DataFrame]]], optional
-        Result from CSV validation. If provided and valid, uses the
-        pre-loaded DataFrame.
+    csv_df : Optional[pd.DataFrame], optional
+        Pre-validated CSV DataFrame. If provided, uses this instead of
+        reading from disk.
     trim_start : Optional[int], optional
         Start frame index for trimming (0-based, inclusive).
         If None, starts from frame 0.
@@ -966,7 +961,7 @@ def crop_run(
     _crop_csv_metadata(
         video_path,
         output_path_obj,
-        csv_validation_result,
+        csv_df=csv_df,
         trim_start=trim_start_val,
         trim_end=trim_end_val,
     )
@@ -977,7 +972,7 @@ def crop_run(
 def _crop_csv_metadata(
     input_video_path: str,
     output_video_path: Path,
-    csv_validation_result: Optional[tuple[bool, Optional[pd.DataFrame]]] = None,
+    csv_df: Optional[pd.DataFrame] = None,
     trim_start: int = 0,
     trim_end: Optional[int] = None,
 ) -> Optional[pd.DataFrame]:
@@ -991,9 +986,9 @@ def _crop_csv_metadata(
         Path to the input video file.
     output_video_path : Path
         Path to the output video file.
-    csv_validation_result : Optional[tuple[bool, Optional[pd.DataFrame]]], optional
-        Result from CSV validation. If provided and valid, uses the
-        pre-loaded DataFrame.
+    csv_df : Optional[pd.DataFrame], optional
+        Pre-validated CSV DataFrame. If provided, uses this instead of
+        reading from disk.
     trim_start : int, optional
         Start frame index for trimming (0-based, inclusive). Default is 0.
     trim_end : Optional[int], optional
@@ -1010,13 +1005,8 @@ def _crop_csv_metadata(
     output_csv_path = output_video_path.with_suffix(".csv")
 
     # Use pre-validated CSV if available, otherwise read it
-    if csv_validation_result is not None:
-        is_valid, df = csv_validation_result
-        if not is_valid or df is None:
-            logger.warning(
-                "CSV validation failed or CSV not available. " "Skipping CSV metadata modification."
-            )
-            return None
+    if csv_df is not None:
+        df = csv_df
     else:
         # Fallback: read CSV if validation wasn't done
         if not input_csv_path.exists():

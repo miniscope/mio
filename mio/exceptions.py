@@ -2,6 +2,13 @@
 Custom exceptions!
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pandas as pd
+
 
 class InvalidSDException(Exception):
     """
@@ -56,3 +63,16 @@ class DeviceConfigurationError(DeviceError):
     """
     Error while configuring a device
     """
+
+
+class VideoMetadataError(ValueError):
+    """
+    Raised when video/CSV metadata validation fails.
+
+    Attributes:
+        csv_df: The partially-read DataFrame, if available.
+    """
+
+    def __init__(self, message: str, csv_df: pd.DataFrame | None = None):
+        super().__init__(message)
+        self.csv_df = csv_df

@@ -7,9 +7,11 @@ Uses Click's CliRunner and the same trimmed fixtures as the stitch regression te
 import shutil
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from mio.cli.process import process
+from mio.exceptions import VideoMetadataError
 from mio.utils import hash_video, validate_frame_count_alignment, validate_video_metadata_match
 
 STITCH_DATA_DIR = Path(__file__).parent / "data" / "stitch"
@@ -38,8 +40,7 @@ def test_cli_stitch(tmp_path):
     assert result.exit_code == 0, result.output
     out_video = out_dir / "video1_stitched.avi"
     assert hash_video(out_video) == EXPECTED_STITCHED_VIDEO_HASH
-    is_valid, msg, _ = validate_video_metadata_match(out_video)
-    assert is_valid, msg
+    validate_video_metadata_match(out_video)
 
 
 def test_cli_stitch_with_debug(tmp_path):
@@ -131,18 +132,16 @@ def test_cli_crop_no_trim(tmp_path):
 
 
 def test_validate_video_metadata_match_missing_csv(tmp_path):
-    """Validation reports missing CSV."""
+    """Validation raises on missing CSV."""
     video = tmp_path / "fake.avi"
     video.touch()
-    is_valid, msg, df = validate_video_metadata_match(video)
-    assert not is_valid
-    assert "not found" in msg
+    with pytest.raises(VideoMetadataError, match="not found"):
+        validate_video_metadata_match(video)
 
 
 def test_validate_frame_count_alignment_missing_csv(tmp_path):
-    """Alignment check reports missing CSV."""
+    """Alignment check raises on missing CSV."""
     video = tmp_path / "fake.avi"
     video.touch()
-    is_valid, msg = validate_frame_count_alignment(video)
-    assert not is_valid
-    assert "not found" in msg
+    with pytest.raises(VideoMetadataError, match="not found"):
+        validate_frame_count_alignment(video)

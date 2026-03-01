@@ -91,8 +91,7 @@ def test_stitched_video_frame_count(stitch_result):
 
 def test_stitched_csv_valid(stitch_result):
     """Stitched CSV passes video-metadata validation."""
-    is_valid, msg, _ = validate_video_metadata_match(stitch_result["stitched_video"])
-    assert is_valid, msg
+    validate_video_metadata_match(stitch_result["stitched_video"])
 
 
 def test_stitched_csv_contiguous_index(stitch_result):
@@ -172,8 +171,7 @@ def test_stitch_without_debug(tmp_path):
     bundle.stitch_recordings()
 
     assert hash_video(stitched_video) == EXPECTED_STITCHED_VIDEO_HASH
-    is_valid, msg, _ = validate_video_metadata_match(stitched_video)
-    assert is_valid, msg
+    validate_video_metadata_match(stitched_video)
 
 
 def test_stitch_single_recording(tmp_path):
@@ -205,8 +203,7 @@ def test_stitch_single_recording(tmp_path):
     assert int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) == 49
     cap.release()
 
-    is_valid, msg, _ = validate_video_metadata_match(stitched_video)
-    assert is_valid, msg
+    validate_video_metadata_match(stitched_video)
 
     # frame_num 2535 appears once in output (deduplicated), but all 9 metadata rows
     # are included (8 from rfi=22 + 1 fragment from rfi=31)
@@ -291,8 +288,7 @@ def test_crop_csv_valid(tmp_path):
         trim_start=10,
         trim_end=39,
     )
-    is_valid, msg, _ = validate_video_metadata_match(out)
-    assert is_valid, msg
+    validate_video_metadata_match(out)
 
 
 def test_crop_csv_renumbered(tmp_path):

@@ -6,7 +6,7 @@ import contextlib
 import hashlib
 import re
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Union
 
 import cv2
 import pandas as pd
@@ -69,68 +69,46 @@ def hash_video(
 
 def validate_video_metadata_match(
     video_path: Union[Path, str],
-) -> Tuple[bool, Optional[str], Optional[pd.DataFrame]]:
+) -> pd.DataFrame:
     """
     Validate that a CSV metadata file matches its corresponding video file.
 
-    The CSV file is expected to have the same name as the video file with a .csv extension.
+    Raises :class:`~mio.exceptions.VideoMetadataError` on any validation
+    failure.  The exception carries a ``csv_df`` attribute with the partially-
+    read DataFrame when the CSV was readable but mismatched.
 
-    This function checks:
-    1. If CSV file exists (video_path.with_suffix(".csv"))
-    2. If CSV has 'reconstructed_frame_index' column
-    3. If all frame indices from the video (0 to frame_count-1) exist in the CSV
-
-    Parameters
-    ----------
-    video_path : Union[Path, str]
-        Path to the video file.
-
-    Returns
-    -------
-    Tuple[bool, Optional[str], Optional[pd.DataFrame]]
-        A tuple containing:
-        - bool: True if validation passes, False otherwise
-        - Optional[str]: Error message if validation fails, None otherwise
-        - Optional[pd.DataFrame]: The CSV DataFrame if successfully read, None otherwise
+    Returns the validated DataFrame on success.
     """
+    from mio.exceptions import VideoMetadataError
+
     video_path_obj = Path(video_path)
     csv_path_obj = video_path_obj.with_suffix(".csv")
 
-    # Check if CSV exists
     if not csv_path_obj.exists():
-        return False, f"CSV file not found at {csv_path_obj}", None
+        raise VideoMetadataError(f"CSV file not found at {csv_path_obj}")
 
-    # Read CSV
     try:
         df = pd.read_csv(csv_path_obj)
     except Exception as e:
-        return False, f"Failed to read CSV file {csv_path_obj}: {e}", None
+        raise VideoMetadataError(f"Failed to read CSV file {csv_path_obj}: {e}") from e
 
-    # Check if reconstructed_frame_index column exists
     if "reconstructed_frame_index" not in df.columns:
-        return (
-            False,
+        raise VideoMetadataError(
             f"CSV file {csv_path_obj} does not have 'reconstructed_frame_index' column",
-            None,
+            csv_df=df,
         )
 
-    # Get video frame count
-    try:
-        cap = cv2.VideoCapture(str(video_path_obj))
-        if not cap.isOpened():
-            return False, f"Could not open video file {video_path_obj}", None
-        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        cap.release()
-    except Exception as e:
-        return False, f"Failed to read video file {video_path_obj}: {e}", None
+    cap = cv2.VideoCapture(str(video_path_obj))
+    if not cap.isOpened():
+        raise VideoMetadataError(f"Could not open video file {video_path_obj}", csv_df=df)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
 
-    # Check if all frame indices from video exist in CSV
     expected_frame_indices = set(range(frame_count))
     unique_frame_indices = set(df["reconstructed_frame_index"].unique())
     missing_indices = expected_frame_indices - unique_frame_indices
 
     if missing_indices:
-        # Only report first few missing indices to avoid huge error messages
         missing_list = sorted(missing_indices)
         if len(missing_list) > 10:
             missing_str = (
@@ -138,85 +116,62 @@ def validate_video_metadata_match(
             )
         else:
             missing_str = ", ".join(map(str, missing_list))
-        return (
-            False,
+        raise VideoMetadataError(
             f"Frame indices mismatch: frames {missing_str} not found in CSV. "
             f"Video has {frame_count} frames",
-            None,
+            csv_df=df,
         )
 
-    return True, None, df
+    return df
 
 
 def validate_frame_count_alignment(
     video_path: Union[Path, str],
-) -> Tuple[bool, Optional[str]]:
+) -> None:
     """
     Validate that video frame count matches CSV metadata frame count.
 
-    Parameters
-    ----------
-    video_path : Union[Path, str]
-        Path to the video file.
-
-    Returns
-    -------
-    Tuple[bool, Optional[str]]
-        A tuple containing:
-        - bool: True if alignment is correct, False otherwise
-        - Optional[str]: Error message if validation fails, None otherwise
+    Raises :class:`~mio.exceptions.VideoMetadataError` on failure.
     """
+    from mio.exceptions import VideoMetadataError
+
     video_path_obj = Path(video_path)
     csv_path_obj = video_path_obj.with_suffix(".csv")
 
-    # Check if CSV exists
     if not csv_path_obj.exists():
-        return False, f"CSV file not found at {csv_path_obj}"
+        raise VideoMetadataError(f"CSV file not found at {csv_path_obj}")
 
-    # Read CSV
     try:
         df = pd.read_csv(csv_path_obj)
     except Exception as e:
-        return False, f"Failed to read CSV file {csv_path_obj}: {e}"
+        raise VideoMetadataError(f"Failed to read CSV file {csv_path_obj}: {e}") from e
 
-    # Check if reconstructed_frame_index column exists
     if "reconstructed_frame_index" not in df.columns:
-        return (
-            False,
-            f"CSV file {csv_path_obj} does not have 'reconstructed_frame_index' column",
+        raise VideoMetadataError(
+            f"CSV file {csv_path_obj} does not have 'reconstructed_frame_index' column"
         )
 
-    # Get video frame count
-    try:
-        cap = cv2.VideoCapture(str(video_path_obj))
-        if not cap.isOpened():
-            return False, f"Could not open video file {video_path_obj}"
-        video_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        cap.release()
-    except Exception as e:
-        return False, f"Failed to read video file {video_path_obj}: {e}"
+    cap = cv2.VideoCapture(str(video_path_obj))
+    if not cap.isOpened():
+        raise VideoMetadataError(f"Could not open video file {video_path_obj}")
+    video_frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
 
-    # Check frame count alignment
     max_csv_index = df["reconstructed_frame_index"].max()
     min_csv_index = df["reconstructed_frame_index"].min()
     unique_indices = set(df["reconstructed_frame_index"].unique())
 
-    # Expected: video has frames 0 to (video_frame_count - 1)
     expected_max_index = video_frame_count - 1
     expected_indices = set(range(video_frame_count))
 
     if max_csv_index != expected_max_index:
-        return (
-            False,
+        raise VideoMetadataError(
             f"Frame count mismatch: video has {video_frame_count} frames "
-            f"(indices 0-{expected_max_index}), but CSV max index is {max_csv_index}",
+            f"(indices 0-{expected_max_index}), but CSV max index is {max_csv_index}"
         )
 
     if min_csv_index != 0:
-        return (
-            False,
-            f"CSV min index is {min_csv_index}, expected 0",
-        )
+        raise VideoMetadataError(f"CSV min index is {min_csv_index}, expected 0")
 
     missing_indices = expected_indices - unique_indices
     if missing_indices:
@@ -228,12 +183,7 @@ def validate_frame_count_alignment(
             )
         else:
             missing_str = ", ".join(map(str, missing_list))
-        return (
-            False,
-            f"Missing frame indices in CSV: {missing_str}",
-        )
-
-    return True, None
+        raise VideoMetadataError(f"Missing frame indices in CSV: {missing_str}")
 
 
 def format_missing_frame_ranges(missing_indices: List[int]) -> List[str]:
