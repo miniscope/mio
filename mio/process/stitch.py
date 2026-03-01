@@ -138,13 +138,9 @@ class RecordingDataBundle:
         This is a list of unique frame_nums across all recordings.
         """
         if self._combined_frame_num is None:
-            seen: set = set()
-            combined: list[int] = []
-            for recording in self.recordings:
-                for fn in recording.metadata["frame_num"]:
-                    if fn not in seen:
-                        seen.add(fn)
-                        combined.append(fn)
+            combined = list(
+                dict.fromkeys(fn for r in self.recordings for fn in r.metadata["frame_num"])
+            )
             self._combined_frame_num = combined
         return self._combined_frame_num
 
