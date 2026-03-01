@@ -9,7 +9,7 @@ from typing import Optional
 import click
 
 from mio.exceptions import VideoMetadataError
-from mio.io import VideoReader, VideoWriter
+from mio.io import VideoWriter
 from mio.logging import init_logger
 from mio.models.process import DenoiseConfig
 from mio.process.stitch import RecordingData, RecordingDataBundle
@@ -133,20 +133,14 @@ def denoise(
     "--trim-start",
     type=int,
     default=0,
-    help=(
-        "Start frame index for cropping (0-based, inclusive). "
-        "Default 0 means no trimming from start."
-    ),
+    help="Number of frames to remove from the beginning. Default: 0.",
 )
 @click.option(
     "-e",
     "--trim-end",
     type=int,
     default=0,
-    help=(
-        "End frame index for cropping (0-based, inclusive). "
-        "Default 0 means no trimming from end."
-    ),
+    help="Number of frames to remove from the end. Default: 0.",
 )
 def crop(
     input: str,
@@ -155,15 +149,8 @@ def crop(
     trim_end: int,
 ) -> None:
     """
-    Crop a video file by trimming frames.
+    Crop a video file by trimming frames from both ends.
     """
-    # 0 means "don't trim"
-    trim_start_val = None if trim_start == 0 else trim_start
-    trim_end_val = None if trim_end == 0 else trim_end
-
-    if trim_start_val is None and trim_end_val is None:
-        click.echo("No trimming specified (both start and end are 0). Copying entire video.")
-
     csv_df = _validate_with_prompt(input)
 
     input_path = Path(input)
@@ -174,8 +161,8 @@ def crop(
         input,
         output_path=str(output_path),
         csv_df=csv_df,
-        trim_start=trim_start_val,
-        trim_end=trim_end_val,
+        trim_start=trim_start,
+        trim_end=trim_end,
     )
 
     try:
@@ -452,24 +439,15 @@ def workflow(
         except VideoMetadataError as e:
             raise click.ClickException(f"Cannot crop: {e}") from None
 
-        reader = VideoReader(str(stitched_video_path))
-        total_frames = reader.frame_count
-        reader.release()
-        crop_start = trim_start
-        crop_end = total_frames - trim_end - 1
-
-        click.echo(
-            f"Trimming: removing first {trim_start} frames and last {trim_end} frames "
-            f"(keeping frames {crop_start}-{crop_end})"
-        )
+        click.echo(f"Trimming: removing first {trim_start} frames and last {trim_end} frames")
 
         try:
             actual_cropped_video = crop_run(
                 str(stitched_video_path),
                 output_path=str(cropped_video),
                 csv_df=csv_df,
-                trim_start=crop_start,
-                trim_end=crop_end,
+                trim_start=trim_start,
+                trim_end=trim_end,
             )
         except ValueError as e:
             raise click.ClickException(str(e)) from None

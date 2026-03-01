@@ -99,7 +99,7 @@ def test_cli_crop(tmp_path):
             "-i", str(dst),
             "-o", str(out_dir),
             "-s", "10",
-            "-e", "39",
+            "-e", "10",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -128,7 +128,6 @@ def test_cli_crop_no_trim(tmp_path):
         ],
     )
     assert result.exit_code == 0, result.output
-    assert "No trimming" in result.output
 
 
 def test_validate_video_metadata_match_missing_csv(tmp_path):

@@ -262,7 +262,7 @@ def test_crop_video_hash(tmp_path):
         str(STITCH_DATA_DIR / "video1.avi"),
         output_path=str(tmp_path / "cropped.avi"),
         trim_start=10,
-        trim_end=39,
+        trim_end=10,
     )
     assert hash_video(out) == EXPECTED_CROP_VIDEO_HASH
 
@@ -273,7 +273,7 @@ def test_crop_frame_count(tmp_path):
         str(STITCH_DATA_DIR / "video1.avi"),
         output_path=str(tmp_path / "cropped.avi"),
         trim_start=10,
-        trim_end=39,
+        trim_end=10,
     )
     cap = cv2.VideoCapture(str(out))
     assert int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) == EXPECTED_CROP_FRAME_COUNT
@@ -286,7 +286,7 @@ def test_crop_csv_valid(tmp_path):
         str(STITCH_DATA_DIR / "video1.avi"),
         output_path=str(tmp_path / "cropped.avi"),
         trim_start=10,
-        trim_end=39,
+        trim_end=10,
     )
     validate_video_metadata_match(out)
 
@@ -297,7 +297,7 @@ def test_crop_csv_renumbered(tmp_path):
         str(STITCH_DATA_DIR / "video1.avi"),
         output_path=str(tmp_path / "cropped.avi"),
         trim_start=10,
-        trim_end=39,
+        trim_end=10,
     )
     df = pd.read_csv(str(out).replace(".avi", ".csv"))
     indices = sorted(df["reconstructed_frame_index"].unique())
@@ -317,7 +317,7 @@ def test_crop_default_output_path(tmp_path):
     shutil.copy(src, dst)
     shutil.copy(src_csv, dst_csv)
 
-    out = crop_run(str(dst), output_path=None, trim_start=0, trim_end=9)
+    out = crop_run(str(dst), output_path=None, trim_end=40)
     assert out.name == "video1_cropped.avi"
     assert out.parent == tmp_path
 
@@ -333,11 +333,11 @@ def test_crop_invalid_range(tmp_path):
     with pytest.raises(ValueError, match="trim_start must be >= 0"):
         crop_run(video, output_path=str(tmp_path / "out.avi"), trim_start=-1)
 
-    with pytest.raises(ValueError, match="trim_end must be < total_frames"):
-        crop_run(video, output_path=str(tmp_path / "out.avi"), trim_end=9999)
+    with pytest.raises(ValueError, match="trim_end must be >= 0"):
+        crop_run(video, output_path=str(tmp_path / "out.avi"), trim_end=-1)
 
-    with pytest.raises(ValueError, match="trim_start.*must be <= trim_end"):
-        crop_run(video, output_path=str(tmp_path / "out.avi"), trim_start=30, trim_end=10)
+    with pytest.raises(ValueError, match="must be < total_frames"):
+        crop_run(video, output_path=str(tmp_path / "out.avi"), trim_start=25, trim_end=25)
 
 
 def test_metadata_tie_detection():

@@ -2,7 +2,7 @@
 Custom exceptions!
 """
 
-from __future__ import annotations
+from __future__ import annotations  # needed for pd.DataFrame | None on <3.10
 
 from typing import TYPE_CHECKING
 

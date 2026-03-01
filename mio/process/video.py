@@ -790,11 +790,11 @@ def crop_run(
     video_path: str,
     output_path: Optional[str] = None,
     csv_df: Optional[pd.DataFrame] = None,
-    trim_start: Optional[int] = None,
-    trim_end: Optional[int] = None,
+    trim_start: int = 0,
+    trim_end: int = 0,
 ) -> Path:
     """
-    Crop a video file by trimming frames.
+    Crop a video file by trimming frames from both ends.
 
     Parameters
     ----------
@@ -806,12 +806,10 @@ def crop_run(
     csv_df : Optional[pd.DataFrame], optional
         Pre-validated CSV DataFrame. If provided, uses this instead of
         reading from disk.
-    trim_start : Optional[int], optional
-        Start frame index for trimming (0-based, inclusive).
-        If None, starts from frame 0.
-    trim_end : Optional[int], optional
-        End frame index for trimming (0-based, inclusive).
-        If None, ends at the last frame.
+    trim_start : int
+        Number of frames to remove from the beginning. Default 0.
+    trim_end : int
+        Number of frames to remove from the end. Default 0.
 
     Returns
     -------
@@ -835,20 +833,22 @@ def crop_run(
     total_frames = int(reader.cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = reader.cap.get(cv2.CAP_PROP_FPS)
 
-    trim_start_val = trim_start if trim_start is not None else 0
-    trim_end_val = trim_end if trim_end is not None else total_frames - 1
+    if trim_start < 0:
+        raise ValueError(f"trim_start must be >= 0, got {trim_start}")
+    if trim_end < 0:
+        raise ValueError(f"trim_end must be >= 0, got {trim_end}")
+    if trim_start + trim_end >= total_frames:
+        raise ValueError(
+            f"trim_start ({trim_start}) + trim_end ({trim_end}) "
+            f"must be < total_frames ({total_frames})"
+        )
 
-    if trim_start_val < 0:
-        raise ValueError(f"trim_start must be >= 0, got {trim_start_val}")
-    if trim_end_val >= total_frames:
-        raise ValueError(f"trim_end must be < total_frames ({total_frames}), got {trim_end_val}")
-    if trim_start_val > trim_end_val:
-        raise ValueError(f"trim_start ({trim_start_val}) must be <= trim_end ({trim_end_val})")
-
-    expected_output_frames = trim_end_val - trim_start_val + 1
+    start_idx = trim_start
+    end_idx = total_frames - 1 - trim_end
+    expected_output_frames = end_idx - start_idx + 1
     logger.info(
-        f"Cropping video: frames {trim_start_val}-{trim_end_val} "
-        f"(inclusive, {expected_output_frames} frames)"
+        f"Cropping video: keeping frames {start_idx}-{end_idx} "
+        f"({expected_output_frames} frames, removing {trim_start} from start, {trim_end} from end)"
     )
 
     writer = VideoWriter(path=output_path_obj, fps=fps)
@@ -857,9 +857,9 @@ def crop_run(
     try:
         frame_iter = tqdm(reader.read_frames(), total=total_frames, desc="Cropping frames")
         for index, frame in frame_iter:
-            if index < trim_start_val:
+            if index < start_idx:
                 continue
-            if index > trim_end_val:
+            if index > end_idx:
                 break
 
             if len(frame.shape) == 3:
@@ -884,8 +884,8 @@ def crop_run(
         video_path,
         output_path_obj,
         csv_df=csv_df,
-        trim_start=trim_start_val,
-        trim_end=trim_end_val,
+        start_idx=start_idx,
+        end_idx=end_idx,
     )
 
     return output_path_obj
@@ -895,12 +895,12 @@ def _crop_csv_metadata(
     input_video_path: str,
     output_video_path: Path,
     csv_df: Optional[pd.DataFrame] = None,
-    trim_start: int = 0,
-    trim_end: Optional[int] = None,
+    start_idx: int = 0,
+    end_idx: Optional[int] = None,
 ) -> Optional[pd.DataFrame]:
     """
-    Crop CSV metadata to match the cropped video by trimming and adjusting
-    reconstructed_frame_index.
+    Crop CSV metadata to match the cropped video by filtering to the kept
+    frame range and renumbering reconstructed_frame_index from 0.
 
     Parameters
     ----------
@@ -911,10 +911,10 @@ def _crop_csv_metadata(
     csv_df : Optional[pd.DataFrame], optional
         Pre-validated CSV DataFrame. If provided, uses this instead of
         reading from disk.
-    trim_start : int, optional
-        Start frame index for trimming (0-based, inclusive). Default is 0.
-    trim_end : Optional[int], optional
-        End frame index for trimming (0-based, inclusive).
+    start_idx : int
+        First frame index to keep (inclusive). Default 0.
+    end_idx : Optional[int]
+        Last frame index to keep (inclusive).
         If None, uses the max index from the CSV.
 
     Returns
@@ -928,16 +928,16 @@ def _crop_csv_metadata(
 
     df = csv_df if csv_df is not None else pd.read_csv(input_csv_path)
 
-    trim_end_val = df["reconstructed_frame_index"].max() if trim_end is None else trim_end
+    end_idx_val = df["reconstructed_frame_index"].max() if end_idx is None else end_idx
 
     df_filtered = df[
-        (df["reconstructed_frame_index"] >= trim_start)
-        & (df["reconstructed_frame_index"] <= trim_end_val)
+        (df["reconstructed_frame_index"] >= start_idx)
+        & (df["reconstructed_frame_index"] <= end_idx_val)
     ].copy()
-    df_filtered["reconstructed_frame_index"] = df_filtered["reconstructed_frame_index"] - trim_start
+    df_filtered["reconstructed_frame_index"] = df_filtered["reconstructed_frame_index"] - start_idx
 
     logger.info(
-        f"Trimmed CSV to frames {trim_start}-{trim_end_val} "
+        f"Trimmed CSV to frames {start_idx}-{end_idx_val} "
         f"and renumbered to start from 0 "
         f"({len(df_filtered)} rows)."
     )
