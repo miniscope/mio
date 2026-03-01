@@ -61,7 +61,7 @@ def stitch_result(tmp_path_factory):
 
     bundle = RecordingDataBundle(
         recordings=recordings,
-        combined_video_writer=VideoWriter(path=stitched_video, fps=20),
+        stitched_video_writer=VideoWriter(path=stitched_video, fps=20),
         debug_video_writer=VideoWriter(path=debug_video, fps=20),
         combined_csv_path=stitched_csv,
         debug_csv_path=debug_csv,
@@ -163,7 +163,7 @@ def test_stitch_without_debug(tmp_path):
 
     bundle = RecordingDataBundle(
         recordings=recordings,
-        combined_video_writer=VideoWriter(path=stitched_video, fps=20),
+        stitched_video_writer=VideoWriter(path=stitched_video, fps=20),
         debug_video_writer=None,
         combined_csv_path=stitched_csv,
         debug_csv_path=None,
@@ -189,7 +189,7 @@ def test_stitch_single_recording(tmp_path):
 
     bundle = RecordingDataBundle(
         recordings=recordings,
-        combined_video_writer=VideoWriter(path=stitched_video, fps=20),
+        stitched_video_writer=VideoWriter(path=stitched_video, fps=20),
         combined_csv_path=stitched_csv,
         debug_csv_path=debug_csv,
     )
@@ -239,7 +239,7 @@ def test_stitch_padding_tiebreaker(tmp_path):
 
     bundle = RecordingDataBundle(
         recordings=recordings,
-        combined_video_writer=VideoWriter(path=stitched_video, fps=20),
+        stitched_video_writer=VideoWriter(path=stitched_video, fps=20),
         combined_csv_path=stitched_csv,
     )
     bundle.stitch_recordings()

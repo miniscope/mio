@@ -103,13 +103,13 @@ class RecordingDataBundle:
     def __init__(
         self,
         recordings: List[RecordingData],
-        combined_video_writer: VideoWriter,
+        stitched_video_writer: VideoWriter,
         debug_video_writer: Optional[VideoWriter] = None,
         combined_csv_path: Optional[Path] = None,
         debug_csv_path: Optional[Path] = None,
     ) -> None:
         self.recordings: List[RecordingData] = recordings
-        self.combined_video_writer: VideoWriter = combined_video_writer
+        self.stitched_video_writer: VideoWriter = stitched_video_writer
         self.debug_video_writer: Optional[VideoWriter] = debug_video_writer
         self.combined_csv_path: Optional[Path] = combined_csv_path
         self._metadata_parts: List[pd.DataFrame] = []
@@ -236,7 +236,7 @@ class RecordingDataBundle:
     ) -> None:
         """Write the selected frame and its metadata to the stitched outputs."""
         selected = candidates[selected_idx]
-        self.combined_video_writer.write_frame(selected.frame)
+        self.stitched_video_writer.write_frame(selected.frame)
 
         rows = selected.metadata_rows.copy()
         rows["reconstructed_frame_index"] = self._out_frame_index
@@ -245,7 +245,7 @@ class RecordingDataBundle:
 
     def _finalize(self) -> None:
         """Close writers and flush combined CSV."""
-        self.combined_video_writer.close()
+        self.stitched_video_writer.close()
         if self.debug_video_writer is not None:
             self.debug_video_writer.close()
         if self.debug_csv_writer is not None:

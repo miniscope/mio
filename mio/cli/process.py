@@ -24,6 +24,46 @@ from mio.utils import (
 logger = init_logger("mio.cli.process")
 
 
+def _validate_with_prompt(video_path: str) -> Optional[object]:
+    """Validate video-metadata match, prompting user on failure.
+
+    Returns the validated DataFrame, or None if the user chose to continue
+    without CSV metadata.
+    """
+    try:
+        return validate_video_metadata_match(video_path)
+    except VideoMetadataError as e:
+        if e.csv_df is None:
+            if click.confirm(
+                f"{e}. Do you want to continue without generating output CSV metadata?",
+                default=False,
+            ):
+                logger.warning(f"{e}. Continuing without CSV metadata generation.")
+                return None
+            raise click.ClickException(f"{e}. Cannot proceed without CSV.") from None
+        else:
+            if click.confirm(
+                f"{e}. This may indicate a mismatch between the video and CSV. "
+                "Do you want to continue anyway?",
+                default=False,
+            ):
+                logger.warning(f"{e}. Proceeding anyway.")
+                return e.csv_df
+            raise click.ClickException(f"{e}. Cannot proceed.") from None
+
+
+def _build_recordings(inputs: tuple) -> List[RecordingData]:
+    """Build RecordingData list from input video paths, checking for companion CSVs."""
+    recordings: List[RecordingData] = []
+    for video_path in inputs:
+        video_path_obj = Path(video_path)
+        csv_path_obj = video_path_obj.with_suffix(".csv")
+        if not csv_path_obj.exists():
+            raise click.ClickException(f"CSV file not found for {video_path}: {csv_path_obj}")
+        recordings.append(RecordingData(video_path=video_path_obj, csv_path=csv_path_obj))
+    return recordings
+
+
 @click.group()
 def process() -> None:
     """
@@ -65,28 +105,7 @@ def denoise(
     """
     Denoise a video file.
     """
-    csv_df = None
-    try:
-        csv_df = validate_video_metadata_match(input)
-    except VideoMetadataError as e:
-        if e.csv_df is None:
-            if click.confirm(
-                f"{e}. Do you want to continue without generating output CSV metadata?",
-                default=False,
-            ):
-                logger.warning(f"{e}. Continuing without CSV metadata generation.")
-            else:
-                raise click.ClickException(f"{e}. Cannot proceed without CSV.") from None
-        else:
-            if click.confirm(
-                f"{e}. This may indicate a mismatch between the video and CSV. "
-                "Do you want to continue anyway?",
-                default=False,
-            ):
-                logger.warning(f"{e}. Proceeding anyway.")
-                csv_df = e.csv_df
-            else:
-                raise click.ClickException(f"{e}. Cannot proceed.") from None
+    csv_df = _validate_with_prompt(input)
 
     denoise_config_parsed = DenoiseConfig.from_any(denoise_config)
 
@@ -157,28 +176,7 @@ def crop(
     if trim_start_val is None and trim_end_val is None:
         click.echo("No trimming specified (both start and end are 0). Copying entire video.")
 
-    csv_df = None
-    try:
-        csv_df = validate_video_metadata_match(input)
-    except VideoMetadataError as e:
-        if e.csv_df is None:
-            if click.confirm(
-                f"{e}. Do you want to continue without generating output CSV metadata?",
-                default=False,
-            ):
-                logger.warning(f"{e}. Continuing without CSV metadata generation.")
-            else:
-                raise click.ClickException(f"{e}. Cannot proceed without CSV.") from None
-        else:
-            if click.confirm(
-                f"{e}. This may indicate a mismatch between the "
-                "video and CSV. Do you want to continue anyway?",
-                default=False,
-            ):
-                logger.warning(f"{e}. Proceeding anyway.")
-                csv_df = e.csv_df
-            else:
-                raise click.ClickException(f"{e}. Cannot proceed.") from None
+    csv_df = _validate_with_prompt(input)
 
     input_path = Path(input)
     output_arg = output if output is not None else DEFAULT_PROCESS_DIR
@@ -247,29 +245,23 @@ def stitch(
     if len(inputs) < 2:
         raise click.ClickException("At least 2 input videos are required for stitching.")
 
-    recordings: List[RecordingData] = []
-    for video_path in inputs:
-        video_path_obj = Path(video_path)
-        csv_path_obj = video_path_obj.with_suffix(".csv")
-        if not csv_path_obj.exists():
-            raise click.ClickException(f"CSV file not found for {video_path}: {csv_path_obj}")
-        recordings.append(RecordingData(video_path=video_path_obj, csv_path=csv_path_obj))
+    recordings = _build_recordings(inputs)
 
-    first_input = Path(inputs[0])
+    first_input_path = Path(inputs[0])
     output_arg = output if output is not None else DEFAULT_PROCESS_DIR
-    stitched_video = resolve_output_path(first_input, "_stitched", output_arg)
+    stitched_video_path = resolve_output_path(first_input_path, "_stitched", output_arg)
 
-    output_csv_path = stitched_video.with_suffix(".csv")
+    output_csv_path = stitched_video_path.with_suffix(".csv")
 
     debug_video_path = Path(debug_video) if debug_video else None
     debug_csv_path = Path(debug_csv) if debug_csv else None
 
-    combined_video_writer = VideoWriter(path=stitched_video, fps=fps)
+    stitched_video_writer = VideoWriter(path=stitched_video_path, fps=fps)
     debug_video_writer = VideoWriter(path=debug_video_path, fps=fps) if debug_video_path else None
 
     recording_bundle = RecordingDataBundle(
         recordings=recordings,
-        combined_video_writer=combined_video_writer,
+        stitched_video_writer=stitched_video_writer,
         debug_video_writer=debug_video_writer,
         combined_csv_path=output_csv_path,
         debug_csv_path=debug_csv_path,
@@ -279,10 +271,10 @@ def stitch(
     recording_bundle.stitch_recordings()
 
     try:
-        validate_video_metadata_match(stitched_video)
+        validate_video_metadata_match(stitched_video_path)
     except VideoMetadataError as e:
         raise click.ClickException(f"Frame count alignment failed after stitching: {e}") from None
-    click.echo(f"✅ Frame count alignment verified: {stitched_video}")
+    click.echo(f"✅ Frame count alignment verified: {stitched_video_path}")
 
 
 @process.command()
@@ -340,18 +332,18 @@ def workflow(
     """
     Complete workflow: stitch → trim → denoise with validation at each step.
     """
-    first_input = Path(inputs[0])
+    first_input_path = Path(inputs[0])
     if output is None:
         output_dir = Path.cwd() / DEFAULT_PROCESS_DIR
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_stem = first_input.stem
+        output_stem = first_input_path.stem
     else:
         output_path = Path(output).expanduser()
         if output_path.is_dir() or not output_path.suffix:
             if not output_path.exists():
                 output_path.mkdir(parents=True, exist_ok=True)
             output_dir = output_path
-            output_stem = first_input.stem
+            output_stem = first_input_path.stem
         else:
             output_dir = output_path.parent
             output_stem = output_path.stem
@@ -407,56 +399,40 @@ def workflow(
             "validation failure(s). Missing frames will be skipped."
         )
     else:
-        click.echo("✅ All input videos validated successfully")
+        click.echo("✅ [input] All input videos validated successfully")
 
-    click.echo("")
+    stitched_dir = output_dir / "stitched"
+    stitched_dir.mkdir(parents=True, exist_ok=True)
+    stitched_video_path = stitched_dir / f"{output_stem}_stitched.avi"
 
     if len(inputs) == 1:
         click.echo("Only one input video provided, skipping stitching...")
         input_video_path = Path(inputs[0])
         input_csv_path = input_video_path.with_suffix(".csv")
 
-        if not input_csv_path.exists():
-            raise click.ClickException(
-                f"CSV file not found for {input_video_path}: {input_csv_path}"
-            )
+        click.echo(f"Copying single video to stitched directory: {stitched_video_path}")
+        shutil.copy2(input_video_path, stitched_video_path)
+        shutil.copy2(input_csv_path, stitched_video_path.with_suffix(".csv"))
 
-        stitched_dir = output_dir / "stitched"
-        stitched_dir.mkdir(parents=True, exist_ok=True)
-        stitched_video = stitched_dir / f"{output_stem}_stitched.avi"
-
-        click.echo(f"Copying single video to stitched directory: {stitched_video}")
-        shutil.copy2(input_video_path, stitched_video)
-        shutil.copy2(input_csv_path, stitched_video.with_suffix(".csv"))
-
-        click.echo(f"✅ Using single input video as stitched video: {stitched_video}")
+        click.echo(
+            f"✅ [stitch] Using single input video as stitched output: {stitched_video_path}"
+        )
     else:
-        stitched_dir = output_dir / "stitched"
-        stitched_dir.mkdir(parents=True, exist_ok=True)
-        stitched_video = stitched_dir / f"{output_stem}_stitched.avi"
-        click.echo("Stitching videos...")
+        recordings = _build_recordings(inputs)
 
-        recordings: List[RecordingData] = []
-        for video_path in inputs:
-            video_path_obj = Path(video_path)
-            csv_path_obj = video_path_obj.with_suffix(".csv")
-            if not csv_path_obj.exists():
-                raise click.ClickException(f"CSV file not found for {video_path}: {csv_path_obj}")
-            recordings.append(RecordingData(video_path=video_path_obj, csv_path=csv_path_obj))
-
-        output_csv_path = stitched_video.with_suffix(".csv")
+        output_csv_path = stitched_video_path.with_suffix(".csv")
 
         debug_dir = stitched_dir / "debug"
         debug_dir.mkdir(parents=True, exist_ok=True)
         debug_video_path = debug_dir / f"{output_stem}_debug.avi"
         debug_csv_path = debug_dir / f"{output_stem}_debug.csv"
 
-        combined_video_writer = VideoWriter(path=stitched_video, fps=fps)
+        stitched_video_writer = VideoWriter(path=stitched_video_path, fps=fps)
         debug_video_writer = VideoWriter(path=debug_video_path, fps=fps)
 
         recording_bundle = RecordingDataBundle(
             recordings=recordings,
-            combined_video_writer=combined_video_writer,
+            stitched_video_writer=stitched_video_writer,
             debug_video_writer=debug_video_writer,
             combined_csv_path=output_csv_path,
             debug_csv_path=debug_csv_path,
@@ -466,26 +442,24 @@ def workflow(
         recording_bundle.stitch_recordings()
 
         try:
-            validate_video_metadata_match(stitched_video)
+            validate_video_metadata_match(stitched_video_path)
         except VideoMetadataError as e:
             raise click.ClickException(
                 f"Frame count alignment failed after stitching: {e}"
             ) from None
-        click.echo(f"✅ Frame count alignment verified: {stitched_video}")
-        click.echo(f"✅ Saved stitched video: {stitched_video}")
-        click.echo(f"✅ Saved stitched metadata: {output_csv_path}")
+        click.echo(f"✅ [stitch] Frame count alignment verified: {stitched_video_path}")
 
     if trim_start == 0 and trim_end == 0:
         click.echo("Skipping trim (both start and end are 0)...")
-        actual_cropped_video = stitched_video
-        click.echo("✅ No trimming needed, using stitched video as-is")
+        actual_cropped_video = stitched_video_path
+        click.echo("✅ [crop] No trimming needed, using stitched video as-is")
     else:
         cropped_dir = output_dir / "cropped"
         cropped_dir.mkdir(parents=True, exist_ok=True)
         cropped_video = cropped_dir / f"{output_stem}_cropped.avi"
         click.echo("Trimming video...")
 
-        reader = VideoReader(str(stitched_video))
+        reader = VideoReader(str(stitched_video_path))
         total_frames = reader.frame_count
         reader.release()
 
@@ -504,12 +478,12 @@ def workflow(
         )
 
         try:
-            csv_df = validate_video_metadata_match(str(stitched_video))
+            csv_df = validate_video_metadata_match(str(stitched_video_path))
         except VideoMetadataError as e:
             raise click.ClickException(f"Cannot crop: {e}") from None
 
         actual_cropped_video = crop_run(
-            str(stitched_video),
+            str(stitched_video_path),
             output_path=str(cropped_video),
             csv_df=csv_df,
             trim_start=crop_start,
@@ -522,9 +496,7 @@ def workflow(
             raise click.ClickException(
                 f"Frame count alignment failed after cropping: {e}"
             ) from None
-        click.echo(f"✅ Frame count alignment verified: {actual_cropped_video}")
-        click.echo(f"✅ Saved cropped video: {actual_cropped_video}")
-        click.echo(f"✅ Saved cropped metadata: {actual_cropped_video.with_suffix('.csv')}")
+        click.echo(f"✅ [crop] Frame count alignment verified: {actual_cropped_video}")
 
     click.echo("Denoising video...")
 
@@ -589,14 +561,10 @@ def workflow(
                 raise click.ClickException(
                     f"Frame count alignment failed after denoising: {e}"
                 ) from None
-            click.echo(f"✅ Final frame count alignment verified: {final_video}")
+            click.echo(f"✅ [denoise] Frame count alignment verified: {final_video}")
         else:
             logger.warning(
                 f"CSV file not found for {final_video}, " "skipping alignment validation"
             )
-
-        click.echo(f"✅ Saved denoised video: {final_video}")
-        if final_csv.exists():
-            click.echo(f"✅ Saved denoised metadata: {final_csv}")
     else:
         logger.warning("Could not find denoised output video for validation.")
