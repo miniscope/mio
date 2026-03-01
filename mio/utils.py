@@ -208,16 +208,10 @@ def format_missing_frame_ranges(missing_indices: List[int]) -> List[str]:
 
 
 def extract_mismatch_details(
-    video_path: Path, is_valid: bool, error_msg: Optional[str], csv_df: Optional[pd.DataFrame]
-) -> Optional[dict]:
-    """Extract detailed mismatch information from validation result."""
-    if is_valid:
-        return None
-
+    video_path: Path, error_msg: str, csv_df: Optional[pd.DataFrame]
+) -> dict:
+    """Extract detailed mismatch information from validation error."""
     video_path_obj = Path(video_path)
-
-    if error_msg is None:
-        return {"error_type": "unknown"}
 
     error_lower = error_msg.lower()
     if "not found" in error_lower:

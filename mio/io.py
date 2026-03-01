@@ -49,18 +49,11 @@ class VideoWriter:
 
         self.writer = FFmpegWriter(filename=str(path), inputdict=input_dict, outputdict=output_dict)
 
-    def write_frame(self, frame: np.ndarray) -> bool:
+    def write_frame(self, frame: np.ndarray) -> None:
         """
         Write a frame to the video file.
-
-        Parameters:
-        frame (np.ndarray): The frame to write.
-
-        Returns:
-        bool: True if the frame write was attempted and did not raise anything.
         """
         self.writer.writeFrame(frame)
-        return True
 
     def close(self) -> None:
         """
@@ -144,14 +137,14 @@ class VideoReader:
 
             yield index, frame
 
-    def read_frame(self, index: int) -> np.ndarray:
+    def read_frame(self, index: int) -> Optional[np.ndarray]:
         """
         Read a frame from the video file.
         """
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, index)
         ret, frame = self.cap.read()
-        if not ret or frame is None:
-            return frame
+        if not ret:
+            return None
         return frame
 
     def release(self) -> None:

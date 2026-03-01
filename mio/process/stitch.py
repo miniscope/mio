@@ -115,7 +115,6 @@ class RecordingDataBundle:
         self._metadata_parts: List[pd.DataFrame] = []
         self._combined_frame_num: Optional[List[int]] = None
         self._out_frame_index: int = 0
-        # Debug CSV writer
         self.debug_csv_writer: Optional[BufferedCSVWriter] = None
         self._debug_frame_index: int = 0
         if debug_csv_path is not None:
