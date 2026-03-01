@@ -18,7 +18,7 @@ from mio.process.stitch import (
     CandidateFrame,
     RecordingData,
     RecordingDataBundle,
-    most_proper_metadata,
+    select_best_candidate,
     score_edges,
 )
 from mio.process.video import crop_run
@@ -342,12 +342,11 @@ def test_crop_invalid_range(tmp_path):
 
 def test_metadata_tie_detection():
     """Equal metadata scores are detected as a tie (triggers edge scoring)."""
-    _cand = lambda nb, bp: CandidateFrame(
-        recording=None, frame=None, num_buffers=nb,
-        sum_black_padding=bp, metadata_rows=None, edge_score=0.0,
+    cand = CandidateFrame(
+        recording=None, frame=None, num_buffers=8,
+        sum_black_padding=0, metadata_rows=None, edge_score=0.0,
     )
-    _, tied, is_tie = most_proper_metadata([_cand(8, 0), _cand(8, 0)])
-    assert tied == [0, 1]
+    _, is_tie = select_best_candidate([cand, cand])
     assert is_tie is True
 
 

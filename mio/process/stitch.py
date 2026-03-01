@@ -6,9 +6,10 @@ the best buffers from each stream using gradient noise detection.
 This is still hardcoded around the StreamDevConfig metadata fields.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -22,51 +23,48 @@ from mio.models.stitch import DebugRecord, FrameInfo
 logger = init_logger(name="stitch")
 
 
-def score_metadata(num_buffers: int, sum_black_padding: int) -> Tuple[int, int]:
-    """Return a tuple score for metadata (higher is better lexicographically)."""
-    return (num_buffers, -sum_black_padding)
-
-
 def score_edges(frame: np.ndarray) -> float:
     """Negative of total Sobel gradient magnitude (higher is better)."""
     gx = cv2.Sobel(frame, cv2.CV_16S, 1, 0, ksize=3)
     gy = cv2.Sobel(frame, cv2.CV_16S, 0, 1, ksize=3)
-    total_grad = int(np.abs(gx).sum() + np.abs(gy).sum())
-    return -float(total_grad)
+    return -float(np.abs(gx).sum() + np.abs(gy).sum())
 
 
 @dataclass
 class CandidateFrame:
     """A single candidate frame from one recording for a given frame_num."""
 
-    recording: "RecordingData"
+    recording: RecordingData
     frame: np.ndarray
     num_buffers: int
     sum_black_padding: int
     metadata_rows: pd.DataFrame
     edge_score: float
 
+    @property
+    def metadata_score(self) -> tuple[int, int]:
+        """Higher is better: more buffers, less black padding.
+        A bit overkill but left this for future extension.
+        """
+        return (self.num_buffers, -self.sum_black_padding)
 
-def most_proper_metadata(
-    candidates: List[CandidateFrame],
-) -> Tuple[int, List[int], bool]:
-    """
-    Select less broken frames using metadata scoring.
 
-    Uses score_metadata(num_buffers, sum_black_padding) and returns the
-    index of a best-scoring candidate, the list of tied candidate indices,
-    and whether there was a tie.
+def select_best_candidate(candidates: list[CandidateFrame]) -> tuple[int, bool]:
     """
-    scored = [
-        (i, score_metadata(num_buffers=c.num_buffers, sum_black_padding=c.sum_black_padding))
-        for i, c in enumerate(candidates)
-    ]
-    scored.sort(key=lambda t: t[1], reverse=True)
-    top_score = scored[0][1]
-    tied = [i for i, s in scored if s == top_score]
+    Pick the best candidate using metadata scoring with edge-score tiebreak.
+
+    Metadata score: (num_buffers, -sum_black_padding) lexicographically.
+    Ties are broken by edge score (less sharp = better, i.e. less noise).
+    Returns (best_index, was_tie).
+    """
+    top_score = max(c.metadata_score for c in candidates)
+    tied = [i for i, c in enumerate(candidates) if c.metadata_score == top_score]
     best_idx = tied[0]
     is_tie = len(tied) > 1
-    return best_idx, tied, is_tie
+    if is_tie:
+        tied_scores = [candidates[i].edge_score for i in tied]
+        best_idx = tied[int(np.argmax(tied_scores))]
+    return best_idx, is_tie
 
 
 class RecordingData:
@@ -79,13 +77,13 @@ class RecordingData:
     ) -> None:
         self.video_path: Path = video_path
         self.csv_path: Path = csv_path
-        self._video_reader: Optional[VideoReader] = None
-        self._metadata: Optional[pd.DataFrame] = None
+        self._video_reader: VideoReader | None = None
+        self._metadata: pd.DataFrame | None = None
 
     @classmethod
-    def from_video_paths(cls, video_paths: List[Path]) -> List["RecordingData"]:
+    def from_video_paths(cls, video_paths: list[Path]) -> list[RecordingData]:
         """Build a list of RecordingData from video paths, inferring companion CSVs."""
-        recordings: List[RecordingData] = []
+        recordings: list[RecordingData] = []
         for video_path in video_paths:
             csv_path = video_path.with_suffix(".csv")
             if not csv_path.exists():
@@ -113,20 +111,20 @@ class RecordingDataBundle:
 
     def __init__(
         self,
-        recordings: List[RecordingData],
+        recordings: list[RecordingData],
         stitched_video_writer: VideoWriter,
-        debug_video_writer: Optional[VideoWriter] = None,
-        combined_csv_path: Optional[Path] = None,
-        debug_csv_path: Optional[Path] = None,
+        debug_video_writer: VideoWriter | None = None,
+        combined_csv_path: Path | None = None,
+        debug_csv_path: Path | None = None,
     ) -> None:
-        self.recordings: List[RecordingData] = recordings
+        self.recordings: list[RecordingData] = recordings
         self.stitched_video_writer: VideoWriter = stitched_video_writer
-        self.debug_video_writer: Optional[VideoWriter] = debug_video_writer
-        self.combined_csv_path: Optional[Path] = combined_csv_path
-        self._metadata_parts: List[pd.DataFrame] = []
-        self._combined_frame_num: Optional[List[int]] = None
+        self.debug_video_writer: VideoWriter | None = debug_video_writer
+        self.combined_csv_path: Path | None = combined_csv_path
+        self._metadata_parts: list[pd.DataFrame] = []
+        self._combined_frame_num: list[int] | None = None
         self._out_frame_index: int = 0
-        self.debug_csv_writer: Optional[BufferedCSVWriter] = None
+        self.debug_csv_writer: BufferedCSVWriter | None = None
         self._debug_frame_index: int = 0
         if debug_csv_path is not None:
             self.debug_csv_writer = BufferedCSVWriter(
@@ -134,14 +132,14 @@ class RecordingDataBundle:
             )
 
     @property
-    def combined_frame_num(self) -> List[int]:
+    def combined_frame_num(self) -> list[int]:
         """
         Get the combined frame_num.
         This is a list of unique frame_nums across all recordings.
         """
         if self._combined_frame_num is None:
             seen: set = set()
-            combined: List[int] = []
+            combined: list[int] = []
             for recording in self.recordings:
                 for fn in recording.metadata["frame_num"]:
                     if fn not in seen:
@@ -150,9 +148,9 @@ class RecordingDataBundle:
             self._combined_frame_num = combined
         return self._combined_frame_num
 
-    def _collect_candidates(self, frame_num: int) -> List[CandidateFrame]:
+    def _collect_candidates(self, frame_num: int) -> list[CandidateFrame]:
         """Read frames and metadata scores for all recordings that have *frame_num*."""
-        candidates: List[CandidateFrame] = []
+        candidates: list[CandidateFrame] = []
         for recording in self.recordings:
             rows = recording.metadata[recording.metadata["frame_num"] == frame_num]
             if rows.empty:
@@ -175,19 +173,10 @@ class RecordingDataBundle:
             )
         return candidates
 
-    @staticmethod
-    def _select_best(candidates: List[CandidateFrame]) -> Tuple[int, bool]:
-        """Pick the best candidate index using metadata scoring + edge tiebreak."""
-        best_idx, tied, is_tie = most_proper_metadata(candidates)
-        if is_tie:
-            tied_scores = [candidates[i].edge_score for i in tied]
-            best_idx = tied[int(np.argmax(tied_scores))]
-        return best_idx, is_tie
-
     def _write_debug(
         self,
         frame_num: int,
-        candidates: List[CandidateFrame],
+        candidates: list[CandidateFrame],
         selected_idx: int,
         is_tie: bool,
     ) -> int:
@@ -242,7 +231,7 @@ class RecordingDataBundle:
 
     def _write_stitched(
         self,
-        candidates: List[CandidateFrame],
+        candidates: list[CandidateFrame],
         selected_idx: int,
     ) -> None:
         """Write the selected frame and its metadata to the stitched outputs."""
@@ -276,7 +265,7 @@ class RecordingDataBundle:
             valid_pairs = self._collect_candidates(frame_num)
             if not valid_pairs:
                 continue
-            selected_idx, is_tie = self._select_best(valid_pairs)
+            selected_idx, is_tie = select_best_candidate(valid_pairs)
             debug_writes += self._write_debug(frame_num, valid_pairs, selected_idx, is_tie)
             self._write_stitched(valid_pairs, selected_idx)
             stitched_writes += 1
