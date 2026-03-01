@@ -231,7 +231,6 @@ class RecordingDataBundle:
 
     def _write_stitched(
         self,
-        frame_num: int,
         candidates: List[CandidateFrame],
         selected_idx: int,
     ) -> None:
@@ -263,18 +262,13 @@ class RecordingDataBundle:
         frame_iter = tqdm(self.combined_frame_num, desc="Stitching frames")
 
         for frame_num in frame_iter:
-            try:
-                valid_pairs = self._collect_candidates(frame_num)
-                if not valid_pairs:
-                    continue
-                selected_idx, is_tie = self._select_best(valid_pairs)
-                debug_writes += self._write_debug(frame_num, valid_pairs, selected_idx, is_tie)
-                self._write_stitched(frame_num, valid_pairs, selected_idx)
-                stitched_writes += 1
-            except Exception as e:
-                msg = f"Error processing frame_num {frame_num}: {e}"
-                tqdm.write(msg)
-                logger.debug(msg)
+            valid_pairs = self._collect_candidates(frame_num)
+            if not valid_pairs:
+                continue
+            selected_idx, is_tie = self._select_best(valid_pairs)
+            debug_writes += self._write_debug(frame_num, valid_pairs, selected_idx, is_tie)
+            self._write_stitched(valid_pairs, selected_idx)
+            stitched_writes += 1
 
         self._finalize()
         logger.info(

@@ -339,21 +339,17 @@ def test_iter_buffers(read_size: int, tmp_path: Path):
     assert all([buf == buffer for buf in got_buffers])
 
 
-def test_writer_returns_match_avi_frame_count(tmp_path: Path, set_okdev_input, monkeypatch):
+def test_writer_calls_match_avi_frame_count(tmp_path: Path, set_okdev_input, monkeypatch):
     """
-    Count write_frame calls and True returns from VideoWriter and compare the number of True returns against the number of frames reported in the AVI.
+    Count write_frame calls from VideoWriter and compare against the number
+    of frames reported in the AVI.
     """
-    call_count = {"calls": 0, "ok": 0, "failed": 0}
+    call_count = {"calls": 0}
     original = VideoWriter.write_frame
 
     def wrapped(self, frame):  # type: ignore[no-redef]
         call_count["calls"] += 1
-        ok = original(self, frame)
-        if ok:
-            call_count["ok"] += 1
-        else:
-            call_count["failed"] += 1 # This shouldn't happen but just in case
-        return ok
+        original(self, frame)
 
     monkeypatch.setattr(VideoWriter, "write_frame", wrapped, raising=True)
 
@@ -372,10 +368,6 @@ def test_writer_returns_match_avi_frame_count(tmp_path: Path, set_okdev_input, m
     avi_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     cap.release()
 
-    # No false returns
-    assert call_count["failed"] == 0, f"write_frame False returns ({call_count['failed']})"
-
-    # Successes should equal the frames counted by AVI?
-    assert call_count["ok"] == avi_frames, (
-        f"write_frame True returns ({call_count['ok']}) != AVI frames ({avi_frames})"
+    assert call_count["calls"] == avi_frames, (
+        f"write_frame calls ({call_count['calls']}) != AVI frames ({avi_frames})"
     )

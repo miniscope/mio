@@ -591,12 +591,6 @@ def denoise_run(
         reader.release()
 
         output_frames = output_frame_processor.output_video
-
-        if not isinstance(output_frames, list):
-            raise ValueError("Output frames must be a list.")
-        for frame in output_frames:
-            if not isinstance(frame, np.ndarray):
-                logger.warning(f"Frame is not a numpy array: {type(frame)}")
         minimum_projection_processor = MinProjSubtractProcessor(
             name=pathstem + "min_proj",
             output_dir=intermediate_dir,  # Intermediate files go to debug_dir
@@ -804,14 +798,6 @@ def _export_frame_timestamp_csv(output_video_path: Path, csv_df: pd.DataFrame) -
         The modified CSV DataFrame with reconstructed_frame_index and
         buffer_recv_unix_time.
     """
-    # Check if required columns exist
-    if "reconstructed_frame_index" not in csv_df.columns:
-        logger.warning(
-            "CSV DataFrame does not have 'reconstructed_frame_index' column. "
-            "Skipping frame-timestamp CSV export."
-        )
-        return
-
     if "buffer_recv_unix_time" not in csv_df.columns:
         logger.warning(
             "CSV DataFrame does not have 'buffer_recv_unix_time' column. "
