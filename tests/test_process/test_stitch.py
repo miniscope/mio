@@ -20,7 +20,7 @@ from mio.process.stitch import (
     stitch,
     _score_edges,
 )
-from mio.process.video import trim
+from mio.process.video import trim, remove_frames_run
 from mio.utils import hash_video
 
 STITCH_DATA_DIR = Path(__file__).parent.parent / "data" / "stitch"
@@ -32,6 +32,10 @@ EXPECTED_DEBUG_VIDEO_HASH = (
 )
 EXPECTED_CROP_VIDEO_HASH = "432642b1528fcd9ad553cfb3cc3862bef931301bd11d44dc3c2372fc379fa629"
 EXPECTED_CROP_FRAME_COUNT = 30
+EXPECTED_VIDEO1_FRAME_COUNT = 50
+EXPECTED_REMOVE_FRAMES_HASH = (
+    "b76b80f45316bad0a808802b8f5c0d65b99f6f59bc6422b84c1c2a7026ca4b15"
+)
 
 
 @pytest.fixture(scope="module")
@@ -250,3 +254,43 @@ def test_edge_scoring_selects_less_sharp():
     edgy = np.zeros((50, 50), dtype=np.uint8)
     edgy[:, 25:] = 255
     assert _score_edges(uniform) > _score_edges(edgy)
+
+
+# ── Remove frames ──────────────────────────────────────────────────
+
+
+def test_remove_frames(tmp_path):
+    """End-to-end: remove specific frames, verify video hash, frame count, and CSV integrity."""
+    out = remove_frames_run(
+        str(STITCH_DATA_DIR / "video1.avi"),
+        frame_indices_to_remove=[0, 5, 10],
+        output_path=str(tmp_path / "removed.avi"),
+    )
+
+    assert hash_video(out) == EXPECTED_REMOVE_FRAMES_HASH
+
+    cap = cv2.VideoCapture(str(out))
+    assert int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) == EXPECTED_VIDEO1_FRAME_COUNT - 3
+    cap.release()
+
+    df = pd.read_csv(str(out).replace(".avi", ".csv"))
+    indices = sorted(df["reconstructed_frame_index"].unique())
+    assert indices == list(range(len(indices)))
+
+
+def test_remove_frames_invalid(tmp_path):
+    """Invalid frame indices are rejected before processing."""
+    video = str(STITCH_DATA_DIR / "video1.avi")
+
+    with pytest.raises(ValueError, match="out of range"):
+        remove_frames_run(video, frame_indices_to_remove=[-1], output_path=str(tmp_path / "out.avi"))
+
+    with pytest.raises(ValueError, match="out of range"):
+        remove_frames_run(video, frame_indices_to_remove=[9999], output_path=str(tmp_path / "out.avi"))
+
+    with pytest.raises(ValueError, match="Cannot remove all"):
+        remove_frames_run(
+            video,
+            frame_indices_to_remove=list(range(EXPECTED_VIDEO1_FRAME_COUNT)),
+            output_path=str(tmp_path / "out.avi"),
+        )
