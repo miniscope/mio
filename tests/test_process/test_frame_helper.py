@@ -59,7 +59,7 @@ def test_noisy_frame_detection(video, ground_truth, noise_detection_method, nois
     by speckled noise
     """
     if "gradient" in noise_detection_method:
-        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_example")
+        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_noise_detection_test")
     elif "mean_error" in noise_detection_method:
         if "extended" in video:
             # FIXME: resolve this before merging `feat-preprocess` to `main`
@@ -69,7 +69,7 @@ def test_noisy_frame_detection(video, ground_truth, noise_detection_method, nois
             )
         global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_example_mean_error")
     elif "black_area" in noise_detection_method:
-        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_example")
+        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_noise_detection_test")
     else:
         raise ValueError("Invalid noise detection method")
 
