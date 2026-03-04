@@ -22,6 +22,9 @@ EXPECTED_STITCHED_VIDEO_HASH = (
 EXPECTED_CROP_VIDEO_HASH = (
     "432642b1528fcd9ad553cfb3cc3862bef931301bd11d44dc3c2372fc379fa629"
 )
+EXPECTED_REMOVE_FRAMES_HASH = (
+    "b76b80f45316bad0a808802b8f5c0d65b99f6f59bc6422b84c1c2a7026ca4b15"
+)
 
 
 def test_cli_stitch(tmp_path):
@@ -128,6 +131,32 @@ def test_cli_crop_no_trim(tmp_path):
         ],
     )
     assert result.exit_code == 0, result.output
+
+
+def test_cli_remove_frames(tmp_path):
+    """mio process remove-frames removes specified frames."""
+    src = STITCH_DATA_DIR / "video1.avi"
+    src_csv = STITCH_DATA_DIR / "video1.csv"
+    dst = tmp_path / "video1.avi"
+    dst_csv = tmp_path / "video1.csv"
+    shutil.copy(src, dst)
+    shutil.copy(src_csv, dst_csv)
+
+    out_dir = tmp_path / "output"
+    runner = CliRunner()
+    result = runner.invoke(
+        process,
+        [
+            "remove-frames",
+            "-i", str(dst),
+            "-o", str(out_dir),
+            "-f", "0,5,10",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    out_video = out_dir / "video1_removed.avi"
+    assert out_video.exists()
+    assert hash_video(out_video) == EXPECTED_REMOVE_FRAMES_HASH
 
 
 def test_validate_video_metadata_match_missing_csv(tmp_path):
