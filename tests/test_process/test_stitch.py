@@ -343,9 +343,6 @@ def test_crop_invalid_range(tmp_path):
         crop_run(video, output_path=str(tmp_path / "out.avi"), trim_start=25, trim_end=25)
 
 
-# ── Remove frames ──────────────────────────────────────────────────
-
-
 def test_remove_frames(tmp_path):
     """End-to-end: remove specific frames, verify video hash, frame count, and CSV integrity."""
     out = remove_frames_run(

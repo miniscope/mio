@@ -200,16 +200,24 @@ def crop(
     type=str,
     help="Comma-separated list of 0-based frame indices to remove (e.g. '0,5,10,42').",
 )
+@click.option(
+    "-t",
+    "--timestamp-csv",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Path to a timestamp CSV file to update. " "Used when no full metadata CSV is available.",
+)
 def remove_frames(
     input: str,
     output: Optional[str],
     frames: str,
+    timestamp_csv: Optional[str],
 ) -> None:
     """
     Remove specific frames by index from a video.
 
     A manual cleanup step for removing individual bad frames after reviewing
-    the output. Also updates the companion CSV metadata to match.
+    the output. Updates the companion metadata CSV and/or timestamp CSV.
     """
     csv_df = _validate_with_prompt(input)
 
@@ -224,6 +232,7 @@ def remove_frames(
         frame_indices_to_remove=frame_indices,
         output_path=str(output_path),
         csv_df=csv_df,
+        timestamp_csv_path=timestamp_csv,
     )
 
     try:

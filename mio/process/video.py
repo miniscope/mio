@@ -896,6 +896,7 @@ def remove_frames_run(
     frame_indices_to_remove: list[int],
     output_path: Optional[str] = None,
     csv_df: Optional[pd.DataFrame] = None,
+    timestamp_csv_path: Optional[str] = None,
 ) -> Path:
     """
     Remove specific frames by index from a video.
@@ -912,6 +913,11 @@ def remove_frames_run(
     csv_df : Optional[pd.DataFrame], optional
         Pre-validated CSV DataFrame. If provided, uses this instead of
         reading from disk.
+    timestamp_csv_path : Optional[str], optional
+        Path to a timestamp CSV file (columns: frame, timestamp_first,
+        timestamp_last). If provided, updates this file by removing rows
+        for dropped frames and renumbering. Used when no full metadata
+        CSV is available.
 
     Returns
     -------
@@ -976,17 +982,60 @@ def remove_frames_run(
             f"but wrote {frames_written} frames"
         )
 
-    modified_csv_df = _modify_csv_metadata(
-        video_path,
-        output_path_obj,
-        dropped_frame_indices=sorted(removal_set),
-        csv_df=csv_df,
-    )
+    input_csv_path = Path(video_path).with_suffix(".csv")
+    has_metadata_csv = csv_df is not None or input_csv_path.exists()
 
-    if modified_csv_df is not None:
-        _export_frame_timestamp_csv(output_path_obj, modified_csv_df)
+    if has_metadata_csv:
+        modified_csv_df = _modify_csv_metadata(
+            video_path,
+            output_path_obj,
+            dropped_frame_indices=sorted(removal_set),
+            csv_df=csv_df,
+        )
+        if modified_csv_df is not None:
+            _export_frame_timestamp_csv(output_path_obj, modified_csv_df)
+
+    if timestamp_csv_path is not None:
+        _modify_timestamp_csv(timestamp_csv_path, output_path_obj, removal_set)
 
     return output_path_obj
+
+
+def _modify_timestamp_csv(
+    timestamp_csv_path: str,
+    output_video_path: Path,
+    removal_set: set[int],
+) -> None:
+    """
+    Update a timestamp CSV by removing rows for dropped frames and renumbering.
+
+    Parameters
+    ----------
+    timestamp_csv_path : str
+        Path to the input timestamp CSV (columns: frame, timestamp_first, timestamp_last).
+    output_video_path : Path
+        Path to the output video file (used to derive output CSV path).
+    removal_set : set[int]
+        Frame indices that were removed.
+    """
+    df = pd.read_csv(timestamp_csv_path)
+    df_filtered = df[~df["frame"].isin(removal_set)].copy()
+
+    sorted_dropped = sorted(removal_set)
+
+    def adjust_frame(frame_idx: int) -> int:
+        num_dropped_before = sum(1 for d in sorted_dropped if d < frame_idx)
+        return frame_idx - num_dropped_before
+
+    df_filtered["frame"] = df_filtered["frame"].apply(adjust_frame)
+
+    output_csv_path = output_video_path.with_name(output_video_path.stem + "_timestamp.csv")
+    df_filtered.to_csv(output_csv_path, index=False)
+    logger.info(
+        "Updated timestamp CSV at %s (%d frames).",
+        output_csv_path,
+        len(df_filtered),
+    )
 
 
 def _crop_csv_metadata(
