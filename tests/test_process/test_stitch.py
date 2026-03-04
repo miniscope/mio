@@ -256,9 +256,6 @@ def test_edge_scoring_selects_less_sharp():
     assert _score_edges(uniform) > _score_edges(edgy)
 
 
-# ── Remove frames ──────────────────────────────────────────────────
-
-
 def test_remove_frames(tmp_path):
     """End-to-end: remove specific frames, verify video hash, frame count, and CSV integrity."""
     out = remove_frames_run(
