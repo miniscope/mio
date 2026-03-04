@@ -23,7 +23,7 @@ noise_patch:
   output_noisy_frames: true
 frequency_masking:
   id: frequency_masking_example
-  mio_model: mio.models.process.FreqencyMaskingConfig
+  mio_model: mio.models.process.FrequencyMaskingConfig
   mio_version: 0.6.1
   enable: false
   cast_float32: true
