@@ -13,7 +13,7 @@ from mio.io import VideoWriter
 from mio.logging import init_logger
 from mio.models.process import DenoiseConfig
 from mio.process.stitch import RecordingData, RecordingDataBundle
-from mio.process.video import crop_run, denoise_run
+from mio.process.video import crop_run, denoise_run, remove_frames_run
 from mio.utils import (
     DEFAULT_PROCESS_DIR,
     extract_mismatch_details,
@@ -175,6 +175,64 @@ def crop(
     except VideoMetadataError as e:
         raise click.ClickException(f"Frame count alignment failed after cropping: {e}") from None
     click.echo(f"✅ Frame count alignment verified: {cropped_output}")
+
+
+@process.command(name="remove-frames")
+@click.option(
+    "-i",
+    "--input",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to the video file. Each requires a .csv with the same stem name.",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(),
+    default=None,
+    help="Path to the output video file or directory. "
+    f"If not specified, saves to {DEFAULT_PROCESS_DIR}/ directory with '_removed' suffix.",
+)
+@click.option(
+    "-f",
+    "--frames",
+    required=True,
+    type=str,
+    help="Comma-separated list of 0-based frame indices to remove (e.g. '0,5,10,42').",
+)
+def remove_frames(
+    input: str,
+    output: Optional[str],
+    frames: str,
+) -> None:
+    """
+    Remove specific frames by index from a video.
+
+    A manual cleanup step for removing individual bad frames after reviewing
+    the output. Also updates the companion CSV metadata to match.
+    """
+    csv_df = _validate_with_prompt(input)
+
+    frame_indices = [int(x.strip()) for x in frames.split(",")]
+
+    input_path = Path(input)
+    output_arg = output if output is not None else DEFAULT_PROCESS_DIR
+    output_path = resolve_output_path(input_path, "_removed", output_arg)
+
+    result = remove_frames_run(
+        input,
+        frame_indices_to_remove=frame_indices,
+        output_path=str(output_path),
+        csv_df=csv_df,
+    )
+
+    try:
+        validate_video_metadata_match(result)
+    except VideoMetadataError as e:
+        raise click.ClickException(
+            f"Frame count alignment failed after removing frames: {e}"
+        ) from None
+    click.echo(f"✅ Frame count alignment verified: {result}")
 
 
 @process.command()
