@@ -15,7 +15,7 @@ from mio.io import VideoReader, VideoWriter
 from mio.models.frames import NamedFrame, NamedVideo
 from mio.models.process import (
     DenoiseConfig,
-    FreqencyMaskingConfig,
+    FrequencyMaskingConfig,
     MinimumProjectionConfig,
     NoisePatchConfig,
 )
@@ -274,7 +274,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
     def __init__(
         self,
         name: str,
-        freq_mask_config: FreqencyMaskingConfig,
+        freq_mask_config: FrequencyMaskingConfig,
         width: int,
         height: int,
         output_dir: Path,
@@ -284,10 +284,10 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
 
         Parameters:
         name (str): The name of the video processor.
-        freq_mask_config (FreqencyMaskingConfig): The frequency masking configuration.
+        freq_mask_config (FrequencyMaskingConfig): The frequency masking configuration.
         """
         super().__init__(name, output_dir)
-        self.freq_mask_config: FreqencyMaskingConfig = freq_mask_config
+        self.freq_mask_config: FrequencyMaskingConfig = freq_mask_config
         self.freq_mask_helper = FrequencyMaskHelper(
             height=height, width=width, freq_mask_config=freq_mask_config
         )

@@ -1,5 +1,5 @@
 id: test_remove_stripe_example
-mio_model: mio.models.process.FreqencyMaskingConfig
+mio_model: mio.models.process.FrequencyMaskingConfig
 mio_version: 0.6.1
 enable: true
 cast_float32: true
