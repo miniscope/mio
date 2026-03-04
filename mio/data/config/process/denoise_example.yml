@@ -14,14 +14,14 @@ noise_patch:
     threshold: 20
   black_area_config:
     consecutive_threshold: 5
-    value_threshold: 16
+    value_threshold: 0
   output_result: true
   output_noise_patch: true
   output_diff: true
   output_noisy_frames: true
 frequency_masking:
   id: frequency_masking_example
-  mio_model: mio.models.process.FreqencyMaskingConfig
+  mio_model: mio.models.process.FrequencyMaskingConfig
   mio_version: 0.6.1
   enable: true
   cast_float32: true
