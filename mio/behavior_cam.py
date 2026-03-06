@@ -105,6 +105,7 @@ class BehaviorCam:
         self,
         output_dir: Optional[str] = None,
         show_video: bool = True,
+        label: Optional[str] = None,
     ) -> None:
         """
         Start frame capture and recording.
@@ -112,6 +113,7 @@ class BehaviorCam:
         Args:
             output_dir: Output directory (defaults to config.output_dir)
             show_video: If True, display video preview window
+            label: Optional label appended to the filename after the timestamp
         """
         self.terminate.clear()
 
@@ -129,8 +131,9 @@ class BehaviorCam:
             video_ext = ".avi"
             container_format = "avi"
 
-        video_path = Path(output_dir) / f"{timestamp}{video_ext}"
-        csv_path = Path(output_dir) / f"{timestamp}.csv"
+        stem = f"{timestamp}_{label}" if label else str(timestamp)
+        video_path = Path(output_dir) / f"{stem}{video_ext}"
+        csv_path = Path(output_dir) / f"{stem}.csv"
 
         # Get actual resolution and fps (may differ from requested)
         # We'll get these from the first frame

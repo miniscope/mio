@@ -68,7 +68,14 @@ def usbcam(ctx: click.Context, list_cameras_flag: bool) -> None:
     type=int,
     help="Specify camera index (optional)",
 )
-def record(config: str, output_dir: Optional[str], index: Optional[int]) -> None:
+@click.option(
+    "-l",
+    "--label",
+    type=str,
+    default=None,
+    help="Custom label appended to filename, e.g. 'mouse1_session1' -> '1234567890_mouse1_session1.mp4'",
+)
+def record(config: str, output_dir: Optional[str], index: Optional[int], label: Optional[str]) -> None:
     """Record video with Unix timestamp filename"""
     recording_config = USBCameraRecordingConfig.from_any(config)
 
@@ -103,7 +110,7 @@ def record(config: str, output_dir: Optional[str], index: Optional[int]) -> None
 
     behavior_cam = BehaviorCam(recording_config=recording_config, camera_index=camera_index)
     try:
-        behavior_cam.capture(output_dir=output_dir)
+        behavior_cam.capture(output_dir=output_dir, label=label)
     except Exception as e:
         click.echo(f"Error recording video: {e}", err=True)
         raise click.ClickException(f"Error recording video: {e}") from e
