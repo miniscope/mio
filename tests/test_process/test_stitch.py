@@ -20,6 +20,8 @@ from mio.process.stitch import (
     RecordingDataBundle,
     select_best_candidate,
     score_edges,
+    fuzzy_remap_frame_nums,
+    _detect_segments,
 )
 from mio.process.video import crop_run
 from mio.utils import hash_video, validate_video_metadata_match
@@ -374,3 +376,242 @@ def test_frame_info_majority_vote_rfi():
     ] + [{**base, "reconstructed_frame_index": 20, "buffer_recv_index": 7}]
     fi = FrameInfo.from_metadata(200, pd.DataFrame(rows))
     assert fi.reconstructed_frame_index == 10
+
+
+# ---------------------------------------------------------------------------
+# Fuzzy stitch tests
+# ---------------------------------------------------------------------------
+
+
+def _make_synthetic_recording(tmp_path, name, frame_nums, unix_times, width=50, height=50):
+    """Create a synthetic RecordingData with a video and CSV.
+
+    ``frame_nums`` and ``unix_times`` are parallel lists (one per frame).
+    Each frame gets 1 buffer row in the CSV (frame_buffer_count=1).
+    Video frames are filled with the frame index value so they're distinguishable.
+    """
+    video_path = tmp_path / f"{name}.avi"
+    csv_path = tmp_path / f"{name}.csv"
+
+    writer = VideoWriter(path=video_path, fps=20)
+    rows = []
+    for rfi, (fn, ut) in enumerate(zip(frame_nums, unix_times)):
+        frame = np.full((height, width), fill_value=rfi % 256, dtype=np.uint8)
+        writer.write_frame(frame)
+        rows.append(
+            {
+                "linked_list": 0,
+                "frame_num": fn,
+                "buffer_count": rfi,
+                "frame_buffer_count": 1,
+                "write_buffer_count": rfi,
+                "dropped_buffer_count": 0,
+                "timestamp": int(ut * 1000),
+                "pixel_count": width * height,
+                "write_timestamp": 0,
+                "battery_voltage_raw": 0,
+                "input_voltage_raw": 0,
+                "buffer_recv_index": rfi,
+                "buffer_recv_unix_time": ut,
+                "black_padding_px": 0,
+                "reconstructed_frame_index": rfi,
+            }
+        )
+    writer.close()
+    pd.DataFrame(rows).to_csv(csv_path, index=False)
+    return RecordingData(video_path=video_path, csv_path=csv_path)
+
+
+def test_detect_segments_no_reboot():
+    """A recording without reboots has a single segment."""
+    md = pd.DataFrame(
+        {
+            "frame_num": [10, 11, 12, 13],
+            "buffer_recv_unix_time": [1.0, 1.05, 1.1, 1.15],
+        }
+    )
+    segs = _detect_segments(md)
+    assert len(segs) == 1
+    assert segs[0]["fns"] == [10, 11, 12, 13]
+    assert segs[0]["row_start"] == 0
+    assert segs[0]["row_end"] == 4
+
+
+def test_detect_segments_with_reboot():
+    """A frame_num drop is detected as a reboot boundary."""
+    md = pd.DataFrame(
+        {
+            "frame_num": [10, 11, 12, 0, 1, 2],
+            "buffer_recv_unix_time": [1.0, 1.05, 1.1, 2.0, 2.05, 2.1],
+        }
+    )
+    segs = _detect_segments(md)
+    assert len(segs) == 2
+    assert segs[0]["fns"] == [10, 11, 12]
+    assert segs[1]["fns"] == [0, 1, 2]
+    assert segs[0]["row_end"] == 3
+    assert segs[1]["row_start"] == 3
+
+
+def test_detect_segments_with_duplicate_frame_nums():
+    """Same frame_nums before and after reboot are detected as two segments."""
+    md = pd.DataFrame(
+        {
+            "frame_num": [10, 11, 12, 10, 11, 12],
+            "buffer_recv_unix_time": [1.0, 1.05, 1.1, 2.0, 2.05, 2.1],
+        }
+    )
+    segs = _detect_segments(md)
+    assert len(segs) == 2
+    assert segs[0]["fns"] == [10, 11, 12]
+    assert segs[1]["fns"] == [10, 11, 12]
+
+
+def test_fuzzy_remap_single_reboot(tmp_path):
+    """Fuzzy remap offsets post-reboot frame_nums so they continue monotonically."""
+    # Recording with reboot: frames 10,11,12 then reboot to 0,1,2
+    rec = _make_synthetic_recording(
+        tmp_path,
+        "rec",
+        frame_nums=[10, 11, 12, 0, 1, 2],
+        unix_times=[1.0, 1.05, 1.1, 2.0, 2.05, 2.1],
+    )
+    fuzzy_remap_frame_nums([rec])
+
+    remapped = list(rec.metadata["frame_num"])
+    # Pre-reboot frame_nums unchanged
+    assert remapped[:3] == [10, 11, 12]
+    # Post-reboot frame_nums are offset above 12
+    assert all(fn > 12 for fn in remapped[3:])
+    # Post-reboot frame_nums are monotonically increasing
+    assert remapped[3] < remapped[4] < remapped[5]
+
+
+def test_fuzzy_remap_consistent_across_recordings(tmp_path):
+    """Two recordings of the same device reboot get the same remapped frame_nums."""
+    rec_a = _make_synthetic_recording(
+        tmp_path,
+        "a",
+        frame_nums=[10, 11, 12, 0, 1, 2],
+        unix_times=[1.0, 1.05, 1.1, 2.0, 2.05, 2.1],
+    )
+    rec_b = _make_synthetic_recording(
+        tmp_path,
+        "b",
+        frame_nums=[10, 11, 12, 0, 1, 2],
+        unix_times=[1.0, 1.05, 1.1, 2.0, 2.05, 2.1],
+    )
+    fuzzy_remap_frame_nums([rec_a, rec_b])
+
+    fns_a = list(rec_a.metadata["frame_num"])
+    fns_b = list(rec_b.metadata["frame_num"])
+    assert fns_a == fns_b
+
+
+def test_fuzzy_remap_no_reboot_is_noop(tmp_path):
+    """When there are no reboots, fuzzy remap leaves frame_nums unchanged."""
+    rec = _make_synthetic_recording(
+        tmp_path,
+        "rec",
+        frame_nums=[10, 11, 12, 13],
+        unix_times=[1.0, 1.05, 1.1, 1.15],
+    )
+    original_fns = list(rec.metadata["frame_num"])
+    fuzzy_remap_frame_nums([rec])
+    assert list(rec.metadata["frame_num"]) == original_fns
+
+
+def test_fuzzy_stitch_end_to_end(tmp_path):
+    """Full fuzzy stitch across a reboot produces a contiguous output."""
+    # Two recordings that both see the same reboot
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    rec_a = _make_synthetic_recording(
+        tmp_path / "a",
+        "vid",
+        frame_nums=[100, 101, 102, 0, 1, 2],
+        unix_times=[1.0, 1.05, 1.1, 2.0, 2.05, 2.1],
+    )
+    rec_b = _make_synthetic_recording(
+        tmp_path / "b",
+        "vid",
+        frame_nums=[100, 101, 102, 0, 1, 2],
+        unix_times=[1.0, 1.05, 1.1, 2.0, 2.05, 2.1],
+    )
+
+    out_video = tmp_path / "stitched.avi"
+    out_csv = tmp_path / "stitched.csv"
+
+    bundle = RecordingDataBundle(
+        recordings=[rec_a, rec_b],
+        stitched_video_writer=VideoWriter(path=out_video, fps=20),
+        combined_csv_path=out_csv,
+        fuzzy=True,
+    )
+    bundle.stitch_recordings()
+
+    # Should have 6 frames (3 pre-reboot + 3 post-reboot)
+    cap = cv2.VideoCapture(str(out_video))
+    assert int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) == 6
+    cap.release()
+
+    # reconstructed_frame_index should be contiguous 0..5
+    df = pd.read_csv(out_csv)
+    indices = sorted(df["reconstructed_frame_index"].unique())
+    assert indices == list(range(6))
+
+
+def test_fuzzy_stitch_without_flag_merges_duplicates(tmp_path):
+    """Without fuzzy, duplicate frame_nums from a reboot are merged (wrong behavior)."""
+    rec = _make_synthetic_recording(
+        tmp_path,
+        "rec",
+        frame_nums=[10, 11, 12, 10, 11, 12],
+        unix_times=[1.0, 1.05, 1.1, 2.0, 2.05, 2.1],
+    )
+
+    out_video = tmp_path / "stitched.avi"
+    out_csv = tmp_path / "stitched.csv"
+
+    bundle = RecordingDataBundle(
+        recordings=[rec],
+        stitched_video_writer=VideoWriter(path=out_video, fps=20),
+        combined_csv_path=out_csv,
+        fuzzy=False,
+    )
+    bundle.stitch_recordings()
+
+    # Without fuzzy: only 3 unique frame_nums (duplicates merged)
+    cap = cv2.VideoCapture(str(out_video))
+    assert int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) == 3
+    cap.release()
+
+
+def test_fuzzy_stitch_with_flag_preserves_all_frames(tmp_path):
+    """With fuzzy, duplicate frame_nums from a reboot become unique -> all 6 frames."""
+    rec = _make_synthetic_recording(
+        tmp_path,
+        "rec",
+        frame_nums=[10, 11, 12, 10, 11, 12],
+        unix_times=[1.0, 1.05, 1.1, 2.0, 2.05, 2.1],
+    )
+
+    out_video = tmp_path / "stitched.avi"
+    out_csv = tmp_path / "stitched.csv"
+
+    bundle = RecordingDataBundle(
+        recordings=[rec],
+        stitched_video_writer=VideoWriter(path=out_video, fps=20),
+        combined_csv_path=out_csv,
+        fuzzy=True,
+    )
+    bundle.stitch_recordings()
+
+    # With fuzzy: all 6 frames preserved
+    cap = cv2.VideoCapture(str(out_video))
+    assert int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) == 6
+    cap.release()
+
+    df = pd.read_csv(out_csv)
+    indices = sorted(df["reconstructed_frame_index"].unique())
+    assert indices == list(range(6))

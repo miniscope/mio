@@ -212,12 +212,20 @@ def crop(
     default=20,
     help="Frames per second for output video.",
 )
+@click.option(
+    "--fuzzy",
+    is_flag=True,
+    default=False,
+    help="Handle device reboots by using unix time to detect frame_num resets "
+    "and remap frame numbers across reboot boundaries.",
+)
 def stitch(
     inputs: tuple,
     output: Optional[str],
     debug_video: Optional[str],
     debug_csv: Optional[str],
     fps: int,
+    fuzzy: bool,
 ) -> None:
     """
     Stitch multiple video recordings into one by selecting the best frame
@@ -248,6 +256,7 @@ def stitch(
         debug_video_writer=debug_video_writer,
         combined_csv_path=output_csv_path,
         debug_csv_path=debug_csv_path,
+        fuzzy=fuzzy,
     )
 
     click.echo(f"Stitching {len(recordings)} recordings...")

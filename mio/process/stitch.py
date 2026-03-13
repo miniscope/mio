@@ -67,6 +67,151 @@ def select_best_candidate(candidates: list[CandidateFrame]) -> tuple[int, bool]:
     return best_idx, is_tie
 
 
+def _detect_segments(metadata: pd.DataFrame) -> list[dict]:
+    """Detect recording segments split by frame_num resets (reboots).
+
+    Operates on the raw row sequence so that repeated frame_nums (post-reboot)
+    are not collapsed.  Returns a list of segment dicts, each with keys:
+
+      - fns: list of unique frame_nums in this segment (in order)
+      - min_time / max_time: unix time bounds for the segment
+      - row_start / row_end: row index range in the DataFrame
+    """
+    fns = metadata["frame_num"].values
+    times = metadata["buffer_recv_unix_time"].values
+
+    # Find row indices where a new segment starts (frame_num drops).
+    # We track the *last new* frame_num to ignore repeated rows for the same frame.
+    boundaries: list[int] = [0]
+    last_new_fn = int(fns[0])
+    for i in range(1, len(fns)):
+        fn_i = int(fns[i])
+        if fn_i != last_new_fn:
+            if fn_i < last_new_fn:
+                boundaries.append(i)
+            last_new_fn = fn_i
+    boundaries.append(len(fns))
+
+    segments: list[dict] = []
+    for j in range(len(boundaries) - 1):
+        start, end = boundaries[j], boundaries[j + 1]
+        seg_fns = list(dict.fromkeys(int(f) for f in fns[start:end]))
+        seg_times = times[start:end]
+        segments.append(
+            {
+                "fns": seg_fns,
+                "min_time": float(seg_times.min()),
+                "max_time": float(seg_times.max()),
+                "row_start": start,
+                "row_end": end,
+            }
+        )
+    return segments
+
+
+def _group_into_epochs(
+    rec_segments: list[list[dict]],
+) -> list[list[dict]]:
+    """Group segments from all recordings into temporal epochs.
+
+    Segments whose time ranges overlap belong to the same epoch.
+    Each segment dict gets ``rec_idx`` and ``seg_idx`` keys added.
+    """
+    flat: list[dict] = []
+    for rec_idx, segs in enumerate(rec_segments):
+        for seg_idx, seg in enumerate(segs):
+            flat.append({**seg, "rec_idx": rec_idx, "seg_idx": seg_idx})
+    flat.sort(key=lambda s: s["min_time"])
+
+    epochs: list[list[dict]] = [[flat[0]]]
+    current_end = flat[0]["max_time"]
+    for seg in flat[1:]:
+        if seg["min_time"] <= current_end:
+            epochs[-1].append(seg)
+            current_end = max(current_end, seg["max_time"])
+        else:
+            epochs.append([seg])
+            current_end = seg["max_time"]
+    return epochs
+
+
+def fuzzy_remap_frame_nums(recordings: list[RecordingData]) -> None:
+    """Remap ``frame_num`` in each recording's metadata to handle device reboots.
+
+    Detects points where ``frame_num`` drops (device reboot), groups temporally
+    overlapping segments into epochs, and shifts post-reboot frame numbers so
+    they are globally unique and monotonically increasing.  Uses
+    ``buffer_recv_unix_time`` to estimate frame gaps during reboot downtime.
+
+    Modifies each recording's :pyattr:`metadata` DataFrame **in-place**.
+    """
+    rec_segments: list[list[dict]] = [_detect_segments(r.metadata) for r in recordings]
+
+    if all(len(segs) == 1 for segs in rec_segments):
+        return  # no reboots detected
+
+    epochs = _group_into_epochs(rec_segments)
+
+    # --- compute a frame_num offset for each epoch ----------------------
+    prev_epoch_max_remapped: int | None = None
+    prev_epoch_max_time: float | None = None
+    prev_epoch_fps: float | None = None
+
+    for epoch_segs in epochs:
+        epoch_min_fn = min(min(s["fns"]) for s in epoch_segs)
+        epoch_max_fn = max(max(s["fns"]) for s in epoch_segs)
+
+        if prev_epoch_max_remapped is None:
+            adjustment = 0
+        else:
+            curr_min_time = min(s["min_time"] for s in epoch_segs)
+            time_gap = curr_min_time - prev_epoch_max_time
+            if prev_epoch_fps is not None and prev_epoch_fps > 0:
+                gap_frames = max(1, round(time_gap * prev_epoch_fps))
+            else:
+                gap_frames = 1
+            adjustment = prev_epoch_max_remapped + gap_frames - epoch_min_fn
+
+        for seg in epoch_segs:
+            seg["adjustment"] = adjustment
+
+        # estimate fps from this epoch for next gap calculation
+        total_frames = sum(len(s["fns"]) for s in epoch_segs) / len(
+            {s["rec_idx"] for s in epoch_segs}
+        )
+        time_span = max(s["max_time"] for s in epoch_segs) - min(
+            s["min_time"] for s in epoch_segs
+        )
+        prev_epoch_fps = total_frames / time_span if time_span > 0 else None
+        prev_epoch_max_remapped = epoch_max_fn + adjustment
+        prev_epoch_max_time = max(s["max_time"] for s in epoch_segs)
+
+    # --- build per-recording lookup and apply ----------------------------
+    #
+    # Because the same original frame_num can appear in multiple segments
+    # (that's the whole point of reboots), we use the row_start/row_end
+    # boundaries from _detect_segments to apply the correct offset.
+
+    flat_lookup: dict[tuple[int, int], int] = {}
+    for epoch_segs in epochs:
+        for seg in epoch_segs:
+            flat_lookup[(seg["rec_idx"], seg["seg_idx"])] = seg["adjustment"]
+
+    for rec_idx, (rec, segs) in enumerate(zip(recordings, rec_segments)):
+        md = rec.metadata
+        new_fns = md["frame_num"].values.copy()
+
+        for seg_idx, seg in enumerate(segs):
+            adj = flat_lookup[(rec_idx, seg_idx)]
+            if adj != 0:
+                start, end = seg["row_start"], seg["row_end"]
+                new_fns[start:end] += adj
+
+        md = md.copy()
+        md["frame_num"] = new_fns
+        rec._metadata = md
+
+
 class RecordingData:
     """Class for a single stream's data (video + metadata)."""
 
@@ -116,11 +261,13 @@ class RecordingDataBundle:
         debug_video_writer: VideoWriter | None = None,
         combined_csv_path: Path | None = None,
         debug_csv_path: Path | None = None,
+        fuzzy: bool = False,
     ) -> None:
         self.recordings: list[RecordingData] = recordings
         self.stitched_video_writer: VideoWriter = stitched_video_writer
         self.debug_video_writer: VideoWriter | None = debug_video_writer
         self.combined_csv_path: Path | None = combined_csv_path
+        self.fuzzy: bool = fuzzy
         self._metadata_parts: list[pd.DataFrame] = []
         self._combined_frame_num: list[int] | None = None
         self._out_frame_index: int = 0
@@ -253,6 +400,8 @@ class RecordingDataBundle:
 
     def stitch_recordings(self) -> None:
         """Stitch recordings by iterating unique frame_nums and selecting the best frame."""
+        if self.fuzzy:
+            fuzzy_remap_frame_nums(self.recordings)
         stitched_writes = 0
         debug_writes = 0
         frame_iter = tqdm(self.combined_frame_num, desc="Stitching frames")
