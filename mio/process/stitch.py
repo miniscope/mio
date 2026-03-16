@@ -197,7 +197,6 @@ class RecordingDataBundle:
                 f"Frames are not the same for frame {frame_num} "
                 f"(Rec {selected_idx} vs Rec {idx}): {diff_pixels} px differ"
             )
-            tqdm.write(msg)
             logger.debug(msg)
 
             if self.debug_video_writer is not None:

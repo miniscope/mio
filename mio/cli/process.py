@@ -227,28 +227,47 @@ def concat(
 
     avi_files = sorted(dir_path.glob("*.avi"), key=_natural_sort_key)
 
-    # Filter to only AVIs that have a companion CSV
-    valid_avis = []
-    for avi in avi_files:
-        csv_path = avi.with_suffix(".csv")
+    def _find_companion_csv(avi_path: Path) -> Optional[Path]:
+        """Find companion CSV, handling name mismatches like long-8-002.avi -> long-8.csv."""
+        # Try exact stem match first
+        csv_path = avi_path.with_suffix(".csv")
         if csv_path.exists():
-            valid_avis.append(avi)
+            return csv_path
+        # Try stripping trailing numeric suffixes: long-8-002.avi -> long-8.csv
+        stem = avi_path.stem
+        stripped = re.sub(r"-\d+$", "", stem)
+        while stripped != stem:
+            csv_path = avi_path.parent / f"{stripped}.csv"
+            if csv_path.exists():
+                return csv_path
+            stem = stripped
+            stripped = re.sub(r"-\d+$", "", stem)
+        return None
+
+    # Filter to only AVIs that have a companion CSV
+    valid_pairs: list[tuple[Path, Path]] = []
+    for avi in avi_files:
+        csv_path = _find_companion_csv(avi)
+        if csv_path is not None:
+            valid_pairs.append((avi, csv_path))
         else:
             click.echo(f"  Skipping {avi.name} (no companion .csv found)")
 
-    if len(valid_avis) < 2:
+    if len(valid_pairs) < 2:
         raise click.ClickException(
             f"Need at least 2 .avi files with companion .csv files in {directory}, "
-            f"found {len(valid_avis)}."
+            f"found {len(valid_pairs)}."
         )
 
-    click.echo(f"Found {len(valid_avis)} segments in {directory}:")
-    for avi in valid_avis:
-        click.echo(f"  {avi.name}")
+    click.echo(f"Found {len(valid_pairs)} segments in {directory}:")
+    for avi, csv in valid_pairs:
+        click.echo(f"  {avi.name} -> {csv.name}")
 
-    recordings = RecordingData.from_video_paths(valid_avis)
+    recordings = [
+        RecordingData(video_path=avi, csv_path=csv) for avi, csv in valid_pairs
+    ]
 
-    first_input_path = valid_avis[0]
+    first_input_path = valid_pairs[0][0]
     output_arg = output if output is not None else DEFAULT_PROCESS_DIR
     combined_video_path = resolve_output_path(first_input_path, "_combined", output_arg)
     combined_csv_path = combined_video_path.with_suffix(".csv")
