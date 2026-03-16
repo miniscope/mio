@@ -251,20 +251,133 @@ class RecordingDataBundle:
                 self.combined_csv_path, index=False
             )
 
-    def stitch_recordings(self) -> None:
-        """Stitch recordings by iterating unique frame_nums and selecting the best frame."""
+    def _build_timestamp_matches(
+        self, threshold_ms: float = 25.0
+    ) -> list[dict[int, int]]:
+        """
+        Match frames across recordings by nearest unix timestamp.
+
+        For each recording, compute per-frame timestamp as the max
+        buffer_recv_unix_time for each reconstructed_frame_index.
+
+        Uses recording[0] as the reference. For each frame in ref,
+        find nearest frame in each other recording within threshold.
+
+        Returns list of dicts: [{rec_idx: reconstructed_frame_index, ...}, ...]
+        One entry per matched frame set, ordered by ref recording's frame order.
+        """
+        threshold_s = threshold_ms / 1000.0
+
+        # Build per-frame timestamp arrays for each recording
+        per_rec_timestamps: list[tuple[np.ndarray, np.ndarray]] = []
+        for rec in self.recordings:
+            df = rec.metadata
+            grouped = df.groupby("reconstructed_frame_index")["buffer_recv_unix_time"].max()
+            frame_indices = grouped.index.values
+            timestamps = grouped.values
+            sort_order = np.argsort(timestamps)
+            per_rec_timestamps.append((frame_indices[sort_order], timestamps[sort_order]))
+
+        ref_indices, ref_timestamps = per_rec_timestamps[0]
+        matches: list[dict[int, int]] = []
+
+        for i, (ref_idx, ref_ts) in enumerate(zip(ref_indices, ref_timestamps)):
+            match: dict[int, int] = {0: int(ref_idx)}
+            for rec_num in range(1, len(self.recordings)):
+                other_indices, other_timestamps = per_rec_timestamps[rec_num]
+                pos = np.searchsorted(other_timestamps, ref_ts)
+
+                best_dist = float("inf")
+                best_idx = -1
+                for candidate_pos in [pos - 1, pos]:
+                    if 0 <= candidate_pos < len(other_timestamps):
+                        dist = abs(other_timestamps[candidate_pos] - ref_ts)
+                        if dist < best_dist:
+                            best_dist = dist
+                            best_idx = int(other_indices[candidate_pos])
+
+                if best_dist <= threshold_s:
+                    match[rec_num] = best_idx
+
+            if len(match) > 1:
+                matches.append(match)
+
+        return matches
+
+    def _collect_candidates_by_index(
+        self, frame_indices: dict[int, int]
+    ) -> list[CandidateFrame]:
+        """Collect candidates using reconstructed_frame_index directly."""
+        candidates: list[CandidateFrame] = []
+        for rec_num, rfi in frame_indices.items():
+            recording = self.recordings[rec_num]
+            rows = recording.metadata[recording.metadata["reconstructed_frame_index"] == rfi]
+            if rows.empty:
+                continue
+            frame = recording.video_reader.read_frame(rfi)
+            if frame is None:
+                continue
+            num_buffers = int(len(rows))
+            sum_black = int(rows["black_padding_px"].fillna(0).sum())
+            candidates.append(
+                CandidateFrame(
+                    recording=recording,
+                    frame=frame,
+                    num_buffers=num_buffers,
+                    sum_black_padding=sum_black,
+                    metadata_rows=rows,
+                    edge_score=score_edges(frame),
+                )
+            )
+        return candidates
+
+    def stitch_recordings(
+        self,
+        matching_method: str = "frame_num",
+        timestamp_threshold_ms: float = 25.0,
+    ) -> None:
+        """Stitch recordings by selecting the best frame per matched position.
+
+        Parameters
+        ----------
+        matching_method : str
+            ``"frame_num"`` (default) matches by device frame_num.
+            ``"timestamp"`` matches by nearest ``buffer_recv_unix_time``.
+        timestamp_threshold_ms : float
+            Max time difference in ms for timestamp matching (default 25).
+        """
         stitched_writes = 0
         debug_writes = 0
-        frame_iter = tqdm(self.combined_frame_num, desc="Stitching frames")
 
-        for frame_num in frame_iter:
-            valid_pairs = self._collect_candidates(frame_num)
-            if not valid_pairs:
-                continue
-            selected_idx, is_tie = select_best_candidate(valid_pairs)
-            debug_writes += self._write_debug(frame_num, valid_pairs, selected_idx, is_tie)
-            self._write_stitched(valid_pairs, selected_idx)
-            stitched_writes += 1
+        if matching_method == "timestamp":
+            matches = self._build_timestamp_matches(
+                threshold_ms=timestamp_threshold_ms
+            )
+            frame_iter = tqdm(matches, desc="Stitching frames (timestamp)")
+            for match in frame_iter:
+                candidates = self._collect_candidates_by_index(match)
+                if not candidates:
+                    continue
+                selected_idx, is_tie = select_best_candidate(candidates)
+                # Use first recording's frame index as label for debug
+                frame_label = match.get(0, 0)
+                debug_writes += self._write_debug(
+                    frame_label, candidates, selected_idx, is_tie
+                )
+                self._write_stitched(candidates, selected_idx)
+                stitched_writes += 1
+        else:
+            frame_iter = tqdm(self.combined_frame_num, desc="Stitching frames")
+            for frame_num in frame_iter:
+                valid_pairs = self._collect_candidates(frame_num)
+                if not valid_pairs:
+                    continue
+                selected_idx, is_tie = select_best_candidate(valid_pairs)
+                debug_writes += self._write_debug(
+                    frame_num, valid_pairs, selected_idx, is_tie
+                )
+                self._write_stitched(valid_pairs, selected_idx)
+                stitched_writes += 1
 
         self._finalize()
         logger.info(

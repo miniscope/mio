@@ -357,6 +357,44 @@ def test_edge_scoring_selects_less_sharp():
     assert score_edges(uniform) > score_edges(edgy)
 
 
+def test_stitch_timestamp_matching(tmp_path):
+    """Timestamp matching produces a valid stitched output on real fixtures."""
+    recordings = [
+        RecordingData(
+            video_path=STITCH_DATA_DIR / "video1.avi",
+            csv_path=STITCH_DATA_DIR / "video1.csv",
+        ),
+        RecordingData(
+            video_path=STITCH_DATA_DIR / "video2.avi",
+            csv_path=STITCH_DATA_DIR / "video2.csv",
+        ),
+    ]
+
+    stitched_video = tmp_path / "stitched.avi"
+    stitched_csv = tmp_path / "stitched.csv"
+
+    bundle = RecordingDataBundle(
+        recordings=recordings,
+        stitched_video_writer=VideoWriter(path=stitched_video, fps=20),
+        combined_csv_path=stitched_csv,
+    )
+    bundle.stitch_recordings(matching_method="timestamp", timestamp_threshold_ms=25.0)
+
+    # Should produce a non-empty stitched video
+    cap = cv2.VideoCapture(str(stitched_video))
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+    assert frame_count > 0, "Timestamp matching produced no output frames"
+
+    # Stitched CSV should exist and have contiguous reconstructed_frame_index
+    df = pd.read_csv(stitched_csv)
+    indices = sorted(df["reconstructed_frame_index"].unique())
+    assert indices == list(range(len(indices)))
+
+    # Frame count should be similar to frame_num matching (within 20%)
+    assert abs(frame_count - EXPECTED_STITCHED_FRAME_COUNT) / EXPECTED_STITCHED_FRAME_COUNT < 0.2
+
+
 def test_frame_info_majority_vote_rfi():
     """When a frame_num maps to multiple rfi values, majority wins."""
     base = {

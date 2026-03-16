@@ -234,7 +234,7 @@ class BlackAreaDetector(BaseSingleFrameHelper):
         logger.debug(f"Using black pixel threshold: <= {black_pixel_value_threshold}")
         logger.debug(f"Consecutive black pixel threshold: {consecutive_threshold}")
 
-        frame_is_noisy = False  # Track if frame should be discarded
+        noisy_row_count = 0
 
         for y in range(height):
             row = current_frame[y, :]  # Extract row
@@ -246,16 +246,17 @@ class BlackAreaDetector(BaseSingleFrameHelper):
                 else:
                     consecutive_count = 0  # Reset if a non-black pixel is found
 
-                # If we exceed the allowed threshold of consecutive black pixels, discard the frame
+                # If we exceed the allowed threshold of consecutive black pixels, flag the row
                 if consecutive_count >= consecutive_threshold:
                     logger.debug(
                         f"Frame noisy due to {consecutive_count} consecutive black pixels "
                         f"in row {y}."
                     )
                     noisy_mask[y, :] = 1  # Mark row as noisy
-                    frame_is_noisy = True
+                    noisy_row_count += 1
                     break  # No need to check further in this row
 
+        frame_is_noisy = noisy_row_count >= self.config.min_rows
         return frame_is_noisy, noisy_mask
 
 

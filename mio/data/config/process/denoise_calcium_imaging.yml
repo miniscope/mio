@@ -1,0 +1,28 @@
+id: denoise_calcium_imaging
+mio_model: mio.models.process.DenoiseConfig
+mio_version: 0.6.1
+noise_patch:
+  enable: true
+  method: [gradient, black_area]
+  gradient_config:
+    threshold: 20
+  black_area_config:
+    consecutive_threshold: 30
+    value_threshold: 0
+    min_rows: 10
+  output_result: true
+  output_noise_patch: true
+  output_noisy_frames: true
+frequency_masking:
+  enable: true
+  cast_float32: true
+  spatial_LPF_cutoff_radius: 15
+  vertical_BEF_cutoff: 2
+  horizontal_BEF_cutoff: 0
+  output_result: true
+minimum_projection:
+  enable: true
+  normalize: true
+  output_result: true
+end_frame: -1
+output_result: true

@@ -212,12 +212,27 @@ def crop(
     default=20,
     help="Frames per second for output video.",
 )
+@click.option(
+    "--match-by",
+    type=click.Choice(["frame_num", "timestamp"]),
+    default="frame_num",
+    help="Frame matching strategy. 'frame_num' matches by device frame number. "
+    "'timestamp' matches by nearest buffer_recv_unix_time.",
+)
+@click.option(
+    "--timestamp-threshold",
+    type=float,
+    default=25.0,
+    help="Max time difference in ms for timestamp matching (default: 25).",
+)
 def stitch(
     inputs: tuple,
     output: Optional[str],
     debug_video: Optional[str],
     debug_csv: Optional[str],
     fps: int,
+    match_by: str,
+    timestamp_threshold: float,
 ) -> None:
     """
     Stitch multiple video recordings into one by selecting the best frame
@@ -250,8 +265,11 @@ def stitch(
         debug_csv_path=debug_csv_path,
     )
 
-    click.echo(f"Stitching {len(recordings)} recordings...")
-    recording_bundle.stitch_recordings()
+    click.echo(f"Stitching {len(recordings)} recordings (match-by={match_by})...")
+    recording_bundle.stitch_recordings(
+        matching_method=match_by,
+        timestamp_threshold_ms=timestamp_threshold,
+    )
 
     try:
         validate_video_metadata_match(stitched_video_path)
@@ -304,6 +322,19 @@ def stitch(
     default=20,
     help="Frames per second for stitched video.",
 )
+@click.option(
+    "--match-by",
+    type=click.Choice(["frame_num", "timestamp"]),
+    default="frame_num",
+    help="Frame matching strategy for stitching. 'frame_num' matches by device frame number. "
+    "'timestamp' matches by nearest buffer_recv_unix_time.",
+)
+@click.option(
+    "--timestamp-threshold",
+    type=float,
+    default=25.0,
+    help="Max time difference in ms for timestamp matching (default: 25).",
+)
 def workflow(
     inputs: tuple,
     output: Optional[str],
@@ -311,6 +342,8 @@ def workflow(
     trim_start: int,
     trim_end: int,
     fps: int,
+    match_by: str,
+    timestamp_threshold: float,
 ) -> None:
     """
     Complete workflow: stitch → trim → denoise with validation at each step.
@@ -421,8 +454,11 @@ def workflow(
             debug_csv_path=debug_csv_path,
         )
 
-        click.echo(f"Stitching {len(recordings)} recordings...")
-        recording_bundle.stitch_recordings()
+        click.echo(f"Stitching {len(recordings)} recordings (match-by={match_by})...")
+        recording_bundle.stitch_recordings(
+            matching_method=match_by,
+            timestamp_threshold_ms=timestamp_threshold,
+        )
 
         try:
             validate_video_metadata_match(stitched_video_path)

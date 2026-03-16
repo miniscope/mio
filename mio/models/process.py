@@ -101,6 +101,12 @@ class BlackAreaDetectorConfig(BaseModel):
         default=0,
         description="Pixel intensity value below which a pixel is considered 'black'.",
     )
+    min_rows: int = Field(
+        default=1,
+        description="Minimum number of flagged rows required to mark the frame as invalid. "
+        "Default of 1 preserves original behavior. For calcium imaging, values around 10 "
+        "reduce false positives from naturally dark regions.",
+    )
 
 
 class NoisePatchConfig(BaseModel):
