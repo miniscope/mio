@@ -2,6 +2,7 @@
 Command line interface for offline video pre-processing.
 """
 
+import re
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -184,7 +185,7 @@ def crop(
     required=True,
     type=click.Path(exists=True, file_okay=False),
     help="Directory containing .avi segment files. All .avi files with companion "
-    ".csv files will be discovered and sorted by name.",
+    ".csv files will be discovered and sorted in natural numeric order.",
 )
 @click.option(
     "-o",
@@ -216,7 +217,15 @@ def concat(
     from the same DAQ before stitching across DAQs.
     """
     dir_path = Path(directory)
-    avi_files = sorted(dir_path.glob("*.avi"))
+
+    def _natural_sort_key(path: Path) -> list:
+        """Sort by splitting name into text and numeric parts for natural ordering."""
+        return [
+            int(part) if part.isdigit() else part.lower()
+            for part in re.split(r"(\d+)", path.name)
+        ]
+
+    avi_files = sorted(dir_path.glob("*.avi"), key=_natural_sort_key)
 
     # Filter to only AVIs that have a companion CSV
     valid_avis = []
