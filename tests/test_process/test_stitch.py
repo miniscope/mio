@@ -18,6 +18,7 @@ from mio.process.stitch import (
     CandidateFrame,
     RecordingData,
     RecordingDataBundle,
+    concat_recordings,
     select_best_candidate,
     score_edges,
 )
@@ -355,6 +356,55 @@ def test_edge_scoring_selects_less_sharp():
     edgy = np.zeros((50, 50), dtype=np.uint8)
     edgy[:, 25:] = 255
     assert score_edges(uniform) > score_edges(edgy)
+
+
+def test_concat_recordings(tmp_path):
+    """Concatenating two recordings produces contiguous frame indices and correct frame count."""
+    recordings = [
+        RecordingData(
+            video_path=STITCH_DATA_DIR / "video1.avi",
+            csv_path=STITCH_DATA_DIR / "video1.csv",
+        ),
+        RecordingData(
+            video_path=STITCH_DATA_DIR / "video2.avi",
+            csv_path=STITCH_DATA_DIR / "video2.csv",
+        ),
+    ]
+
+    combined_video = tmp_path / "combined.avi"
+    combined_csv = tmp_path / "combined.csv"
+
+    concat_recordings(
+        recordings=recordings,
+        output_video_path=combined_video,
+        output_csv_path=combined_csv,
+        fps=20,
+    )
+
+    # Video frame count should be sum of both inputs
+    cap1 = cv2.VideoCapture(str(STITCH_DATA_DIR / "video1.avi"))
+    cap2 = cv2.VideoCapture(str(STITCH_DATA_DIR / "video2.avi"))
+    expected_frames = int(cap1.get(cv2.CAP_PROP_FRAME_COUNT)) + int(
+        cap2.get(cv2.CAP_PROP_FRAME_COUNT)
+    )
+    cap1.release()
+    cap2.release()
+
+    cap = cv2.VideoCapture(str(combined_video))
+    actual_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap.release()
+    assert actual_frames == expected_frames
+
+    # CSV should have contiguous reconstructed_frame_index
+    df = pd.read_csv(combined_csv)
+    indices = sorted(df["reconstructed_frame_index"].unique())
+    assert indices == list(range(len(indices)))
+
+    # Second segment's rfi should start after first segment's max rfi
+    df1 = pd.read_csv(STITCH_DATA_DIR / "video1.csv")
+    max_rfi_1 = df1["reconstructed_frame_index"].max()
+    # Combined CSV should have indices beyond max_rfi_1
+    assert df["reconstructed_frame_index"].max() > max_rfi_1
 
 
 def test_stitch_timestamp_matching(tmp_path):

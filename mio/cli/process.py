@@ -12,7 +12,7 @@ from mio.exceptions import VideoMetadataError
 from mio.io import VideoWriter
 from mio.logging import init_logger
 from mio.models.process import DenoiseConfig
-from mio.process.stitch import RecordingData, RecordingDataBundle
+from mio.process.stitch import RecordingData, RecordingDataBundle, concat_recordings
 from mio.process.video import crop_run, denoise_run
 from mio.utils import (
     DEFAULT_PROCESS_DIR,
@@ -175,6 +175,90 @@ def crop(
     except VideoMetadataError as e:
         raise click.ClickException(f"Frame count alignment failed after cropping: {e}") from None
     click.echo(f"✅ Frame count alignment verified: {cropped_output}")
+
+
+@process.command()
+@click.option(
+    "-d",
+    "--directory",
+    required=True,
+    type=click.Path(exists=True, file_okay=False),
+    help="Directory containing .avi segment files. All .avi files with companion "
+    ".csv files will be discovered and sorted by name.",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(),
+    default=None,
+    help="Path to the output concatenated video file or directory. "
+    f"If not specified, saves to {DEFAULT_PROCESS_DIR}/ with '_combined' suffix.",
+)
+@click.option(
+    "--fps",
+    type=int,
+    default=20,
+    help="Frames per second for output video.",
+)
+def concat(
+    directory: str,
+    output: Optional[str],
+    fps: int,
+) -> None:
+    """
+    Concatenate sequential recording segments from one DAQ into a single video.
+
+    Discovers all .avi files in the given directory (that have companion .csv files),
+    sorts them by filename, and concatenates them into a single video + CSV with
+    contiguous reconstructed_frame_index.
+
+    Use this to combine multiple segment files (e.g. long-2.avi, long-3.avi, ...)
+    from the same DAQ before stitching across DAQs.
+    """
+    dir_path = Path(directory)
+    avi_files = sorted(dir_path.glob("*.avi"))
+
+    # Filter to only AVIs that have a companion CSV
+    valid_avis = []
+    for avi in avi_files:
+        csv_path = avi.with_suffix(".csv")
+        if csv_path.exists():
+            valid_avis.append(avi)
+        else:
+            click.echo(f"  Skipping {avi.name} (no companion .csv found)")
+
+    if len(valid_avis) < 2:
+        raise click.ClickException(
+            f"Need at least 2 .avi files with companion .csv files in {directory}, "
+            f"found {len(valid_avis)}."
+        )
+
+    click.echo(f"Found {len(valid_avis)} segments in {directory}:")
+    for avi in valid_avis:
+        click.echo(f"  {avi.name}")
+
+    recordings = RecordingData.from_video_paths(valid_avis)
+
+    first_input_path = valid_avis[0]
+    output_arg = output if output is not None else DEFAULT_PROCESS_DIR
+    combined_video_path = resolve_output_path(first_input_path, "_combined", output_arg)
+    combined_csv_path = combined_video_path.with_suffix(".csv")
+
+    click.echo(f"Concatenating {len(recordings)} segments...")
+    concat_recordings(
+        recordings=recordings,
+        output_video_path=combined_video_path,
+        output_csv_path=combined_csv_path,
+        fps=fps,
+    )
+
+    try:
+        validate_video_metadata_match(combined_video_path)
+    except VideoMetadataError as e:
+        raise click.ClickException(
+            f"Frame count alignment failed after concatenation: {e}"
+        ) from None
+    click.echo(f"✅ Frame count alignment verified: {combined_video_path}")
 
 
 @process.command()

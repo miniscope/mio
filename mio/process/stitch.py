@@ -1,8 +1,9 @@
 """
-Buffer-wise stitching of multiple data streams based on device timestamps.
+Buffer-wise stitching and concatenation of multiple data streams.
 
 This module combines multiple recordings (AVI video + metadata CSV) by selecting
 the best buffers from each stream using gradient noise detection.
+It also provides concatenation of sequential recording segments from the same DAQ.
 This is still hardcoded around the StreamDevConfig metadata fields.
 """
 
@@ -383,3 +384,62 @@ class RecordingDataBundle:
         logger.info(
             f"Stitch completed: stitched_writes={stitched_writes}, debug_writes={debug_writes}"
         )
+
+
+def concat_recordings(
+    recordings: list[RecordingData],
+    output_video_path: Path,
+    output_csv_path: Path,
+    fps: int = 20,
+) -> None:
+    """Concatenate sequential recording segments into a single video + CSV.
+
+    Each recording's frames are appended in order. The CSV metadata is merged
+    with ``reconstructed_frame_index`` renumbered to be contiguous across all
+    segments.
+
+    Parameters
+    ----------
+    recordings : list[RecordingData]
+        Ordered list of recording segments to concatenate.
+    output_video_path : Path
+        Path for the combined output AVI.
+    output_csv_path : Path
+        Path for the combined output CSV.
+    fps : int
+        Frames per second for the output video.
+    """
+    video_writer = VideoWriter(path=output_video_path, fps=fps)
+    metadata_parts: list[pd.DataFrame] = []
+    rfi_offset = 0
+    total_frames = 0
+
+    for i, rec in enumerate(tqdm(recordings, desc="Concatenating segments")):
+        # Copy all video frames
+        seg_frames = 0
+        for _, frame in rec.video_reader.read_frames():
+            video_writer.write_frame(frame)
+            seg_frames += 1
+
+        # Offset reconstructed_frame_index in metadata
+        df = rec.metadata.copy()
+        max_rfi = int(df["reconstructed_frame_index"].max())
+        df["reconstructed_frame_index"] = df["reconstructed_frame_index"] + rfi_offset
+        metadata_parts.append(df)
+
+        logger.info(
+            f"Segment {i}: {rec.video_path.name} — "
+            f"{seg_frames} frames, rfi_offset={rfi_offset}"
+        )
+        rfi_offset += max_rfi + 1
+        total_frames += seg_frames
+
+    video_writer.close()
+
+    combined_df = pd.concat(metadata_parts, ignore_index=True)
+    combined_df.to_csv(output_csv_path, index=False)
+
+    logger.info(
+        f"Concat completed: {total_frames} frames from "
+        f"{len(recordings)} segments -> {output_video_path}"
+    )
