@@ -14,6 +14,9 @@ noise_patch:
   output_noise_patch: true
   output_noisy_frames: true
 frequency_masking:
+  id: frequency_masking_calcium_imaging
+  mio_model: mio.models.process.FrequencyMaskingConfig
+  mio_version: 0.6.1
   enable: true
   cast_float32: true
   spatial_LPF_cutoff_radius: 15
