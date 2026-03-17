@@ -215,47 +215,34 @@ class BlackAreaDetector(BaseSingleFrameHelper):
         current_frame: np.ndarray,
     ) -> Tuple[bool, np.ndarray]:
         """
-        Detect black-out noise by checking for black pixels (value 0) over rows of pixels.
+        Detect black-out noise by checking for consecutive black pixels per row.
+
+        Uses vectorized numpy (cumulative sum sliding window) instead of
+        pixel-by-pixel Python loops for ~100x speedup.
 
         Returns:
             Tuple[bool, np.ndarray]: A boolean indicating if the frame is corrupted and noise mask.
         """
-        height, width = current_frame.shape
+        consecutive_threshold = self.config.consecutive_threshold
+        black_pixel_value_threshold = self.config.value_threshold
+
+        # Boolean mask of "black" pixels, then cumsum-based sliding window
+        black_mask = (current_frame <= black_pixel_value_threshold).astype(np.float32)
+        cs = np.cumsum(black_mask, axis=1)
+
+        if current_frame.shape[1] >= consecutive_threshold:
+            # Sliding window: sum of `consecutive_threshold` consecutive pixels
+            run_sum = cs[:, consecutive_threshold:] - cs[:, :-consecutive_threshold]
+            # A row has a run if any window sums to exactly consecutive_threshold
+            # (meaning all pixels in that window were black)
+            row_has_run = np.any(run_sum >= consecutive_threshold, axis=1)
+        else:
+            row_has_run = np.zeros(current_frame.shape[0], dtype=bool)
+
         noisy_mask = np.zeros_like(current_frame, dtype=np.uint8)
+        noisy_mask[row_has_run, :] = 1
 
-        # Read values from YAML config
-        consecutive_threshold = (
-            self.config.consecutive_threshold
-        )  # How many consecutive pixels must be black
-        black_pixel_value_threshold = (
-            self.config.value_threshold
-        )  # Max pixel value considered "black"
-
-        logger.debug(f"Using black pixel threshold: <= {black_pixel_value_threshold}")
-        logger.debug(f"Consecutive black pixel threshold: {consecutive_threshold}")
-
-        noisy_row_count = 0
-
-        for y in range(height):
-            row = current_frame[y, :]  # Extract row
-            consecutive_count = 0  # Counter for consecutive black pixels
-
-            for x in range(width):
-                if row[x] <= black_pixel_value_threshold:  # Check if pixel is "black"
-                    consecutive_count += 1
-                else:
-                    consecutive_count = 0  # Reset if a non-black pixel is found
-
-                # If we exceed the allowed threshold of consecutive black pixels, flag the row
-                if consecutive_count >= consecutive_threshold:
-                    logger.debug(
-                        f"Frame noisy due to {consecutive_count} consecutive black pixels "
-                        f"in row {y}."
-                    )
-                    noisy_mask[y, :] = 1  # Mark row as noisy
-                    noisy_row_count += 1
-                    break  # No need to check further in this row
-
+        noisy_row_count = int(np.sum(row_has_run))
         frame_is_noisy = noisy_row_count >= self.config.min_rows
         return frame_is_noisy, noisy_mask
 

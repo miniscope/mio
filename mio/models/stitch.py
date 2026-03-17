@@ -69,6 +69,9 @@ class DebugRecord(BaseModel):
     selected_edge_score: float
     compare_edge_score: float
     metadata_tie: bool
+    selection_mode: str = "metadata"
+    selected_is_noisy: bool | None = None
+    compare_is_noisy: bool | None = None
 
     @classmethod
     def header(cls) -> List[str]:

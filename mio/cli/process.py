@@ -12,7 +12,7 @@ import click
 from mio.exceptions import VideoMetadataError
 from mio.io import VideoWriter
 from mio.logging import init_logger
-from mio.models.process import DenoiseConfig
+from mio.models.process import DenoiseConfig, NoisePatchConfig
 from mio.process.stitch import RecordingData, RecordingDataBundle, concat_recordings
 from mio.process.video import crop_run, denoise_run
 from mio.utils import (
@@ -337,6 +337,27 @@ def concat(
     default=25.0,
     help="Max time difference in ms for timestamp matching (default: 25).",
 )
+@click.option(
+    "--max-frames",
+    type=int,
+    default=-1,
+    help="Maximum number of frames to process. -1 means all frames. "
+    "Useful for quick test runs.",
+)
+@click.option(
+    "--selection-mode",
+    type=click.Choice(["metadata", "noise_aware"]),
+    default="metadata",
+    help="Frame selection strategy. 'metadata' uses buffer count + edge scoring (default). "
+    "'noise_aware' uses noise detection to pick clean frames and skip both-bad pairs.",
+)
+@click.option(
+    "--noise-config",
+    type=str,
+    default=None,
+    help="Denoise config ID or YAML path for noise detection (used with --selection-mode noise_aware). "
+    "Uses the noise_patch section from the config.",
+)
 def stitch(
     inputs: tuple,
     output: Optional[str],
@@ -345,6 +366,9 @@ def stitch(
     fps: int,
     match_by: str,
     timestamp_threshold: float,
+    max_frames: int,
+    selection_mode: str,
+    noise_config: Optional[str],
 ) -> None:
     """
     Stitch multiple video recordings into one by selecting the best frame
@@ -354,6 +378,16 @@ def stitch(
     """
     if len(inputs) < 2:
         raise click.ClickException("At least 2 input videos are required for stitching.")
+
+    noise_patch_config = None
+    if selection_mode == "noise_aware":
+        if noise_config is None:
+            raise click.ClickException(
+                "--noise-config is required when using --selection-mode noise_aware"
+            )
+        denoise_cfg = DenoiseConfig.from_any(noise_config)
+        noise_patch_config = denoise_cfg.noise_patch
+        click.echo(f"Noise-aware selection enabled (methods: {noise_patch_config.method})")
 
     recordings = RecordingData.from_video_paths([Path(p) for p in inputs])
 
@@ -369,18 +403,28 @@ def stitch(
     stitched_video_writer = VideoWriter(path=stitched_video_path, fps=fps)
     debug_video_writer = VideoWriter(path=debug_video_path, fps=fps) if debug_video_path else None
 
+    # Set up debug dir for noise report when using noise_aware
+    stitch_debug_dir = None
+    if noise_patch_config is not None:
+        stitch_debug_dir = stitched_video_path.parent / "debug"
+        stitch_debug_dir.mkdir(parents=True, exist_ok=True)
+
     recording_bundle = RecordingDataBundle(
         recordings=recordings,
         stitched_video_writer=stitched_video_writer,
         debug_video_writer=debug_video_writer,
         combined_csv_path=output_csv_path,
         debug_csv_path=debug_csv_path,
+        noise_config=noise_patch_config,
+        debug_dir=stitch_debug_dir,
+        fps=fps,
     )
 
     click.echo(f"Stitching {len(recordings)} recordings (match-by={match_by})...")
     recording_bundle.stitch_recordings(
         matching_method=match_by,
         timestamp_threshold_ms=timestamp_threshold,
+        max_frames=max_frames,
     )
 
     try:
@@ -447,6 +491,20 @@ def stitch(
     default=25.0,
     help="Max time difference in ms for timestamp matching (default: 25).",
 )
+@click.option(
+    "--max-frames",
+    type=int,
+    default=-1,
+    help="Maximum number of frames to process during stitching. -1 means all frames. "
+    "Useful for quick test runs.",
+)
+@click.option(
+    "--selection-mode",
+    type=click.Choice(["metadata", "noise_aware"]),
+    default="metadata",
+    help="Frame selection strategy for stitching. 'metadata' uses buffer count + edge scoring (default). "
+    "'noise_aware' uses noise detection to pick clean frames and skip both-bad pairs.",
+)
 def workflow(
     inputs: tuple,
     output: Optional[str],
@@ -456,6 +514,8 @@ def workflow(
     fps: int,
     match_by: str,
     timestamp_threshold: float,
+    max_frames: int,
+    selection_mode: str,
 ) -> None:
     """
     Complete workflow: stitch → trim → denoise with validation at each step.
@@ -558,18 +618,29 @@ def workflow(
         stitched_video_writer = VideoWriter(path=stitched_video_path, fps=fps)
         debug_video_writer = VideoWriter(path=debug_video_path, fps=fps)
 
+        # For noise_aware selection, extract noise_patch config from the denoise config
+        noise_patch_config = None
+        if selection_mode == "noise_aware":
+            denoise_config_parsed_early = DenoiseConfig.from_any(denoise_config)
+            noise_patch_config = denoise_config_parsed_early.noise_patch
+            click.echo(f"Noise-aware selection enabled (methods: {noise_patch_config.method})")
+
         recording_bundle = RecordingDataBundle(
             recordings=recordings,
             stitched_video_writer=stitched_video_writer,
             debug_video_writer=debug_video_writer,
             combined_csv_path=output_csv_path,
             debug_csv_path=debug_csv_path,
+            noise_config=noise_patch_config,
+            debug_dir=debug_dir if noise_patch_config is not None else None,
+            fps=fps,
         )
 
         click.echo(f"Stitching {len(recordings)} recordings (match-by={match_by})...")
         recording_bundle.stitch_recordings(
             matching_method=match_by,
             timestamp_threshold_ms=timestamp_threshold,
+            max_frames=max_frames,
         )
 
         try:

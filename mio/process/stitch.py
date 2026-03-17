@@ -19,7 +19,9 @@ from tqdm import tqdm
 
 from mio.io import BufferedCSVWriter, VideoReader, VideoWriter
 from mio.logging import init_logger
+from mio.models.process import NoisePatchConfig
 from mio.models.stitch import DebugRecord, FrameInfo
+from mio.process.frame_helper import InvalidFrameDetector
 
 logger = init_logger(name="stitch")
 
@@ -41,6 +43,7 @@ class CandidateFrame:
     sum_black_padding: int
     metadata_rows: pd.DataFrame
     edge_score: float
+    is_noisy: bool | None = None
 
     @property
     def metadata_score(self) -> tuple[int, int]:
@@ -66,6 +69,30 @@ def select_best_candidate(candidates: list[CandidateFrame]) -> tuple[int, bool]:
         tied_scores = [candidates[i].edge_score for i in tied]
         best_idx = tied[int(np.argmax(tied_scores))]
     return best_idx, is_tie
+
+
+def select_best_candidate_noise_aware(
+    candidates: list[CandidateFrame],
+) -> tuple[int, bool] | None:
+    """
+    Pick the best candidate using noise detection results.
+
+    Returns (best_index, was_tie) or None if all candidates are noisy (skip frame).
+
+    Logic:
+    - If all candidates are noisy, return None (skip this frame)
+    - If exactly one is clean, pick it
+    - If multiple are clean, fall back to metadata scoring among clean ones
+    """
+    clean = [i for i, c in enumerate(candidates) if not c.is_noisy]
+    if not clean:
+        return None
+    if len(clean) == 1:
+        return clean[0], False
+    # Multiple clean candidates — use metadata scoring among them
+    clean_candidates = [candidates[i] for i in clean]
+    best_among_clean, was_tie = select_best_candidate(clean_candidates)
+    return clean[best_among_clean], was_tie
 
 
 class RecordingData:
@@ -117,6 +144,9 @@ class RecordingDataBundle:
         debug_video_writer: VideoWriter | None = None,
         combined_csv_path: Path | None = None,
         debug_csv_path: Path | None = None,
+        noise_config: NoisePatchConfig | None = None,
+        debug_dir: Path | None = None,
+        fps: int = 20,
     ) -> None:
         self.recordings: list[RecordingData] = recordings
         self.stitched_video_writer: VideoWriter = stitched_video_writer
@@ -127,6 +157,27 @@ class RecordingDataBundle:
         self._out_frame_index: int = 0
         self.debug_csv_writer: BufferedCSVWriter | None = None
         self._debug_frame_index: int = 0
+        self._noise_detector: InvalidFrameDetector | None = None
+        self._debug_dir: Path | None = debug_dir
+        self._fps: int = fps
+        # Noise tracking for summary
+        self._per_rec_noisy: list[int] = [0] * len(recordings)
+        self._both_noisy_indices: list[int] = []  # matched position indices
+        self._both_noisy_writer: VideoWriter | None = None
+        self._total_matched: int = 0
+        if noise_config is not None:
+            if "mean_error" in (noise_config.method or []):
+                raise ValueError(
+                    "mean_error detection is not supported during stitching "
+                    "(it requires sequential frames from a single recording). "
+                    "Use only 'gradient' and/or 'black_area' methods."
+                )
+            self._noise_detector = InvalidFrameDetector(noise_config)
+            if debug_dir is not None:
+                debug_dir.mkdir(parents=True, exist_ok=True)
+                self._both_noisy_writer = VideoWriter(
+                    path=debug_dir / "both_broken.avi", fps=fps
+                )
         if debug_csv_path is not None:
             self.debug_csv_writer = BufferedCSVWriter(
                 debug_csv_path, header=DebugRecord.header(), buffer_size=100
@@ -145,9 +196,17 @@ class RecordingDataBundle:
             self._combined_frame_num = combined
         return self._combined_frame_num
 
+    def _detect_noise(self, frame: np.ndarray) -> bool | None:
+        """Run noise detection on a frame if a detector is configured."""
+        if self._noise_detector is None:
+            return None
+        is_noisy, _ = self._noise_detector.find_invalid_area(frame)
+        return is_noisy
+
     def _collect_candidates(self, frame_num: int) -> list[CandidateFrame]:
         """Read frames and metadata scores for all recordings that have *frame_num*."""
         candidates: list[CandidateFrame] = []
+        skip_edge_score = self._noise_detector is not None
         for recording in self.recordings:
             rows = recording.metadata[recording.metadata["frame_num"] == frame_num]
             if rows.empty:
@@ -165,7 +224,8 @@ class RecordingDataBundle:
                     num_buffers=num_buffers,
                     sum_black_padding=sum_black,
                     metadata_rows=rows,
-                    edge_score=score_edges(frame),
+                    edge_score=0.0 if skip_edge_score else score_edges(frame),
+                    is_noisy=self._detect_noise(frame),
                 )
             )
         return candidates
@@ -205,6 +265,7 @@ class RecordingDataBundle:
                 writes += 1
 
             if self.debug_csv_writer is not None:
+                selection_mode = "noise_aware" if self._noise_detector is not None else "metadata"
                 record = DebugRecord(
                     debug_frame_index=self._debug_frame_index,
                     stitched_frame_index=self._out_frame_index,
@@ -219,6 +280,9 @@ class RecordingDataBundle:
                     selected_edge_score=selected.edge_score,
                     compare_edge_score=cand.edge_score,
                     metadata_tie=bool(is_tie),
+                    selection_mode=selection_mode,
+                    selected_is_noisy=selected.is_noisy,
+                    compare_is_noisy=cand.is_noisy,
                 )
                 self.debug_csv_writer.append(record.model_dump())
                 self._debug_frame_index += 1
@@ -246,6 +310,8 @@ class RecordingDataBundle:
             self.debug_video_writer.close()
         if self.debug_csv_writer is not None:
             self.debug_csv_writer.close()
+        if self._both_noisy_writer is not None:
+            self._both_noisy_writer.close()
         if self.combined_csv_path is not None and self._metadata_parts:
             pd.concat(self._metadata_parts, ignore_index=True).to_csv(
                 self.combined_csv_path, index=False
@@ -309,6 +375,7 @@ class RecordingDataBundle:
     ) -> list[CandidateFrame]:
         """Collect candidates using reconstructed_frame_index directly."""
         candidates: list[CandidateFrame] = []
+        skip_edge_score = self._noise_detector is not None
         for rec_num, rfi in frame_indices.items():
             recording = self.recordings[rec_num]
             rows = recording.metadata[recording.metadata["reconstructed_frame_index"] == rfi]
@@ -326,15 +393,121 @@ class RecordingDataBundle:
                     num_buffers=num_buffers,
                     sum_black_padding=sum_black,
                     metadata_rows=rows,
-                    edge_score=score_edges(frame),
+                    edge_score=0.0 if skip_edge_score else score_edges(frame),
+                    is_noisy=self._detect_noise(frame),
                 )
             )
         return candidates
+
+    def _print_noise_summary(
+        self, stitched_writes: int, skipped_both_noisy: int
+    ) -> None:
+        """Print a terminal summary of noise statistics."""
+        total = self._total_matched
+        if total == 0:
+            return
+        fps = self._fps
+        both_pct = 100.0 * skipped_both_noisy / total
+        print(f"\n{'=' * 60}")
+        print("STITCH NOISE SUMMARY")
+        print(f"{'=' * 60}")
+        print(f"  Total matched frames:    {total}")
+        print(f"  Stitched (output):       {stitched_writes} "
+              f"({stitched_writes / fps:.1f}s, {stitched_writes / fps / 3600:.2f}h)")
+        print(f"  Both broken (skipped):   {skipped_both_noisy} "
+              f"({both_pct:.2f}%, {skipped_both_noisy / fps:.1f}s)")
+        for i, rec in enumerate(self.recordings):
+            noisy = self._per_rec_noisy[i]
+            pct = 100.0 * noisy / total if total > 0 else 0
+            print(f"  Rec {i} noisy ({rec.video_path.name}): "
+                  f"{noisy} ({pct:.2f}%)")
+        print(f"{'=' * 60}\n")
+
+    def _generate_noise_report(
+        self, stitched_writes: int, skipped_both_noisy: int
+    ) -> None:
+        """Generate a drop analysis PNG in the debug directory."""
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+        except ImportError:
+            logger.warning("matplotlib not available, skipping noise report plot")
+            return
+
+        if not self._both_noisy_indices and skipped_both_noisy == 0:
+            return
+
+        total = self._total_matched
+        fps = self._fps
+        dropped_indices = np.array(self._both_noisy_indices)
+
+        fig, axes = plt.subplots(3, 1, figsize=(14, 10))
+
+        # Plot 1: Timeline
+        ax1 = axes[0]
+        time_hours = dropped_indices / fps / 3600.0
+        total_hours = total / fps / 3600.0
+        ax1.vlines(time_hours, 0, 1, colors="red", alpha=0.5, linewidth=0.5)
+        ax1.set_xlim(0, total_hours)
+        ax1.set_ylim(0, 1)
+        ax1.set_yticks([])
+        ax1.set_xlabel("Time (hours)")
+        ax1.set_title(
+            f"Both-broken frames timeline "
+            f"({len(dropped_indices)} dropped across {total} total)"
+        )
+
+        # Plot 2: Run length distribution
+        ax2 = axes[1]
+        if len(dropped_indices) > 0:
+            diffs = np.diff(dropped_indices)
+            runs = []
+            current_run = 1
+            for d in diffs:
+                if d == 1:
+                    current_run += 1
+                else:
+                    runs.append(current_run)
+                    current_run = 1
+            runs.append(current_run)
+            max_run = max(runs) if runs else 1
+            bins = range(1, min(max_run + 2, 102))
+            ax2.hist(runs, bins=bins, color="steelblue", edgecolor="black",
+                     linewidth=0.5)
+            ax2.axvline(x=fps, color="red", linestyle="--", alpha=0.7,
+                        label=f"1 second ({fps} frames)")
+            ax2.legend()
+        ax2.set_xlabel("Consecutive dropped frames (run length)")
+        ax2.set_ylabel("Number of events")
+        ax2.set_title(
+            f"Distribution of drop run lengths "
+            f"({len(dropped_indices)} events)"
+        )
+
+        # Plot 3: Drop density (1-minute bins)
+        ax3 = axes[2]
+        time_minutes = dropped_indices / fps / 60.0
+        total_minutes = total / fps / 60.0
+        if total_minutes > 0:
+            bins_minutes = np.arange(0, total_minutes + 1, 1)
+            ax3.hist(time_minutes, bins=bins_minutes, color="orangered",
+                     edgecolor="none", rwidth=0.8)
+        ax3.set_xlabel("Time (minutes)")
+        ax3.set_ylabel("Dropped frames per minute")
+        ax3.set_title("Drop density over time (1-minute bins)")
+
+        plt.tight_layout()
+        out_path = self._debug_dir / "noise_report.png"
+        fig.savefig(str(out_path), dpi=150)
+        plt.close(fig)
+        logger.info(f"Noise report saved to {out_path}")
 
     def stitch_recordings(
         self,
         matching_method: str = "frame_num",
         timestamp_threshold_ms: float = 25.0,
+        max_frames: int = -1,
     ) -> None:
         """Stitch recordings by selecting the best frame per matched position.
 
@@ -345,44 +518,100 @@ class RecordingDataBundle:
             ``"timestamp"`` matches by nearest ``buffer_recv_unix_time``.
         timestamp_threshold_ms : float
             Max time difference in ms for timestamp matching (default 25).
+        max_frames : int
+            Maximum number of frames to write. -1 means all frames.
         """
         stitched_writes = 0
         debug_writes = 0
+        skipped_both_noisy = 0
+        use_noise_aware = self._noise_detector is not None
+        match_position = 0
+
+        def _select(candidates: list[CandidateFrame]) -> tuple[int, bool] | None:
+            if use_noise_aware:
+                return select_best_candidate_noise_aware(candidates)
+            return select_best_candidate(candidates)
+
+        def _track_noise(candidates: list[CandidateFrame], position: int) -> None:
+            """Track per-recording noisy counts."""
+            if not use_noise_aware:
+                return
+            for i, c in enumerate(candidates):
+                if c.is_noisy and i < len(self._per_rec_noisy):
+                    self._per_rec_noisy[i] += 1
+
+        def _handle_both_noisy(candidates: list[CandidateFrame], position: int) -> None:
+            """Write all candidate frames to both-broken AVI for manual review."""
+            self._both_noisy_indices.append(position)
+            if self._both_noisy_writer is not None:
+                for c in candidates:
+                    self._both_noisy_writer.write_frame(c.frame)
 
         if matching_method == "timestamp":
             matches = self._build_timestamp_matches(
                 threshold_ms=timestamp_threshold_ms
             )
+            if max_frames > 0:
+                matches = matches[:max_frames]
             frame_iter = tqdm(matches, desc="Stitching frames (timestamp)")
             for match in frame_iter:
                 candidates = self._collect_candidates_by_index(match)
                 if not candidates:
+                    match_position += 1
                     continue
-                selected_idx, is_tie = select_best_candidate(candidates)
-                # Use first recording's frame index as label for debug
+                self._total_matched += 1
+                _track_noise(candidates, match_position)
+                result = _select(candidates)
+                if result is None:
+                    skipped_both_noisy += 1
+                    _handle_both_noisy(candidates, match_position)
+                    match_position += 1
+                    continue
+                selected_idx, is_tie = result
                 frame_label = match.get(0, 0)
                 debug_writes += self._write_debug(
                     frame_label, candidates, selected_idx, is_tie
                 )
                 self._write_stitched(candidates, selected_idx)
                 stitched_writes += 1
+                match_position += 1
         else:
-            frame_iter = tqdm(self.combined_frame_num, desc="Stitching frames")
+            frame_nums = self.combined_frame_num
+            if max_frames > 0:
+                frame_nums = frame_nums[:max_frames]
+            frame_iter = tqdm(frame_nums, desc="Stitching frames")
             for frame_num in frame_iter:
                 valid_pairs = self._collect_candidates(frame_num)
                 if not valid_pairs:
+                    match_position += 1
                     continue
-                selected_idx, is_tie = select_best_candidate(valid_pairs)
+                self._total_matched += 1
+                _track_noise(valid_pairs, match_position)
+                result = _select(valid_pairs)
+                if result is None:
+                    skipped_both_noisy += 1
+                    _handle_both_noisy(valid_pairs, match_position)
+                    match_position += 1
+                    continue
+                selected_idx, is_tie = result
                 debug_writes += self._write_debug(
                     frame_num, valid_pairs, selected_idx, is_tie
                 )
                 self._write_stitched(valid_pairs, selected_idx)
                 stitched_writes += 1
+                match_position += 1
 
         self._finalize()
-        logger.info(
-            f"Stitch completed: stitched_writes={stitched_writes}, debug_writes={debug_writes}"
-        )
+        msg = f"Stitch completed: stitched_writes={stitched_writes}, debug_writes={debug_writes}"
+        if skipped_both_noisy > 0:
+            msg += f", skipped_both_noisy={skipped_both_noisy}"
+        logger.info(msg)
+
+        # Print noise summary and generate plots if noise-aware
+        if use_noise_aware:
+            self._print_noise_summary(stitched_writes, skipped_both_noisy)
+            if self._debug_dir is not None:
+                self._generate_noise_report(stitched_writes, skipped_both_noisy)
 
 
 def concat_recordings(
