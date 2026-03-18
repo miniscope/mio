@@ -8,7 +8,7 @@ This is still hardcoded around the StreamDevConfig metadata fields.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
@@ -39,7 +39,14 @@ class CandidateFrame:
     num_buffers: int
     sum_black_padding: int
     metadata_rows: pd.DataFrame
-    edge_score: float
+    _edge_score: float | None = field(default=None, repr=False)
+
+    @property
+    def edge_score(self) -> float:
+        """Lazy edge score — only computed on first access (Sobel is expensive)."""
+        if self._edge_score is None:
+            self._edge_score = score_edges(self.frame)
+        return self._edge_score
 
     @property
     def metadata_score(self) -> tuple[int, int]:
@@ -164,7 +171,6 @@ class RecordingDataBundle:
                     num_buffers=num_buffers,
                     sum_black_padding=sum_black,
                     metadata_rows=rows,
-                    edge_score=score_edges(frame),
                 )
             )
         return candidates

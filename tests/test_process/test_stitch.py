@@ -26,17 +26,11 @@ from mio.utils import hash_video, validate_video_metadata_match
 
 STITCH_DATA_DIR = Path(__file__).parent.parent / "data" / "stitch"
 
-EXPECTED_STITCHED_VIDEO_HASH = (
-    "245caa04878a1288c5d2915680259e1a5c37aef819d1767a0b357587ccb3d703"
-)
-EXPECTED_DEBUG_VIDEO_HASH = (
-    "e9fd27bbf7c2ab658dbe7a63206b9f370eeb561b9c2574143e168f5f40120e03"
-)
+EXPECTED_STITCHED_VIDEO_HASH = "245caa04878a1288c5d2915680259e1a5c37aef819d1767a0b357587ccb3d703"
+EXPECTED_DEBUG_VIDEO_HASH = "e9fd27bbf7c2ab658dbe7a63206b9f370eeb561b9c2574143e168f5f40120e03"
 EXPECTED_STITCHED_FRAME_COUNT = 54
 EXPECTED_DEBUG_ROWS = 4
-EXPECTED_CROP_VIDEO_HASH = (
-    "432642b1528fcd9ad553cfb3cc3862bef931301bd11d44dc3c2372fc379fa629"
-)
+EXPECTED_CROP_VIDEO_HASH = "432642b1528fcd9ad553cfb3cc3862bef931301bd11d44dc3c2372fc379fa629"
 EXPECTED_CROP_FRAME_COUNT = 30
 
 
@@ -112,6 +106,7 @@ def test_stitched_csv_frame_num_range(stitch_result):
     assert frame_nums[0] == 2145
     assert frame_nums[-1] == 2566
     assert len(frame_nums) == EXPECTED_STITCHED_FRAME_COUNT
+
 
 def test_debug_video_hash(stitch_result):
     """Debug video content matches expected hash."""
@@ -342,8 +337,12 @@ def test_crop_invalid_range(tmp_path):
 def test_metadata_tie_detection():
     """Equal metadata scores are detected as a tie (triggers edge scoring)."""
     cand = CandidateFrame(
-        recording=None, frame=None, num_buffers=8,
-        sum_black_padding=0, metadata_rows=None, edge_score=0.0,
+        recording=None,
+        frame=None,
+        num_buffers=8,
+        sum_black_padding=0,
+        metadata_rows=None,
+        _edge_score=0.0,
     )
     _, is_tie = select_best_candidate([cand, cand])
     assert is_tie is True
@@ -368,9 +367,8 @@ def test_frame_info_majority_vote_rfi():
         "black_padding_px": 0,
         "buffer_recv_unix_time": 2.0,
     }
-    rows = [
-        {**base, "reconstructed_frame_index": 10, "buffer_recv_index": i}
-        for i in range(7)
-    ] + [{**base, "reconstructed_frame_index": 20, "buffer_recv_index": 7}]
+    rows = [{**base, "reconstructed_frame_index": 10, "buffer_recv_index": i} for i in range(7)] + [
+        {**base, "reconstructed_frame_index": 20, "buffer_recv_index": 7}
+    ]
     fi = FrameInfo.from_metadata(200, pd.DataFrame(rows))
     assert fi.reconstructed_frame_index == 10
