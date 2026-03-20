@@ -1,0 +1,67 @@
+# https://miniscope-io.readthedocs.io/en/latest/api/models/buffer.html#mio.models.buffer.BufferHeader.frame_buffer_count
+
+id: MSUS_ROI
+mio_model: mio.devices.gs.config.GSDevConfig
+mio_version: "v5.0.0"
+
+# capture device. "OK" (Opal Kelly) or "UART"
+device: "OK"
+
+# bitstream file to upload to Opal Kelly board
+# bitstream: "XEM7310-A75/USBInterface-3_03mhz-J2_2-3v3-IEEE.bit"
+# bitstream: "XEM7310-A75/USBInterface-5mhz-J2_2-3v3-IEEE.bit"
+# bitstream: "XEM7310-A75/USBInterface-6_67mhz-J2_2-3v3-IEEE.bit"
+bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit" # original
+# bitstream: "XEM7310-A75/USBInterface-12_5mhz-J2_2-3v3-IEEE.bit"
+# bitstream: "XEM7310-A75/USBInterface-16_67mhz-J2_2-3v3-IEEE.bit"
+# bitstream: "XEM7310-A75/USBInterface-20mhz-J2_2-3v3-IEEE.bit" 
+
+# COM port and baud rate is only required for UART mode
+port: null
+baudrate: null
+
+# Preamble for each data buffer.
+preamble: 0x78563412 # new preamble
+
+# Incoming Pre-Processed Image format. 
+# StreamDaq will calculate buffer size, etc. based on these parameters
+# this should be 320x320x10
+frame_width: 320  # 328 * 12 PP, with the extra 8 coming from the start_of_frame sequence
+frame_height: 328 # 320 # 320 lines total, set to the ROI number on the firmware!
+pix_depth: 8 # pixel depth, or, pixel period
+max_pixels_per_buffer:  9840 #  ORIGINAL: 10000
+
+# Buffer data format. These have to match the firmware value
+header_len: 384 # 12 * 32 (in bits)
+buffer_block_length: 4  # 10 # originally 12 how many words per block length
+block_size:   3714 # just buffer (header+data-header)
+num_buffers: 6 # 6 # (maybe change to 10 num of data buffers inside mcu
+dummy_words: 12 # 12 # num of dummy words before header file
+
+# Flags to flip bit/byte order when recovering headers and data. See model document for details.
+reverse_header_bits: False # False
+reverse_header_bytes: False # False
+reverse_payload_bits: False # False
+reverse_payload_bytes: False # False
+
+adc_scale:
+  ref_voltage: 1.1
+  bitdepth: 8
+  battery_div_factor: 5
+  vin_div_factor: 11.3
+
+runtime:
+  serial_buffer_queue_size: 50
+  frame_buffer_queue_size: 50
+  image_buffer_queue_size: 50
+  csv:
+    buffer: 5
+  plot:
+    keys:
+      - timestamp
+      - buffer_count
+      - frame_buffer_count
+      - battery_voltage
+      - input_voltage
+    update_ms: 1000
+    history: 500
