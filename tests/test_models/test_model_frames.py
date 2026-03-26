@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 import numpy as np
+from pydantic import ValidationError
 
 import mio.io.video
 import mio.models.frames
@@ -55,6 +56,10 @@ def test_invalid_frame_type_raises_exception(monkeypatch):
     with pytest.raises(ValueError):
         named_frame = NamedFrame(name="test", frame=[123, 456])
         named_frame.export("output_path", True)
+
+    # wrong shape
+    with pytest.raises(ValidationError):
+        NamedFrame(name="test", frame=np.zeros((10, 10, 2)))
 
     # Ensure that no write methods are called
     mock_VideoWriter.write_frame.assert_not_called()

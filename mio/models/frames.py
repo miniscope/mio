@@ -4,12 +4,13 @@ Pydantic models for storing frames and videos.
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import List, Literal, Optional, Union, overload
+from typing import Annotated as A
+from typing import List, Literal, Optional, TypeAlias, Union, overload
 
 import cv2
 import numpy as np
 import pandas as pd
-from numpydantic import NDArray
+from numpydantic import NDArray, NDArraySchema
 from pydantic import BaseModel, Field, field_validator
 
 from mio.logging import init_logger
@@ -17,25 +18,18 @@ from mio.models.sdcard import SDBufferHeader
 
 logger = init_logger("model.frames")
 
+FrameType: TypeAlias = A[np.ndarray, NDArraySchema(("*", "*"))]
+
 
 class BaseFrame(BaseModel):
     """
     Pydantic model to store an image
     """
 
-    frame: NDArray = Field(
+    frame: FrameType | None = Field(
         None,
         description="Frame data, if provided.",
     )
-
-    @field_validator("frame")
-    def validate_frame_is_2d(cls, v: NDArray) -> NDArray:
-        """
-        Validate that the frame is a 2D array.
-        """
-        if v is not None and len(v.shape) != 2:
-            raise ValueError("Frame must be a 2D array")
-        return v
 
     @abstractmethod
     def export(self, output_path: Union[Path, str], suffix: bool = False) -> None:
@@ -50,23 +44,10 @@ class BaseVideo(BaseModel):
     Pydantic model to store a video.
     """
 
-    video: List[NDArray] = Field(
+    video: List[FrameType] = Field(
         ...,
         description="List of frames.",
     )
-
-    @field_validator("video")
-    def validate_video_is_list_of_2d_arrays(cls, v: List[NDArray]) -> List[NDArray]:
-        """
-        Validate that the video is a list of 2D arrays.
-        """
-
-        # check that all frames have 2D shape and are the same shape
-        if v is not None and not all(
-            len(frame.shape) == 2 and frame.shape == v[0].shape for frame in v
-        ):
-            raise ValueError("Not all frames are 2D arrays or have the same shape.")
-        return v
 
     @abstractmethod
     def export(self, output_path: Union[Path, str], suffix: bool = False) -> None:
@@ -127,15 +108,6 @@ class NamedFrame(BaseFrame):
         cv2.destroyAllWindows()
         cv2.waitKey(1)  # Extra waitKey to properly close the window
 
-    @field_validator("frame")
-    def validate_frame_is_2d(cls, v: NDArray) -> NDArray:
-        """
-        Validate that the frame is a 2D array.
-        """
-        if v is not None and len(v.shape) != 2:
-            raise ValueError("Frame must be a 2D array")
-        return v
-
 
 class NamedVideo(BaseVideo):
     """
@@ -147,7 +119,7 @@ class NamedVideo(BaseVideo):
         description="Name of the video.",
     )
 
-    def export(self, output_path: Path | str, suffix: bool = False, fps: float = 20) -> None:
+    def export(self, output_path: Union[Path, str], suffix: bool = False, fps: int = 20) -> None:
         """
         Export the frame data to a file.
         """
