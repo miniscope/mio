@@ -12,7 +12,6 @@ import pandas as pd
 from numpydantic import NDArray
 from pydantic import BaseModel, Field, field_validator
 
-from mio.io import VideoWriter
 from mio.logging import init_logger
 from mio.models.sdcard import SDBufferHeader
 
@@ -152,6 +151,8 @@ class NamedVideo(BaseVideo):
         """
         Export the frame data to a file.
         """
+        from mio.io import VideoWriter
+
         if self.video is None or self.video == []:
             logger.warning(f"No frame data provided for {self.name}. Skipping export.")
             return
