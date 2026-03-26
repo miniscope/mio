@@ -67,7 +67,7 @@ def hash_video(
 
 
 def validate_video_metadata_match(
-    video_path: Union[Path, str],
+    video_path: Path | str,
 ) -> pd.DataFrame:
     """
     Validate that a CSV metadata file matches its corresponding video file.
@@ -122,7 +122,7 @@ def validate_video_metadata_match(
     return df
 
 
-def format_missing_frame_ranges(missing_indices: List[int]) -> List[str]:
+def format_missing_frame_ranges(missing_indices: list[int]) -> list[str]:
     """Convert a sorted list of missing frame indices into readable ranges."""
     if not missing_indices:
         return []
@@ -143,7 +143,7 @@ def format_missing_frame_ranges(missing_indices: List[int]) -> List[str]:
     return ranges
 
 
-def extract_mismatch_details(video_path: Path, csv_df: Optional[pd.DataFrame]) -> dict:
+def extract_mismatch_details(video_path: Path, csv_df: pd.DataFrame | None) -> dict:
     """Extract detailed mismatch information for a frame-index validation failure."""
     if csv_df is None or "reconstructed_frame_index" not in csv_df.columns:
         return {"error_type": "frame_mismatch"}

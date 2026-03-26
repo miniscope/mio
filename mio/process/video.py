@@ -493,8 +493,8 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
 def denoise_run(
     video_path: str,
     config: DenoiseConfig,
-    csv_df: Optional[pd.DataFrame] = None,
-    debug_dir: Optional[Path] = None,
+    csv_df: pd.DataFrame | None = None,
+    debug_dir: Path | None = None,
 ) -> Path:
     """
     Preprocess a video file and display the results.
@@ -527,7 +527,7 @@ def denoise_run(
 
     reader = VideoReader(video_path)
     pathstem = Path(video_path).stem
-    output_video_path: Optional[Path] = None
+    output_video_path: Path | None = None
 
     output_dir = Path.cwd() / config.output_dir
     if not output_dir.exists():
@@ -677,8 +677,8 @@ def _modify_csv_metadata(
     input_video_path: str,
     output_video_path: Path,
     dropped_frame_indices: list[int],
-    csv_df: Optional[pd.DataFrame] = None,
-) -> Optional[pd.DataFrame]:
+    csv_df: pd.DataFrame | None = None,
+) -> pd.DataFrame | None:
     """
     Modify CSV metadata to match the denoised video by removing rows for dropped frames
     and adjusting reconstructed_frame_index.
@@ -787,8 +787,8 @@ def _export_frame_timestamp_csv(output_video_path: Path, csv_df: pd.DataFrame) -
 
 def crop_run(
     video_path: str,
-    output_path: Optional[str] = None,
-    csv_df: Optional[pd.DataFrame] = None,
+    output_path: str | None = None,
+    csv_df: pd.DataFrame | None = None,
     trim_start: int = 0,
     trim_end: int = 0,
 ) -> Path:
@@ -893,10 +893,10 @@ def crop_run(
 def _crop_csv_metadata(
     input_video_path: str,
     output_video_path: Path,
-    csv_df: Optional[pd.DataFrame] = None,
+    csv_df: pd.DataFrame | None = None,
     start_idx: int = 0,
-    end_idx: Optional[int] = None,
-) -> Optional[pd.DataFrame]:
+    end_idx: int | None = None,
+) -> pd.DataFrame | None:
     """
     Crop CSV metadata to match the cropped video by filtering to the kept
     frame range and renumbering reconstructed_frame_index from 0.

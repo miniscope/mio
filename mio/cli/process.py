@@ -4,7 +4,6 @@ Command line interface for offline video pre-processing.
 
 import shutil
 from pathlib import Path
-from typing import Optional
 
 import click
 
@@ -24,7 +23,7 @@ from mio.utils import (
 logger = init_logger("mio.cli.process")
 
 
-def _validate_with_prompt(video_path: str) -> Optional[object]:
+def _validate_with_prompt(video_path: str) -> object | None:
     """Validate video-metadata match, prompting user on failure.
 
     Returns the validated DataFrame, or None if the user chose to continue
@@ -88,7 +87,7 @@ def process() -> None:
 def denoise(
     input: str,
     denoise_config: str,
-    output_dir: Optional[str],
+    output_dir: str | None,
 ) -> None:
     """
     Denoise a video file by detecting and removing frames with noisy areas.
@@ -147,7 +146,7 @@ def denoise(
 )
 def crop(
     input: str,
-    output: Optional[str],
+    output: str | None,
     trim_start: int,
     trim_end: int,
 ) -> None:
@@ -214,9 +213,9 @@ def crop(
 )
 def stitch(
     inputs: tuple,
-    output: Optional[str],
-    debug_video: Optional[str],
-    debug_csv: Optional[str],
+    output: str | None,
+    debug_video: str | None,
+    debug_csv: str | None,
     fps: int,
 ) -> None:
     """
@@ -306,7 +305,7 @@ def stitch(
 )
 def workflow(
     inputs: tuple,
-    output: Optional[str],
+    output: str | None,
     denoise_config: str,
     trim_start: int,
     trim_end: int,

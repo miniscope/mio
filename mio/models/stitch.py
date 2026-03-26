@@ -2,8 +2,6 @@
 Models for stitching multiple recordings together.
 """
 
-from typing import List
-
 import pandas as pd
 from pydantic import BaseModel
 from tqdm import tqdm
@@ -71,6 +69,6 @@ class DebugRecord(BaseModel):
     metadata_tie: bool
 
     @classmethod
-    def header(cls) -> List[str]:
+    def header(cls) -> list[str]:
         """Return CSV header preserving declared field order."""
         return list(cls.model_fields.keys())
