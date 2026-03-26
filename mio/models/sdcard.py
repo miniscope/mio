@@ -4,7 +4,6 @@ specific values. This allows for the model to be reused across different minisco
 for consuming code to use a consistent, introspectable API
 """
 
-
 from mio.models import MiniscopeConfig
 from mio.models.buffer import BufferHeader, BufferHeaderFormat
 from mio.models.mixins import ConfigYAMLMixin

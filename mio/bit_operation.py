@@ -2,7 +2,6 @@
 Bit operations for parsing header and payload information. Currently for use in streamDaq module.
 """
 
-
 import numpy as np
 
 

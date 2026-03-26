@@ -241,9 +241,7 @@ class SDCard:
 
     """
 
-    def __init__(
-        self, drive: str | Path, layout: SDLayout | ConfigSource = "wirefree-sd-layout"
-    ):
+    def __init__(self, drive: str | Path, layout: SDLayout | ConfigSource = "wirefree-sd-layout"):
         self.drive = drive
         self.layout = SDLayout.from_any(layout)
         self.logger = init_logger("SDCard")

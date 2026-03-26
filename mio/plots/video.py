@@ -2,7 +2,6 @@
 Plotting functions for video streams and frames.
 """
 
-
 import numpy as np
 
 from mio import init_logger
