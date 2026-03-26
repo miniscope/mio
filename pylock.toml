@@ -590,6 +590,23 @@ dependencies = [
 ]
 
 [[packages]]
+name = "numpydantic"
+version = "1.8.0"
+requires-python = "<4.0,>=3.10"
+sdist = {name = "numpydantic-1.8.0.tar.gz", url = "https://files.pythonhosted.org/packages/83/87/59e5cac8d14bdaec8f13f954b54c8c48cf107ea19c476ba781514f4b2cc3/numpydantic-1.8.0.tar.gz", hashes = {sha256 = "874f009d141fe70de2e096527683a722a25a32ef561a55a210d3e486e9c99327"}}
+wheels = [
+    {name = "numpydantic-1.8.0-py3-none-any.whl",url = "https://files.pythonhosted.org/packages/97/3f/ba491e30e8be2996a5ee31cf395f445a34c10519156ec15c6edb83e66f23/numpydantic-1.8.0-py3-none-any.whl",hashes = {sha256 = "7c9586f50bbdf331b9a6b3a15b86cd1afa42096af20df1bf1f3620031dc393f3"}},
+]
+marker = "\"default\" in dependency_groups"
+
+[packages.tool.pdm]
+dependencies = [
+    "pydantic>=2.7.0",
+    "numpy>=1.24.0",
+    "typing-extensions>=4.11.0; python_version < \"3.11\"",
+]
+
+[[packages]]
 name = "opencv-python"
 version = "4.11.0.86"
 requires-python = ">=3.6"
@@ -2469,7 +2486,7 @@ marker = "\"all\" in extras or \"docs\" in extras"
 dependencies = []
 
 [tool.pdm]
-hashes = {sha256 = "0386f11c1e5b4a5111e44d51a2be30659b8d3937a440ad57645b09b7d71ba5bd"}
+hashes = {sha256 = "ac09e2d6faffb51e2f916fbf305380fc0d42e32745b0262c0858ea1ba05c9d22"}
 strategy = ["inherit_metadata", "static_urls"]
 
 [[tool.pdm.targets]]
