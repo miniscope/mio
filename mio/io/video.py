@@ -1,8 +1,8 @@
 """Reading and writing video files"""
 
 import contextlib
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Tuple, Union
 
 import cv2
 import numpy as np
@@ -25,9 +25,9 @@ class VideoWriter:
 
     def __init__(
         self,
-        path: Union[str, Path],
+        path: str | Path,
         fps: int,
-        output_dict: Union[dict, None] = None,
+        output_dict: dict | None = None,
     ):
         """
         Initialize the VideoWriter object.
@@ -104,7 +104,7 @@ class VideoReader:
             self._cap = cv2.VideoCapture(str(self.video_path))
         return self._cap
 
-    def read_frames(self) -> Iterator[Tuple[int, np.ndarray]]:
+    def read_frames(self) -> Iterator[tuple[int, np.ndarray]]:
         """
         Read frames from the video file along with their index.
 

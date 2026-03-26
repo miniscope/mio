@@ -5,7 +5,6 @@ I/O functions for files.
 import atexit
 import csv
 from pathlib import Path
-from typing import Union
 
 from mio.logging import init_logger
 
@@ -34,7 +33,7 @@ class BufferedCSVWriter:
         The buffer for storing rows before writing.
     """
 
-    def __init__(self, file_path: Union[str, Path], header: list[str], buffer_size: int = 100):
+    def __init__(self, file_path: str | Path, header: list[str], buffer_size: int = 100):
         self.file_path: Path = Path(file_path)
         self.header = header
         self.buffer_size = buffer_size

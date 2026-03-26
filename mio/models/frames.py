@@ -5,7 +5,7 @@ Pydantic models for storing frames and videos.
 from abc import abstractmethod
 from pathlib import Path
 from typing import Annotated as A
-from typing import List, Literal, Optional, TypeAlias, Union, overload
+from typing import Literal, TypeAlias, overload
 
 import cv2
 import numpy as np
@@ -32,7 +32,7 @@ class BaseFrame(BaseModel):
     )
 
     @abstractmethod
-    def export(self, output_path: Union[Path, str], suffix: bool = False) -> None:
+    def export(self, output_path: Path | str, suffix: bool = False) -> None:
         """
         Export the frame data to a file.
         """
@@ -44,13 +44,13 @@ class BaseVideo(BaseModel):
     Pydantic model to store a video.
     """
 
-    video: List[FrameType] = Field(
+    video: list[FrameType] = Field(
         ...,
         description="List of frames.",
     )
 
     @abstractmethod
-    def export(self, output_path: Union[Path, str], suffix: bool = False) -> None:
+    def export(self, output_path: Path | str, suffix: bool = False) -> None:
         """
         Export the frame data to a file.
         """
@@ -119,7 +119,7 @@ class NamedVideo(BaseVideo):
         description="Name of the video.",
     )
 
-    def export(self, output_path: Union[Path, str], suffix: bool = False, fps: int = 20) -> None:
+    def export(self, output_path: Path | str, suffix: bool = False, fps: int = 20) -> None:
         """
         Export the frame data to a file.
         """
@@ -157,11 +157,11 @@ class SDCardFrame(BaseModel):
     """
 
     frame: NDArray
-    headers: List[SDBufferHeader]
+    headers: list[SDBufferHeader]
 
     @field_validator("headers")
     @classmethod
-    def frame_nums_must_be_equal(cls, v: List[SDBufferHeader]) -> Optional[List[SDBufferHeader]]:
+    def frame_nums_must_be_equal(cls, v: list[SDBufferHeader]) -> list[SDBufferHeader] | None:
         """
         Each frame_number field in each header must be the same
         (they come from the same frame!)
@@ -172,7 +172,7 @@ class SDCardFrame(BaseModel):
         return v
 
     @property
-    def frame_num(self) -> Optional[int]:
+    def frame_num(self) -> int | None:
         """
         Frame number for this set of headers, if headers are present
         """
@@ -184,15 +184,15 @@ class SDCardVideo(BaseModel):
     A collection of frames from a miniscope recording
     """
 
-    frames: List[SDCardFrame]
+    frames: list[SDCardFrame]
 
     @overload
-    def flatten_headers(self, as_dict: Literal[False]) -> List[SDBufferHeader]: ...
+    def flatten_headers(self, as_dict: Literal[False]) -> list[SDBufferHeader]: ...
 
     @overload
-    def flatten_headers(self, as_dict: Literal[True]) -> List[dict]: ...
+    def flatten_headers(self, as_dict: Literal[True]) -> list[dict]: ...
 
-    def flatten_headers(self, as_dict: bool = False) -> Union[List[dict], List[SDBufferHeader]]:
+    def flatten_headers(self, as_dict: bool = False) -> list[dict] | list[SDBufferHeader]:
         """
         Return flat list of headers, not grouped by frame
 
@@ -200,9 +200,9 @@ class SDCardVideo(BaseModel):
             as_dict (bool): If `True`, return a list of dictionaries, if `False`
                 (default), return a list of :class:`.SDBufferHeader` s.
         """
-        h: Union[List[dict], List[SDBufferHeader]] = []
+        h: list[dict] | list[SDBufferHeader] = []
         for frame in self.frames:
-            headers: Union[List[dict], List[SDBufferHeader]]
+            headers: list[dict] | list[SDBufferHeader]
             if as_dict:
                 headers = [header.model_dump() for header in frame.headers]
             else:

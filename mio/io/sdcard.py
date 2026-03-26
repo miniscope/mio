@@ -4,7 +4,7 @@ I/O for data on an SDCard
 
 import contextlib
 from pathlib import Path
-from typing import BinaryIO, Literal, Optional, Union, overload
+from typing import BinaryIO, Literal, overload
 
 import cv2
 import numpy as np
@@ -306,7 +306,7 @@ class SDCard:
     @overload
     def read(self, return_header: Literal[False] = False) -> np.ndarray: ...
 
-    def read(self, return_header: bool = False) -> Union[np.ndarray, SDCardFrame]:
+    def read(self, return_header: bool = False) -> np.ndarray | SDCardFrame:
         """
         Read a single frame
 
