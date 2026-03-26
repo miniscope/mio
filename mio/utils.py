@@ -4,7 +4,6 @@ The junk drawer my dogs
 
 import hashlib
 from pathlib import Path
-from typing import List, Optional, Union
 
 import cv2
 import pandas as pd
@@ -14,7 +13,7 @@ from mio.exceptions import VideoMetadataError
 DEFAULT_PROCESS_DIR = "mio_process"
 
 
-def hash_file(path: Union[Path, str]) -> str:
+def hash_file(path: Path | str) -> str:
     """
     Return the sha256 hash of a file
 
@@ -39,7 +38,7 @@ def hash_file(path: Union[Path, str]) -> str:
 
 
 def hash_video(
-    path: Union[Path, str],
+    path: Path | str,
     method: str = "blake2s",
 ) -> str:
     """

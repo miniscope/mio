@@ -2,51 +2,72 @@
 Pydantic models for storing frames and videos.
 """
 
+from abc import abstractmethod
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Annotated as A
+from typing import Literal, TypeAlias, overload
 
 import cv2
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
+import pandas as pd
+from numpydantic import NDArray, NDArraySchema
+from pydantic import BaseModel, Field, field_validator
 
-from mio.io import VideoWriter
 from mio.logging import init_logger
+from mio.models.sdcard import SDBufferHeader
 
 logger = init_logger("model.frames")
 
+FrameType: TypeAlias = A[np.ndarray, NDArraySchema(("*", "*"))]
 
-class NamedBaseFrame(BaseModel):
+
+class BaseFrame(BaseModel):
     """
-    Pydantic model to store an an image or a video together with a name.
-    """
-
-    name: str = Field(
-        ...,
-        description="Name of the video.",
-    )
-    model_config = ConfigDict(
-        arbitrary_types_allowed=True,
-    )
-
-    def export(self, output_path: Union[Path, str], fps: int, suffix: bool) -> None:
-        """
-        Export the frame data to a file.
-        The implementation needs to be defined in the derived classes.
-        """
-        raise NotImplementedError("Method not implemented.")
-
-
-class NamedFrame(NamedBaseFrame):
-    """
-    Pydantic model to store an image or a video together with a name.
+    Pydantic model to store an image
     """
 
-    frame: Optional[np.ndarray] = Field(
+    frame: FrameType | None = Field(
         None,
         description="Frame data, if provided.",
     )
 
-    def export(self, output_path: Union[Path, str], suffix: bool = False) -> None:
+    @abstractmethod
+    def export(self, output_path: Path | str, suffix: bool = False) -> None:
+        """
+        Export the frame data to a file.
+        """
+        raise NotImplementedError("Method not implemented.")
+
+
+class BaseVideo(BaseModel):
+    """
+    Pydantic model to store a video.
+    """
+
+    video: list[FrameType] = Field(
+        ...,
+        description="List of frames.",
+    )
+
+    @abstractmethod
+    def export(self, output_path: Path | str, suffix: bool = False) -> None:
+        """
+        Export the frame data to a file.
+        """
+        raise NotImplementedError("Method not implemented.")
+
+
+class NamedFrame(BaseFrame):
+    """
+    Pydantic model to store an image or a video together with a name.
+    """
+
+    name: str = Field(
+        ...,
+        description="Name of the frame.",
+    )
+
+    def export(self, output_path: Path | str, suffix: bool = False) -> None:
         """
         Export the frame data to a file.
         The file name will be a concatenation of the output path and the name of the frame.
@@ -88,20 +109,22 @@ class NamedFrame(NamedBaseFrame):
         cv2.waitKey(1)  # Extra waitKey to properly close the window
 
 
-class NamedVideo(NamedBaseFrame):
+class NamedVideo(BaseVideo):
     """
     Pydantic model to store a video together with a name.
     """
 
-    video: Optional[List[np.ndarray]] = Field(
-        None,
-        description="List of frames.",
+    name: str = Field(
+        ...,
+        description="Name of the video.",
     )
 
-    def export(self, output_path: Union[Path, str], suffix: bool = False, fps: float = 20) -> None:
+    def export(self, output_path: Path | str, suffix: bool = False, fps: int = 20) -> None:
         """
         Export the frame data to a file.
         """
+        from mio.io import VideoWriter
+
         if self.video is None or self.video == []:
             logger.warning(f"No frame data provided for {self.name}. Skipping export.")
             return
@@ -124,3 +147,79 @@ class NamedVideo(NamedBaseFrame):
                 writer.write_frame(picture)
         finally:
             writer.close()
+
+
+class SDCardFrame(BaseModel):
+    """
+    An individual frame from a miniscope recording
+
+    Typically returned from :meth:`.SDCard.read`
+    """
+
+    frame: NDArray
+    headers: list[SDBufferHeader]
+
+    @field_validator("headers")
+    @classmethod
+    def frame_nums_must_be_equal(cls, v: list[SDBufferHeader]) -> list[SDBufferHeader] | None:
+        """
+        Each frame_number field in each header must be the same
+        (they come from the same frame!)
+        """
+
+        if v is not None and not all([header.frame_num != v[0].frame_num for header in v]):
+            raise ValueError(f"All frame numbers should be equal! Got f{[h.frame_num for h in v]}")
+        return v
+
+    @property
+    def frame_num(self) -> int | None:
+        """
+        Frame number for this set of headers, if headers are present
+        """
+        return self.headers[0].frame_num
+
+
+class SDCardVideo(BaseModel):
+    """
+    A collection of frames from a miniscope recording
+    """
+
+    frames: list[SDCardFrame]
+
+    @overload
+    def flatten_headers(self, as_dict: Literal[False]) -> list[SDBufferHeader]: ...
+
+    @overload
+    def flatten_headers(self, as_dict: Literal[True]) -> list[dict]: ...
+
+    def flatten_headers(self, as_dict: bool = False) -> list[dict] | list[SDBufferHeader]:
+        """
+        Return flat list of headers, not grouped by frame
+
+        Args:
+            as_dict (bool): If `True`, return a list of dictionaries, if `False`
+                (default), return a list of :class:`.SDBufferHeader` s.
+        """
+        h: list[dict] | list[SDBufferHeader] = []
+        for frame in self.frames:
+            headers: list[dict] | list[SDBufferHeader]
+            if as_dict:
+                headers = [header.model_dump() for header in frame.headers]
+            else:
+                headers = frame.headers
+            h.extend(headers)
+        return h
+
+    def to_df(self, what: Literal["headers"] = "headers") -> pd.DataFrame:
+        """
+        Convert frames to pandas dataframe
+
+        Arguments:
+            what ('headers'): What information from the frame to include in the df,
+                currently only 'headers' is possible
+        """
+
+        if what == "headers":
+            return pd.DataFrame(self.flatten_headers(as_dict=True))
+        else:
+            raise ValueError("Return mode not implemented!")

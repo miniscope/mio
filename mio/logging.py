@@ -6,7 +6,6 @@ import logging
 import multiprocessing as mp
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional, Union
 
 from rich.logging import RichHandler
 
@@ -15,11 +14,11 @@ from mio.models.config import LOG_LEVELS, Config
 
 def init_logger(
     name: str,
-    log_dir: Union[Optional[Path], bool] = None,
-    level: Optional[LOG_LEVELS] = None,
-    file_level: Optional[LOG_LEVELS] = None,
-    log_file_n: Optional[int] = None,
-    log_file_size: Optional[int] = None,
+    log_dir: Path | None | bool = None,
+    level: LOG_LEVELS | None = None,
+    file_level: LOG_LEVELS | None = None,
+    log_file_n: int | None = None,
+    log_file_size: int | None = None,
 ) -> logging.Logger:
     """
     Make a logger.
