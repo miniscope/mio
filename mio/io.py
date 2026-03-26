@@ -5,8 +5,9 @@ I/O functions for SD card and external files.
 import atexit
 import contextlib
 import csv
+from collections.abc import Iterator
 from pathlib import Path
-from typing import BinaryIO, Iterator, Literal, Optional, Tuple, Union, overload
+from typing import BinaryIO, Literal, overload
 
 import cv2
 import numpy as np
@@ -34,9 +35,9 @@ class VideoWriter:
 
     def __init__(
         self,
-        path: Union[str, Path],
+        path: str | Path,
         fps: int,
-        output_dict: Union[dict, None] = None,
+        output_dict: dict | None = None,
     ):
         """
         Initialize the VideoWriter object.
@@ -116,7 +117,7 @@ class VideoReader:
             self._cap = cv2.VideoCapture(str(self.video_path))
         return self._cap
 
-    def read_frames(self) -> Iterator[Tuple[int, np.ndarray]]:
+    def read_frames(self) -> Iterator[tuple[int, np.ndarray]]:
         """
         Read frames from the video file along with their index.
 
@@ -169,7 +170,7 @@ class BufferedCSVWriter:
         The buffer for storing rows before writing.
     """
 
-    def __init__(self, file_path: Union[str, Path], header: list[str], buffer_size: int = 100):
+    def __init__(self, file_path: str | Path, header: list[str], buffer_size: int = 100):
         self.file_path: Path = Path(file_path)
         self.header = header
         self.buffer_size = buffer_size
@@ -240,9 +241,7 @@ class SDCard:
 
     """
 
-    def __init__(
-        self, drive: Union[str, Path], layout: Union[SDLayout, ConfigSource] = "wirefree-sd-layout"
-    ):
+    def __init__(self, drive: str | Path, layout: SDLayout | ConfigSource = "wirefree-sd-layout"):
         self.drive = drive
         self.layout = SDLayout.from_any(layout)
         self.logger = init_logger("SDCard")
@@ -291,7 +290,7 @@ class SDCard:
         return self._config
 
     @property
-    def position(self) -> Optional[int]:
+    def position(self) -> int | None:
         """
         When entered as context manager, the current position of the internal file
         descriptor
@@ -302,7 +301,7 @@ class SDCard:
         return self._f.tell()
 
     @property
-    def frame(self) -> Optional[int]:
+    def frame(self) -> int | None:
         """
         When reading, the number of the frame that would be read if we were to call
         :meth:`.read`
@@ -517,7 +516,7 @@ class SDCard:
     @overload
     def read(self, return_header: Literal[False] = False) -> np.ndarray: ...
 
-    def read(self, return_header: bool = False) -> Union[np.ndarray, Frame]:
+    def read(self, return_header: bool = False) -> np.ndarray | Frame:
         """
         Read a single frame
 
@@ -595,7 +594,7 @@ class SDCard:
 
     def to_video(
         self,
-        path: Union[Path, str],
+        path: Path | str,
         fourcc: Literal["GREY", "mp4v", "XVID"] = "GREY",
         isColor: bool = False,
         force: bool = False,
@@ -671,8 +670,8 @@ class SDCard:
 
     def to_img(
         self,
-        path: Optional[Union[Path, str]],
-        frame: Optional[int] = None,
+        path: Path | str | None,
+        frame: int | None = None,
         force: bool = False,
         chunk_size: int = 1e6,
         progress: bool = True,

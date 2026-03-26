@@ -3,7 +3,6 @@ NTP utilities for time synchronization checks.
 """
 
 import socket
-from typing import Tuple
 
 import click
 
@@ -41,7 +40,7 @@ def _resolve_hostname(hostname: str) -> str:
         return hostname
 
 
-def query_ntp_sync(ntp_server: str, timeout: float = 3.0) -> Tuple[bool, float]:
+def query_ntp_sync(ntp_server: str, timeout: float = 3.0) -> tuple[bool, float]:
     """
     Query the NTP server for the system time offset.
 

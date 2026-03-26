@@ -12,7 +12,6 @@ Not to be considered part of the public interface of mio <3
 import os
 import sys
 from pathlib import Path
-from typing import Dict, Optional
 
 if sys.version_info < (3, 11):
     from typing_extensions import Self
@@ -27,7 +26,7 @@ class okDevMock:
     Mock class for :class:`~mio.devices.opalkelly.okDev`
     """
 
-    DATA_FILE: Optional[Path] = None
+    DATA_FILE: Path | None = None
     """
     Recorded data file to use for simulating read.
     
@@ -45,9 +44,9 @@ class okDevMock:
     ):
         self.read_length = read_length
         self.serial_id = serial_id
-        self.bit_file: Optional[Path] = None
+        self.bit_file: Path | None = None
 
-        self._wires: Dict[int, int] = {}
+        self._wires: dict[int, int] = {}
         self._buffer_position = 0
 
         # preload the data file to a byte array
@@ -72,7 +71,7 @@ class okDevMock:
         self.bit_file = Path(bit_file)
 
     def read_data(
-        self, length: Optional[int] = None, addr: int = 0xA0, blockSize: int = 16
+        self, length: int | None = None, addr: int = 0xA0, blockSize: int = 16
     ) -> bytearray:
         if length is None:
             length = self.read_length

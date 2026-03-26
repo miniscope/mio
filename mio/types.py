@@ -6,13 +6,11 @@ import re
 import sys
 from os import PathLike
 from pathlib import Path
-from typing import Annotated, Any, Tuple, Union
+from typing import Annotated, Any
 
 from pydantic import AfterValidator, Field
 
-if sys.version_info < (3, 10):
-    from typing_extensions import TypeAlias, TypeIs
-elif sys.version_info < (3, 13):
+if sys.version_info < (3, 10) or sys.version_info < (3, 13):
     from typing import TypeAlias
 
     from typing_extensions import TypeIs
@@ -43,7 +41,7 @@ def _is_identifier(val: str) -> str:
     return val
 
 
-Range: TypeAlias = Union[Tuple[int, int], Tuple[float, float]]
+Range: TypeAlias = tuple[int, int] | tuple[float, float]
 PythonIdentifier: TypeAlias = Annotated[str, AfterValidator(_is_identifier)]
 """
 A valid python identifier, including globally namespace pathed like 
@@ -53,7 +51,7 @@ ConfigID: TypeAlias = Annotated[str, Field(pattern=CONFIG_ID_PATTERN)]
 """
 A string that refers to a config file by the ``id`` field in that config
 """
-ConfigSource: TypeAlias = Union[Path, PathLike[str], ConfigID]
+ConfigSource: TypeAlias = Path | PathLike[str] | ConfigID
 """
 Union of all types of config sources
 """
