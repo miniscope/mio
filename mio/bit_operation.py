@@ -2,7 +2,6 @@
 Bit operations for parsing header and payload information. Currently for use in streamDaq module.
 """
 
-from typing import Tuple
 
 import numpy as np
 
@@ -73,7 +72,7 @@ class BufferFormatter:
         reverse_header_bytes: bool,
         reverse_payload_bits: bool,
         reverse_payload_bytes: bool,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Format the buffer and return the header (uint32) and payload (uint8) arrays.
         The bit/byte order can be optionally reversed.

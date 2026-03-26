@@ -3,7 +3,6 @@ This module contains functions for pre-processing video data.
 """
 
 from pathlib import Path
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -139,7 +138,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
                 "The mean_error method is unstable and not fully tested yet." " Use with caution."
             )
 
-    def process_frame(self, input_frame: np.ndarray) -> Optional[np.ndarray]:
+    def process_frame(self, input_frame: np.ndarray) -> np.ndarray | None:
         """
         Process a single frame.
 
@@ -305,7 +304,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         """
         return NamedVideo(name="freq_domain", video=self.freq_domain_frames)
 
-    def process_frame(self, input_frame: np.ndarray) -> Optional[np.ndarray]:
+    def process_frame(self, input_frame: np.ndarray) -> np.ndarray | None:
         """
         Process a single frame.
 

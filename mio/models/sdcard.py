@@ -4,7 +4,6 @@ specific values. This allows for the model to be reused across different minisco
 for consuming code to use a consistent, introspectable API
 """
 
-from typing import Optional
 
 from mio.models import MiniscopeConfig
 from mio.models.buffer import BufferHeader, BufferHeaderFormat
@@ -83,8 +82,8 @@ class SDHeaderPositions(MiniscopeConfig):
     record_length: int = 7
     fs: int = 8
     """Frame rate"""
-    delay_start: Optional[int] = None
-    battery_cutoff: Optional[int] = None
+    delay_start: int | None = None
+    battery_cutoff: int | None = None
 
 
 class SDBufferHeaderFormat(BufferHeaderFormat):
@@ -103,8 +102,8 @@ class SDBufferHeaderFormat(BufferHeaderFormat):
     dropped_buffer_count: int = 6
     timestamp: int = 7
     data_length: int = 8
-    write_timestamp: Optional[int] = None
-    battery_voltage: Optional[int] = None
+    write_timestamp: int | None = None
+    battery_voltage: int | None = None
 
 
 class SDLayout(MiniscopeConfig, ConfigYAMLMixin):
@@ -160,5 +159,5 @@ class SDBufferHeader(BufferHeader):
     write_buffer_count: int
     dropped_buffer_count: int
     data_length: int
-    write_timestamp: Optional[int] = None
-    battery_voltage: Optional[int] = None
+    write_timestamp: int | None = None
+    battery_voltage: int | None = None

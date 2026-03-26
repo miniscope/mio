@@ -3,7 +3,6 @@ Pydantic models for storing frames and videos.
 """
 
 from pathlib import Path
-from typing import List, Optional, Union
 
 import cv2
 import numpy as np
@@ -28,7 +27,7 @@ class NamedBaseFrame(BaseModel):
         arbitrary_types_allowed=True,
     )
 
-    def export(self, output_path: Union[Path, str], fps: int, suffix: bool) -> None:
+    def export(self, output_path: Path | str, fps: int, suffix: bool) -> None:
         """
         Export the frame data to a file.
         The implementation needs to be defined in the derived classes.
@@ -41,12 +40,12 @@ class NamedFrame(NamedBaseFrame):
     Pydantic model to store an image or a video together with a name.
     """
 
-    frame: Optional[np.ndarray] = Field(
+    frame: np.ndarray | None = Field(
         None,
         description="Frame data, if provided.",
     )
 
-    def export(self, output_path: Union[Path, str], suffix: bool = False) -> None:
+    def export(self, output_path: Path | str, suffix: bool = False) -> None:
         """
         Export the frame data to a file.
         The file name will be a concatenation of the output path and the name of the frame.
@@ -93,12 +92,12 @@ class NamedVideo(NamedBaseFrame):
     Pydantic model to store a video together with a name.
     """
 
-    video: Optional[List[np.ndarray]] = Field(
+    video: list[np.ndarray] | None = Field(
         None,
         description="List of frames.",
     )
 
-    def export(self, output_path: Union[Path, str], suffix: bool = False, fps: float = 20) -> None:
+    def export(self, output_path: Path | str, suffix: bool = False, fps: float = 20) -> None:
         """
         Export the frame data to a file.
         """

@@ -2,7 +2,7 @@
 Classes for using in-memory data from a miniscope
 """
 
-from typing import List, Literal, Optional, Union, overload
+from typing import Literal, overload
 
 import numpy as np
 import pandas as pd
@@ -19,11 +19,11 @@ class Frame(BaseModel, arbitrary_types_allowed=True):
     """
 
     frame: np.ndarray
-    headers: List[SDBufferHeader]
+    headers: list[SDBufferHeader]
 
     @field_validator("headers")
     @classmethod
-    def frame_nums_must_be_equal(cls, v: List[SDBufferHeader]) -> Optional[List[SDBufferHeader]]:
+    def frame_nums_must_be_equal(cls, v: list[SDBufferHeader]) -> list[SDBufferHeader] | None:
         """
         Each frame_number field in each header must be the same
         (they come from the same frame!)
@@ -34,7 +34,7 @@ class Frame(BaseModel, arbitrary_types_allowed=True):
         return v
 
     @property
-    def frame_num(self) -> Optional[int]:
+    def frame_num(self) -> int | None:
         """
         Frame number for this set of headers, if headers are present
         """
@@ -46,15 +46,15 @@ class Frames(BaseModel):
     A collection of frames from a miniscope recording
     """
 
-    frames: List[Frame]
+    frames: list[Frame]
 
     @overload
-    def flatten_headers(self, as_dict: Literal[False]) -> List[SDBufferHeader]: ...
+    def flatten_headers(self, as_dict: Literal[False]) -> list[SDBufferHeader]: ...
 
     @overload
-    def flatten_headers(self, as_dict: Literal[True]) -> List[dict]: ...
+    def flatten_headers(self, as_dict: Literal[True]) -> list[dict]: ...
 
-    def flatten_headers(self, as_dict: bool = False) -> Union[List[dict], List[SDBufferHeader]]:
+    def flatten_headers(self, as_dict: bool = False) -> list[dict] | list[SDBufferHeader]:
         """
         Return flat list of headers, not grouped by frame
 
@@ -62,9 +62,9 @@ class Frames(BaseModel):
             as_dict (bool): If `True`, return a list of dictionaries, if `False`
                 (default), return a list of :class:`.SDBufferHeader` s.
         """
-        h: Union[List[dict], List[SDBufferHeader]] = []
+        h: list[dict] | list[SDBufferHeader] = []
         for frame in self.frames:
-            headers: Union[List[dict], List[SDBufferHeader]]
+            headers: list[dict] | list[SDBufferHeader]
             if as_dict:
                 headers = [header.model_dump() for header in frame.headers]
             else:

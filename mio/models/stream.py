@@ -5,7 +5,7 @@ Models for :mod:`mio.stream_daq`
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Literal, Optional, Union
+from typing import Literal
 
 from pydantic import Field, computed_field, field_validator
 
@@ -139,7 +139,7 @@ class StreamBufferHeader(BufferHeader):
     runtime_metadata: RuntimeMetadata = Field(default_factory=lambda: RuntimeMetadata())
 
     @property
-    def adc_scaling(self) -> Optional[ADCScaling]:
+    def adc_scaling(self) -> ADCScaling | None:
         """
         :class:`.ADCScaling` applied to voltage readings
         """
@@ -264,7 +264,7 @@ class StreamDevRuntime(MiniscopeConfig):
         5,
         description="Timeout for putting data into the queue",
     )
-    plot: Optional[StreamPlotterConfig] = Field(
+    plot: StreamPlotterConfig | None = Field(
         StreamPlotterConfig(
             keys=["timestamp", "buffer_count", "frame_buffer_count"], update_ms=1000, history=500
         ),
@@ -273,14 +273,14 @@ class StreamDevRuntime(MiniscopeConfig):
         "Note that this does *not* control whether header metadata is plotted during capture, "
         "for enabling/disabling, use the ``show_metadata`` kwarg in the capture method",
     )
-    csvwriter: Optional[CSVWriterConfig] = Field(
+    csvwriter: CSVWriterConfig | None = Field(
         CSVWriterConfig(buffer=100),
         description="Default configuration for writing header data to a CSV file. "
         "If ``None``, use the default params in BufferedCSVWriter. "
         "Note that this does *not* control whether header metadata is written during capture, "
         "for enabling/disabling, use the ``metadata`` kwarg in the capture method.",
     )
-    ntp_server: Optional[str] = Field(
+    ntp_server: str | None = Field(
         default=None,
         description="NTP server address for time synchronization check. "
         "If specified, the system time will be verified against this server before capture.",
@@ -371,9 +371,9 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
     """
 
     device: Literal["OK", "UART"]
-    bitstream: Optional[Path] = None
-    port: Optional[str] = None
-    baudrate: Optional[int] = None
+    bitstream: Path | None = None
+    port: str | None = None
+    baudrate: int | None = None
     frame_width: int
     frame_height: int
     fs: int = 20
@@ -388,13 +388,13 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
     reverse_payload_bits: bool = False
     reverse_payload_bytes: bool = False
     dummy_words: int = 0
-    adc_scale: Optional[ADCScaling] = ADCScaling()
+    adc_scale: ADCScaling | None = ADCScaling()
     runtime: StreamDevRuntime = StreamDevRuntime()
 
     _px_per_buffer: int = None
 
     @field_validator("preamble", mode="before")
-    def preamble_to_bytes(cls, value: Union[str, bytes, int]) -> bytes:
+    def preamble_to_bytes(cls, value: str | bytes | int) -> bytes:
         """
         Cast ``preamble`` to bytes.
 
@@ -423,7 +423,7 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
         return value
 
     @field_validator("bitstream", mode="after")
-    def ensure_exists(cls, value: Optional[Path]) -> Optional[Path]:
+    def ensure_exists(cls, value: Path | None) -> Path | None:
         """If a bitstream file has been provided, ensure it exists"""
         if isinstance(value, Path):
             assert (
