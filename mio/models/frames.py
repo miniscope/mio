@@ -12,7 +12,7 @@ import pandas as pd
 from numpydantic import NDArray
 from pydantic import BaseModel, Field, field_validator
 
-from mio.io.file import VideoWriter
+from mio.io import VideoWriter
 from mio.logging import init_logger
 from mio.models.sdcard import SDBufferHeader
 
