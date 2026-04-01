@@ -3,7 +3,6 @@ Update miniscope device configuration, such as LED, GAIN, etc.
 """
 
 import time
-from typing import Optional
 
 import serial
 import serial.tools.list_ports
@@ -20,7 +19,7 @@ def device_update(
     key: str,
     value: int,
     device_id: int,
-    port: Optional[str] = None,
+    port: str | None = None,
 ) -> None:
     """
     Remote update of device configuration.

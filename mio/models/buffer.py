@@ -4,7 +4,7 @@ containers, etc.
 """
 
 from collections.abc import Sequence
-from typing import Type, TypeVar
+from typing import TypeVar
 
 from mio.models import Container, MiniscopeConfig
 from mio.models.mixins import ConfigYAMLMixin
@@ -68,7 +68,7 @@ class BufferHeader(Container):
 
     @classmethod
     def from_format(
-        cls: Type[_T], vals: Sequence, format: BufferHeaderFormat, construct: bool = False
+        cls: type[_T], vals: Sequence, format: BufferHeaderFormat, construct: bool = False
     ) -> _T:
         """
         Instantiate a buffer header from linearized values (eg. in an ndarray or list)

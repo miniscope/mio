@@ -5,7 +5,7 @@ Models for device update commands.
 from enum import Enum
 
 import serial.tools.list_ports
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class DeviceCommand(Enum):
@@ -57,8 +57,6 @@ class DevUpdateCommand(BaseModel):
     port: str
     key: UpdateKey
     value: int
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @model_validator(mode="after")
     def validate_values(cls, values: dict) -> dict:

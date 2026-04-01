@@ -3,8 +3,8 @@ CLI commands for running streamDaq
 """
 
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 import click
 
@@ -82,12 +82,12 @@ def _capture_options(fn: Callable) -> Callable:
 @_capture_options
 def capture(
     device_config: Path,
-    freq_mask_config: Optional[Path],
-    output: Optional[Path],
-    okwarg: Optional[dict],
-    no_display: Optional[bool],
-    binary_export: Optional[bool],
-    metadata_display: Optional[bool],
+    freq_mask_config: Path | None,
+    output: Path | None,
+    okwarg: dict | None,
+    no_display: bool | None,
+    binary_export: bool | None,
+    metadata_display: bool | None,
     **kwargs: dict,
 ) -> None:
     """

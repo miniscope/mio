@@ -6,18 +6,15 @@ to use composition for functionality and inheritance for semantics.
 import re
 import shutil
 import sys
+from collections.abc import Iterator
 from importlib.metadata import version
 from itertools import chain
 from pathlib import Path
 from typing import (
     Any,
     ClassVar,
-    Iterator,
-    List,
     Literal,
-    Optional,
     TypedDict,
-    Union,
     overload,
 )
 
@@ -50,13 +47,13 @@ class YAMLMixin:
     """
 
     @classmethod
-    def from_yaml(cls: Self, file_path: Union[str, Path]) -> Self:
+    def from_yaml(cls: Self, file_path: str | Path) -> Self:
         """Instantiate this class by passing the contents of a yaml file as kwargs"""
         with open(file_path) as file:
             config_data = yaml.safe_load(file)
         return cls(**config_data)
 
-    def to_yaml(self, path: Optional[Path] = None, **kwargs: Any) -> str:
+    def to_yaml(self, path: Path | None = None, **kwargs: Any) -> str:
         """
         Dump the contents of this class to a yaml file, returning the
         contents of the dumped string
@@ -88,7 +85,7 @@ class ConfigYamlHeader(TypedDict):
     Generic container for partially-read config header data
     """
 
-    id: Optional[ConfigID]
+    id: ConfigID | None
     mio_model: PythonIdentifier
     mio_version: str
     path: NotRequired[Path]
@@ -112,7 +109,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
     HEADER_FIELDS: ClassVar[tuple[str]] = ("id", "mio_model", "mio_version")
 
     @classmethod
-    def from_yaml(cls: Self, file_path: Union[str, Path]) -> Self:
+    def from_yaml(cls: Self, file_path: str | Path) -> Self:
         """Instantiate this class by passing the contents of a yaml file as kwargs"""
         with open(file_path) as file:
             config_data = yaml.safe_load(file)
@@ -163,7 +160,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         raise KeyError(f"No config with id {id} found in {Config().config_dir}")
 
     @classmethod
-    def from_any(cls: Self, source: Union[ConfigSource, Self]) -> Self:
+    def from_any(cls: Self, source: ConfigSource | Self) -> Self:
         """
         Try and instantiate a config model from any supported constructor.
 
@@ -221,14 +218,14 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
 
     @field_validator("mio_model", mode="before")
     @classmethod
-    def fill_mio_model(cls, v: Optional[str]) -> PythonIdentifier:
+    def fill_mio_model(cls, v: str | None) -> PythonIdentifier:
         """Get name of instantiating model, if not provided"""
         if v is None:
             v = cls._model_name()
         return v
 
     @classmethod
-    def config_sources(cls) -> List[Path]:
+    def config_sources(cls) -> list[Path]:
         """
         Directories to search for config files, in order of priority
         such that earlier sources are preferred over later sources.
@@ -246,7 +243,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         return f"{cls.__module__}.{cls.__name__}"
 
     @classmethod
-    def _yaml_header(cls, instance: Union[Self, dict]) -> ConfigYamlHeader:
+    def _yaml_header(cls, instance: Self | dict) -> ConfigYamlHeader:
         if isinstance(instance, dict):
             model_id = instance.get("id", None)
             mio_model = instance.get("mio_model", cls._model_name())
@@ -270,7 +267,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         }
 
     @classmethod
-    def _complete_header(cls: Self, data: dict, file_path: Union[str, Path]) -> dict:
+    def _complete_header(cls: Self, data: dict, file_path: str | Path) -> dict:
         """fill in any missing fields in the source file needed for a header"""
 
         missing_fields = set(cls.HEADER_FIELDS) - set(data.keys())
@@ -303,37 +300,37 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
 
 @overload
 def yaml_peek(
-    key: str, path: Union[str, Path], root: bool = True, first: Literal[True] = True
+    key: str, path: str | Path, root: bool = True, first: Literal[True] = True
 ) -> str: ...
 
 
 @overload
 def yaml_peek(
-    key: str, path: Union[str, Path], root: bool = True, first: Literal[False] = False
-) -> List[str]: ...
+    key: str, path: str | Path, root: bool = True, first: Literal[False] = False
+) -> list[str]: ...
 
 
 @overload
 def yaml_peek(
-    key: str, path: Union[str, Path], root: bool = True, first: bool = True
-) -> Union[str, List[str]]: ...
+    key: str, path: str | Path, root: bool = True, first: bool = True
+) -> str | list[str]: ...
 
 
 @overload
 def yaml_peek(
-    key: Union[list[str], tuple[str], set[str], frozenset[str]],
-    path: Union[str, Path],
+    key: list[str] | tuple[str] | set[str] | frozenset[str],
+    path: str | Path,
     root: bool = True,
     first: bool = True,
 ) -> dict[str, Any]: ...
 
 
 def yaml_peek(
-    key: Union[str, list[str], tuple[str], set[str], frozenset[str]],
-    path: Union[str, Path],
+    key: str | list[str] | tuple[str] | set[str] | frozenset[str],
+    path: str | Path,
     root: bool = True,
     first: bool = True,
-) -> Union[str, List[str], dict[str, Any]]:
+) -> str | list[str] | dict[str, Any]:
     """
     Peek into a yaml file without parsing the whole file to retrieve the value of a single key.
 
