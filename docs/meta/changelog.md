@@ -1,5 +1,11 @@
 # Changelog
 
+## Upcoming
+
+#### CI/CD
+
+- [`#157`](https://github.com/miniscope/mio/pull/157) - Add continuous deployment to PyPI 
+
 ## 0.9
 
 ### 0.9.0 - 2026-01-27 - Batch device update, NTP sync, driver import fix
