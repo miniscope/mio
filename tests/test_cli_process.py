@@ -11,7 +11,6 @@ import pytest
 from click.testing import CliRunner
 
 from mio.cli.process import process
-from mio.exceptions import VideoMetadataError
 from mio.utils import hash_video
 
 STITCH_DATA_DIR = Path(__file__).parent / "data" / "stitch"

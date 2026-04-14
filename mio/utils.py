@@ -7,8 +7,6 @@ from pathlib import Path
 
 import cv2
 
-DEFAULT_PROCESS_DIR = "mio_process"
-
 
 def hash_file(path: Path | str) -> str:
     """
@@ -63,10 +61,11 @@ def hash_video(
     return h.hexdigest()
 
 
-def _format_ranges(indices: list[int]) -> list[str]:
+def _format_ranges(indices: list[int] | set[int]) -> list[str]:
     """Convert a sorted list of missing frame indices into readable ranges."""
     if not indices:
         return []
+    indices = sorted(indices)
 
     ranges = []
     start = indices[0]

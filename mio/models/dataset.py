@@ -74,6 +74,7 @@ from pydantic import (
 )
 
 from mio.models import MiniscopeIOModel
+from mio.utils import _format_ranges
 
 VIDEO_EXTENSIONS = (".avi", ".mp4")
 RECORDING_TYPES = Literal["raw", "stitched"]
@@ -151,8 +152,8 @@ class Recording(MiniscopeIOModel):
             metadata_frames = set(self.metadata["reconstructed_frame_index"].unique())
             assert video_frames == metadata_frames, (
                 f"Metadata has different number of frames than video:\n"
-                f"Metadata extra: {metadata_frames - video_frames}\n"
-                f"Video extra: {video_frames - metadata_frames}"
+                f"Metadata extra: {_format_ranges(metadata_frames - video_frames)}\n"
+                f"Video extra: {_format_ranges(video_frames - metadata_frames)}"
             )
         return self
 

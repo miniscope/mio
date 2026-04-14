@@ -37,7 +37,7 @@ def test_noise_patch_processor(video_frame, tmp_path):
     denoise_config.noise_patch.output_result = True
 
     processor = NoisePatchProcessor("denoise_example", denoise_config.noise_patch, tmp_path)
-    processed_frame = processor.process_frame(video_frame, original_frame_index=0)
+    processed_frame = processor.process_frame(video_frame, 0)
 
     assert isinstance(processed_frame, np.ndarray)
     assert processor.name == "denoise_example"
@@ -60,7 +60,7 @@ def test_noise_patch_processor_no_methods(random_8bit_video_frame, tmp_path):
     denoise_config.noise_patch.method = []
 
     processor = NoisePatchProcessor("denoise_example", denoise_config.noise_patch, tmp_path)
-    processed_frame = processor.process_frame(random_8bit_video_frame, original_frame_index=0)
+    processed_frame = processor.process_frame(random_8bit_video_frame, 0)
     assert processed_frame is random_8bit_video_frame
 
 def test_freqency_mask_processor(video_frame, tmp_path):
@@ -75,7 +75,7 @@ def test_freqency_mask_processor(video_frame, tmp_path):
         100,
         tmp_path,
     )
-    processed_frame = processor.process_frame(video_frame)
+    processed_frame = processor.process_frame(video_frame, 0)
 
     assert isinstance(processed_frame, np.ndarray)
     assert processor.name == "test_freq_mask"
@@ -84,7 +84,7 @@ def test_freqency_mask_processor(video_frame, tmp_path):
 
 def test_pass_through_processor(video_frame, tmp_path):
     processor = PassThroughProcessor("test_pass_through", tmp_path)
-    processed_frame = processor.process_frame(video_frame)
+    processed_frame = processor.process_frame(video_frame, 0)
 
     assert isinstance(processed_frame, np.ndarray)
     assert np.array_equal(processed_frame, video_frame)
