@@ -10,7 +10,7 @@ from mio.logging import init_logger
 from mio.models.dataset import Recording
 from mio.models.process import DenoiseConfig
 from mio.process.stitch import stitch as run_stitch
-from mio.process.video import denoise_run
+from mio.process.video import denoise as run_denoise
 from mio.process.video import trim as run_trim
 
 logger = init_logger("mio.cli.process")
@@ -70,11 +70,7 @@ def denoise(
         default_output_dir = input.parent
         denoise_config_parsed.output_dir = str(default_output_dir)
 
-    denoise_run(
-        input,
-        denoise_config_parsed,
-        csv_df=recording.metadata,
-    )
+    run_denoise(input, denoise_config_parsed, csv_df=recording.metadata, progress=True)
 
 
 @process.command()
@@ -134,6 +130,7 @@ def trim(
         csv_df=recording.metadata,
         start=trim_start,
         end=trim_end,
+        progress=True,
     )
     click.echo(f"Cropped output written to {cropped_output}")
 

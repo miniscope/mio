@@ -172,7 +172,6 @@ class NoisePatchProcessor(BaseVideoProcessor):
                 return input_frame
             else:
                 msg = f"Dropping frame {original_frame_index} of original video due to noise."
-                tqdm.write(msg)
                 logger.debug(msg)
                 logger.debug(f"Adding noise patch for frame {original_frame_index}.")
                 self.noise_patchs.append((noisy_area * np.iinfo(np.uint8).max).astype(np.uint8))
@@ -490,11 +489,12 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
         self.export_minimum_projection()
 
 
-def denoise_run(
+def denoise(
     video_path: Path,
     config: DenoiseConfig,
     csv_df: pd.DataFrame | None = None,
     debug_dir: Path | None = None,
+    progress: bool = False,
 ) -> Path:
     """
     Preprocess a video file and display the results.
@@ -513,6 +513,8 @@ def denoise_run(
         If provided, intermediate files (noisy frames, patches, frequency masks, etc.)
         will be saved here instead of the main output_dir. Main output files
         (output video and CSV) will still be saved to output_dir.
+    progress : bool
+        Display a progress bar
 
     Returns
     -------
@@ -566,9 +568,13 @@ def denoise_run(
 
     total_frames = int(reader.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+    if progress:
+        iterator = tqdm(reader.read_frames(), total=total_frames, desc="Processing frames")
+    else:
+        iterator = reader.read_frames()
+
     try:
-        frame_iter = tqdm(reader.read_frames(), total=total_frames, desc="Processing frames")
-        for index, frame in frame_iter:
+        for index, frame in iterator:
             if config.end_frame and index > config.end_frame and config.end_frame != -1:
                 break
 
@@ -791,6 +797,7 @@ def trim(
     csv_df: pd.DataFrame | None = None,
     start: int = 0,
     end: int = 0,
+    progress: bool = False,
 ) -> Path:
     """
     Crop a video file by trimming frames from both ends.
@@ -809,6 +816,8 @@ def trim(
         Number of frames to remove from the beginning. Default 0.
     end : int
         Number of frames to remove from the end. Default 0.
+    progress : bool
+        Display a progress bar
 
     Returns
     -------
@@ -849,10 +858,14 @@ def trim(
 
     writer = VideoWriter(path=output_path_obj, fps=fps)
 
+    if progress:
+        iterator = tqdm(reader.read_frames(), total=total_frames, desc="Cropping frames")
+    else:
+        iterator = reader.read_frames()
+
     frames_written = 0
     try:
-        frame_iter = tqdm(reader.read_frames(), total=total_frames, desc="Cropping frames")
-        for index, frame in frame_iter:
+        for index, frame in iterator:
             if index < start_idx:
                 continue
             if index > end_idx:
@@ -888,7 +901,7 @@ def trim(
 
 
 def _crop_csv_metadata(
-    input_video_path: str,
+    input_video_path: Path,
     output_video_path: Path,
     csv_df: pd.DataFrame | None = None,
     start_idx: int = 0,
