@@ -11,7 +11,7 @@ dynamic = ["version"]
 requires-python = "<4.0,>=3.10"
 dependencies = [
     "opencv-python>=4.7.0.72",
-    "numpy>=1.25.0,<2.0",
+    "numpy>=1.25.0,<2.3.0", # skvideo: numpy tostring removed in 2.3
     "pandas>=2.1.0",
     "pydantic>=2.3.0",
     "pyserial>=3.5",
