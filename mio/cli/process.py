@@ -88,7 +88,7 @@ def denoise(
     default=None,
     help="Path to the output video file or directory. If a directory, "
     "the output filename will be generated from the input filename. "
-    "If not specified, saves to input file name with '_cropped' suffix.",
+    "If not specified, saves to input file name with '_trimmed' suffix.",
 )
 @click.option(
     "-s",
@@ -124,7 +124,7 @@ def trim(
     else:
         output_path = Path(output)
 
-    cropped_output = run_trim(
+    trimmed_output = run_trim(
         input_path,
         output_path=output_path,
         csv_df=recording.metadata,
@@ -132,7 +132,7 @@ def trim(
         end=trim_end,
         progress=True,
     )
-    click.echo(f"Cropped output written to {cropped_output}")
+    click.echo(f"Cropped output written to {trimmed_output}")
 
 
 @process.command()

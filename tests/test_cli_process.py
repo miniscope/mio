@@ -107,7 +107,7 @@ def test_cli_trim(tmp_path):
         ],
     )
     assert result.exit_code == 0, result.output
-    out_video = out_dir / "video1_cropped.avi"
+    out_video = out_dir / "video1_trimmed.avi"
     assert out_video.exists()
     assert hash_video(out_video) == EXPECTED_CROP_VIDEO_HASH
 
