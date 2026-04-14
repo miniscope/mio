@@ -24,12 +24,14 @@ def video_frame() -> np.ndarray:
     """idk it's a frame of all 128s ig lol"""
     return np.ones((100, 100), dtype=np.uint8) * 128
 
+
 @pytest.fixture()
 def random_8bit_video_frame() -> np.ndarray:
     """Frame with pseudo-random 8-bit values."""
     seed = 42  # Arbitrary fixed seed to make the output deterministic
     np.random.seed(seed)
     return np.random.randint(0, 256, (100, 100), dtype=np.uint8)
+
 
 def test_noise_patch_processor(video_frame, tmp_path):
     denoise_config = DenoiseConfig.from_id("denoise_example")
@@ -43,6 +45,7 @@ def test_noise_patch_processor(video_frame, tmp_path):
     assert processor.name == "denoise_example"
     assert processor.output_enable
 
+
 def test_noise_patch_processor_no_config(random_8bit_video_frame, tmp_path):
     denoise_config = DenoiseConfig.from_id("denoise_example")
     denoise_config.noise_patch.enable = True
@@ -54,6 +57,7 @@ def test_noise_patch_processor_no_config(random_8bit_video_frame, tmp_path):
     with pytest.raises(ValueError):
         NoisePatchProcessor("denoise_example", denoise_config.noise_patch, tmp_path)
 
+
 def test_noise_patch_processor_no_methods(random_8bit_video_frame, tmp_path):
     denoise_config = DenoiseConfig.from_id("denoise_example")
     denoise_config.noise_patch.enable = True
@@ -62,6 +66,7 @@ def test_noise_patch_processor_no_methods(random_8bit_video_frame, tmp_path):
     processor = NoisePatchProcessor("denoise_example", denoise_config.noise_patch, tmp_path)
     processed_frame = processor.process_frame(random_8bit_video_frame, 0)
     assert processed_frame is random_8bit_video_frame
+
 
 def test_freqency_mask_processor(video_frame, tmp_path):
     denoise_config = DenoiseConfig.from_id("denoise_example")
