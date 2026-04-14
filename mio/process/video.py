@@ -491,7 +491,7 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
 
 
 def denoise_run(
-    video_path: str,
+    video_path: Path,
     config: DenoiseConfig,
     csv_df: pd.DataFrame | None = None,
     debug_dir: Path | None = None,
@@ -525,7 +525,7 @@ def denoise_run(
             "install it manually or install miniscope-io with `pip install miniscope-io[plot]`"
         )
 
-    reader = VideoReader(video_path)
+    reader = VideoReader(str(video_path))
     pathstem = Path(video_path).stem
     output_video_path: Path | None = None
 
@@ -674,7 +674,7 @@ def denoise_run(
 
 
 def _modify_csv_metadata(
-    input_video_path: str,
+    input_video_path: Path,
     output_video_path: Path,
     dropped_frame_indices: list[int],
     csv_df: pd.DataFrame | None = None,
@@ -785,12 +785,12 @@ def _export_frame_timestamp_csv(output_video_path: Path, csv_df: pd.DataFrame) -
         raise
 
 
-def crop_run(
-    video_path: str,
-    output_path: str | None = None,
+def trim(
+    video_path: Path,
+    output_path: Path | None = None,
     csv_df: pd.DataFrame | None = None,
-    trim_start: int = 0,
-    trim_end: int = 0,
+    start: int = 0,
+    end: int = 0,
 ) -> Path:
     """
     Crop a video file by trimming frames from both ends.
@@ -805,9 +805,9 @@ def crop_run(
     csv_df : Optional[pd.DataFrame], optional
         Pre-validated CSV DataFrame. If provided, uses this instead of
         reading from disk.
-    trim_start : int
+    start : int
         Number of frames to remove from the beginning. Default 0.
-    trim_end : int
+    end : int
         Number of frames to remove from the end. Default 0.
 
     Returns
@@ -815,39 +815,36 @@ def crop_run(
     Path
         Path to the output video file.
     """
-    reader = VideoReader(video_path)
+    reader = VideoReader(str(video_path))
     input_path = Path(video_path)
 
     if output_path is None:
-        output_path_obj = input_path.parent / f"{input_path.stem}_cropped{input_path.suffix}"
+        output_path_obj = input_path.parent / f"{input_path.stem}_trimmed{input_path.suffix}"
+    elif output_path.is_dir() or output_path.suffix == "":
+        output_path_obj = output_path / f"{input_path.stem}_trimmed{input_path.suffix}"
     else:
-        output_path_obj = Path(output_path).expanduser()
-        if output_path_obj.is_dir() or not output_path_obj.suffix:
-            if not output_path_obj.exists():
-                output_path_obj.mkdir(parents=True, exist_ok=True)
-            output_path_obj = output_path_obj / f"{input_path.stem}_cropped{input_path.suffix}"
+        output_path_obj = output_path
 
     output_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
     total_frames = int(reader.cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = reader.cap.get(cv2.CAP_PROP_FPS)
 
-    if trim_start < 0:
-        raise ValueError(f"trim_start must be >= 0, got {trim_start}")
-    if trim_end < 0:
-        raise ValueError(f"trim_end must be >= 0, got {trim_end}")
-    if trim_start + trim_end >= total_frames:
+    if start < 0:
+        raise ValueError(f"start must be >= 0, got {start}")
+    if end < 0:
+        raise ValueError(f"end must be >= 0, got {end}")
+    if start + end >= total_frames:
         raise ValueError(
-            f"trim_start ({trim_start}) + trim_end ({trim_end}) "
-            f"must be < total_frames ({total_frames})"
+            f"start ({start}) + end ({end}) " f"must be < total_frames ({total_frames})"
         )
 
-    start_idx = trim_start
-    end_idx = total_frames - 1 - trim_end
+    start_idx = start
+    end_idx = total_frames - 1 - end
     expected_output_frames = end_idx - start_idx + 1
     logger.info(
-        f"Cropping video: keeping frames {start_idx}-{end_idx} "
-        f"({expected_output_frames} frames, removing {trim_start} from start, {trim_end} from end)"
+        f"Trimming video: keeping frames {start_idx}-{end_idx} "
+        f"({expected_output_frames} frames, removing {start} from start, {end} from end)"
     )
 
     writer = VideoWriter(path=output_path_obj, fps=fps)

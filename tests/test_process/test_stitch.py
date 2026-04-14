@@ -18,11 +18,10 @@ from mio.process.stitch import (
     CandidateFrame,
     StitchRecord,
     stitch,
-    _select_best_candidate,
     _score_edges,
 )
-from mio.process.video import crop_run
-from mio.utils import hash_video, validate_video_metadata_match
+from mio.process.video import trim
+from mio.utils import hash_video
 
 STITCH_DATA_DIR = Path(__file__).parent.parent / "data" / "stitch"
 
@@ -65,11 +64,6 @@ def test_stitched_video_frame_count(
         + list(recordings["video2"].metadata["frame_num"])
     )
     assert frame_count == len(expected)
-
-
-def test_stitched_csv_valid(stitch_result: StitchedRecording):
-    """Stitched CSV passes video-metadata validation."""
-    validate_video_metadata_match(stitch_result.video.path)
 
 
 def test_stitched_csv_contiguous_index(stitch_result: StitchedRecording):
@@ -138,7 +132,6 @@ def test_stitch_without_debug(tmp_path):
     result = stitch(recordings, output_dir=tmp_path)
 
     assert hash_video(result.video.path) == EXPECTED_STITCHED_VIDEO_HASH
-    validate_video_metadata_match(result.video.path)
 
 
 def test_stitch_padding_tiebreaker(tmp_path, recordings):
@@ -163,48 +156,49 @@ def test_stitch_padding_tiebreaker(tmp_path, recordings):
     assert row["compare_black_padding"] == 800
 
 
-def test_crop_video_hash(tmp_path):
+def test_trim_video_hash(tmp_path):
     """Cropped video content matches expected hash."""
-    out = crop_run(
-        str(STITCH_DATA_DIR / "video1.avi"),
-        output_path=str(tmp_path / "cropped.avi"),
-        trim_start=10,
-        trim_end=10,
+    out = trim(
+        STITCH_DATA_DIR / "video1.avi",
+        output_path=tmp_path / "trimped.avi",
+        start=10,
+        end=10,
     )
     assert hash_video(out) == EXPECTED_CROP_VIDEO_HASH
 
 
-def test_crop_frame_count(tmp_path):
+def test_trim_frame_count(tmp_path):
     """Cropped video has the expected number of frames."""
-    out = crop_run(
-        str(STITCH_DATA_DIR / "video1.avi"),
-        output_path=str(tmp_path / "cropped.avi"),
-        trim_start=10,
-        trim_end=10,
+    out = trim(
+        STITCH_DATA_DIR / "video1.avi",
+        output_path=tmp_path / "trimped.avi",
+        start=10,
+        end=10,
     )
     cap = cv2.VideoCapture(str(out))
     assert int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) == EXPECTED_CROP_FRAME_COUNT
     cap.release()
 
 
-def test_crop_csv_valid(tmp_path):
+def test_trim_csv_valid(tmp_path):
     """Cropped CSV passes video-metadata validation."""
-    out = crop_run(
-        str(STITCH_DATA_DIR / "video1.avi"),
-        output_path=str(tmp_path / "cropped.avi"),
-        trim_start=10,
-        trim_end=10,
+    out = trim(
+        STITCH_DATA_DIR / "video1.avi",
+        output_path=tmp_path / "trimped.avi",
+        start=10,
+        end=10,
     )
-    validate_video_metadata_match(out)
+    recording = Recording.from_video(tmp_path / "trimped.avi")
+    assert recording.metadata is not None
 
 
-def test_crop_csv_renumbered(tmp_path):
+def test_trim_csv_renumbered(tmp_path):
     """Cropped CSV has reconstructed_frame_index renumbered to 0-based."""
-    out = crop_run(
-        str(STITCH_DATA_DIR / "video1.avi"),
-        output_path=str(tmp_path / "cropped.avi"),
-        trim_start=10,
-        trim_end=10,
+    out = trim(
+        STITCH_DATA_DIR / "video1.avi",
+        output_path=tmp_path / "trimped.avi",
+        start=10,
+        end=10,
     )
     df = pd.read_csv(str(out).replace(".avi", ".csv"))
     indices = sorted(df["reconstructed_frame_index"].unique())
@@ -212,8 +206,8 @@ def test_crop_csv_renumbered(tmp_path):
     assert indices == list(range(len(indices)))
 
 
-def test_crop_default_output_path(tmp_path):
-    """crop_run with output_path=None generates *_cropped.avi alongside input."""
+def test_trim_default_output_path(tmp_path):
+    """trim with output_path=None generates *_trimped.avi alongside input."""
     # Copy fixture to tmp so the default output goes there
     import shutil
 
@@ -224,8 +218,8 @@ def test_crop_default_output_path(tmp_path):
     shutil.copy(src, dst)
     shutil.copy(src_csv, dst_csv)
 
-    out = crop_run(str(dst), output_path=None, trim_end=40)
-    assert out.name == "video1_cropped.avi"
+    out = trim(dst, output_path=None, end=40)
+    assert out.name == "video1_trimmed.avi"
     assert out.parent == tmp_path
 
     cap = cv2.VideoCapture(str(out))
@@ -233,18 +227,18 @@ def test_crop_default_output_path(tmp_path):
     cap.release()
 
 
-def test_crop_invalid_range(tmp_path):
-    """crop_run raises ValueError for invalid trim ranges."""
-    video = str(STITCH_DATA_DIR / "video1.avi")
+def test_trim_invalid_range(tmp_path):
+    """trim raises ValueError for invalid trim ranges."""
+    video = STITCH_DATA_DIR / "video1.avi"
 
-    with pytest.raises(ValueError, match="trim_start must be >= 0"):
-        crop_run(video, output_path=str(tmp_path / "out.avi"), trim_start=-1)
+    with pytest.raises(ValueError, match="start must be >= 0"):
+        trim(video, output_path=tmp_path / "out.avi", start=-1)
 
-    with pytest.raises(ValueError, match="trim_end must be >= 0"):
-        crop_run(video, output_path=str(tmp_path / "out.avi"), trim_end=-1)
+    with pytest.raises(ValueError, match="end must be >= 0"):
+        trim(video, output_path=tmp_path / "out.avi", end=-1)
 
     with pytest.raises(ValueError, match="must be < total_frames"):
-        crop_run(video, output_path=str(tmp_path / "out.avi"), trim_start=25, trim_end=25)
+        trim(video, output_path=tmp_path / "out.avi", start=25, end=25)
 
 
 def test_edge_scoring_selects_less_sharp():

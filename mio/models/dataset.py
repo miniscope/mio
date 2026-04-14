@@ -143,6 +143,19 @@ class Recording(MiniscopeIOModel):
         if binary_path.exists():
             return binary_path
 
+    @model_validator(mode="after")
+    def _metadata_length_matches_video(self) -> Self:
+        """Video has the same number of frames as accompanying metadata"""
+        if self.metadata is not None and "reconstructed_frame_index" in self.metadata:
+            video_frames = set(range(self.video.shape[0]))
+            metadata_frames = set(self.metadata["reconstructed_frame_index"].unique())
+            assert video_frames == metadata_frames, (
+                f"Metadata has different number of frames than video:\n"
+                f"Metadata extra: {metadata_frames - video_frames}\n"
+                f"Video extra: {video_frames - metadata_frames}"
+            )
+        return self
+
 
 class RawVideoRecording(Recording):
     """A raw video"""
