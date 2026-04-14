@@ -94,7 +94,7 @@ class BaseVideoProcessor:
         else:
             logger.info(f"{self.name} output disabled.")
 
-    def process_frame(self) -> None:
+    def process_frame(self, input_frame: np.ndarray, index: int) -> None:
         """
         Process a single frame. This method should be implemented in the subclass.
 
@@ -143,9 +143,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
                 "The mean_error method is unstable and not fully tested yet." " Use with caution."
             )
 
-    def process_frame(
-        self, input_frame: np.ndarray, original_frame_index: int
-    ) -> np.ndarray | None:
+    def process_frame(self, input_frame: np.ndarray, index: int) -> np.ndarray | None:
         """
         Process a single frame.
 
@@ -153,8 +151,8 @@ class NoisePatchProcessor(BaseVideoProcessor):
         ----------
         input_frame : np.ndarray
             The frame to process.
-        original_frame_index : int
-            The original frame index from the video reader.
+        index : int
+            The frame number within the video.
 
         Returns
         -------
@@ -171,12 +169,12 @@ class NoisePatchProcessor(BaseVideoProcessor):
                 self.append_output_frame(input_frame)
                 return input_frame
             else:
-                msg = f"Dropping frame {original_frame_index} of original video due to noise."
+                msg = f"Dropping frame {index} of original video due to noise."
                 logger.debug(msg)
-                logger.debug(f"Adding noise patch for frame {original_frame_index}.")
+                logger.debug(f"Adding noise patch for frame {index}.")
                 self.noise_patchs.append((noisy_area * np.iinfo(np.uint8).max).astype(np.uint8))
                 self.noisy_frames.append(input_frame)
-                self.dropped_frame_indices.append(original_frame_index)
+                self.dropped_frame_indices.append(index)
             return None
 
         self.append_output_frame(input_frame)
@@ -315,7 +313,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         """
         return NamedVideo(name="freq_domain", video=self.freq_domain_frames)
 
-    def process_frame(self, input_frame: np.ndarray) -> np.ndarray | None:
+    def process_frame(self, input_frame: np.ndarray, index: int) -> np.ndarray | None:
         """
         Process a single frame.
 
@@ -398,7 +396,7 @@ class PassThroughProcessor(BaseVideoProcessor):
         """
         return NamedVideo(name=self.name, video=self.output_video)
 
-    def process_frame(self, input_frame: np.ndarray) -> np.ndarray:
+    def process_frame(self, input_frame: np.ndarray, index: int) -> np.ndarray:
         """
         Process a single frame.
 
@@ -562,10 +560,8 @@ def denoise(
     if config.interactive_display.display_freq_mask:
         freq_mask_processor.freq_mask_named_frame.display()
 
-    total_frames = int(reader.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
     if progress:
-        iterator = tqdm(reader.read_frames(), total=total_frames, desc="Processing frames")
+        iterator = tqdm(reader.read_frames(), total=reader.frame_count, desc="Processing frames")
     else:
         iterator = reader.read_frames()
 
@@ -577,12 +573,10 @@ def denoise(
             if len(frame.shape) != 2:
                 raise ValueError(f"Frame {index} has shape {frame.shape}, expected 2D grayscale.")
             raw_frame = frame
-            input_frame = raw_frame_processor.process_frame(raw_frame)
-            patched_frame = noise_patch_processor.process_frame(
-                input_frame, original_frame_index=index
-            )
-            freq_masked_frame = freq_mask_processor.process_frame(patched_frame)
-            _ = output_frame_processor.process_frame(freq_masked_frame)
+            input_frame = raw_frame_processor.process_frame(raw_frame, index)
+            patched_frame = noise_patch_processor.process_frame(input_frame, index)
+            freq_masked_frame = freq_mask_processor.process_frame(patched_frame, index)
+            _ = output_frame_processor.process_frame(freq_masked_frame, index)
 
     finally:
         reader.release()
@@ -622,7 +616,7 @@ def denoise(
     dropped_count = len(noise_patch_processor.dropped_frame_indices)
     logger.debug(
         f"Output video will have {actual_output_frame_count} frames "
-        f"(input had {total_frames}, dropped {dropped_count})"
+        f"(input had {reader.frame_count}, dropped {dropped_count})"
     )
 
     csv_df = csv_df if csv_df else pd.read_csv(video_path.with_suffix(".csv"))
