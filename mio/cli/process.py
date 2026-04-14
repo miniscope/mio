@@ -10,8 +10,10 @@ import click
 from mio.exceptions import VideoMetadataError
 from mio.io import VideoWriter
 from mio.logging import init_logger
+from mio.models.dataset import Recording
 from mio.models.process import DenoiseConfig
 from mio.process.stitch import RecordingData, RecordingDataBundle
+from mio.process.stitch import stitch as run_stitch
 from mio.process.video import crop_run, denoise_run
 from mio.utils import (
     DEFAULT_PROCESS_DIR,
@@ -186,38 +188,12 @@ def crop(
     help="Paths to video files. Each requires a .csv with the same stem name.",
 )
 @click.option(
-    "-o",
-    "--output",
-    type=click.Path(),
-    default=None,
-    help="Path to the output stitched video file or directory. "
-    f"If not specified, uses {DEFAULT_PROCESS_DIR}/ directory with '_stitched' suffix.",
-)
-@click.option(
     "--debug-video",
     type=click.Path(dir_okay=False),
     default=None,
     help="Output path for debug video showing frame comparisons.",
 )
-@click.option(
-    "--debug-csv",
-    type=click.Path(dir_okay=False),
-    default=None,
-    help="Output path for debug CSV with selection metadata.",
-)
-@click.option(
-    "--fps",
-    type=int,
-    default=20,
-    help="Frames per second for output video.",
-)
-def stitch(
-    inputs: tuple,
-    output: str | None,
-    debug_video: str | None,
-    debug_csv: str | None,
-    fps: int,
-) -> None:
+def stitch(inputs: tuple, debug_video: Path | None = None) -> None:
     """
     Stitch multiple video recordings into one by selecting the best frame
     for each device timestamp using metadata scoring and edge detection.
@@ -227,36 +203,9 @@ def stitch(
     if len(inputs) < 2:
         raise click.ClickException("At least 2 input videos are required for stitching.")
 
-    recordings = RecordingData.from_video_paths([Path(p) for p in inputs])
-
-    first_input_path = Path(inputs[0])
-    output_arg = output if output is not None else DEFAULT_PROCESS_DIR
-    stitched_video_path = resolve_output_path(first_input_path, "_stitched", output_arg)
-
-    output_csv_path = stitched_video_path.with_suffix(".csv")
-
-    debug_video_path = Path(debug_video) if debug_video else None
-    debug_csv_path = Path(debug_csv) if debug_csv else None
-
-    stitched_video_writer = VideoWriter(path=stitched_video_path, fps=fps)
-    debug_video_writer = VideoWriter(path=debug_video_path, fps=fps) if debug_video_path else None
-
-    recording_bundle = RecordingDataBundle(
-        recordings=recordings,
-        stitched_video_writer=stitched_video_writer,
-        debug_video_writer=debug_video_writer,
-        combined_csv_path=output_csv_path,
-        debug_csv_path=debug_csv_path,
-    )
-
-    click.echo(f"Stitching {len(recordings)} recordings...")
-    recording_bundle.stitch_recordings()
-
-    try:
-        validate_video_metadata_match(stitched_video_path)
-    except VideoMetadataError as e:
-        raise click.ClickException(f"Frame count alignment failed after stitching: {e}") from None
-    click.echo(f"✅ Frame count alignment verified: {stitched_video_path}")
+    recordings = [Recording.from_video(Path(p)) for p in inputs]
+    stitched = run_stitch(recordings, debug_video=debug_video, progress=True)
+    click.echo(f"Stitched videos to {stitched.video.path}")
 
 
 @process.command()

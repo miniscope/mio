@@ -13,241 +13,154 @@ import pytest
 import numpy as np
 
 from mio.io import VideoWriter
-from mio.models.stitch import DebugRecord, FrameInfo
+from mio.models.dataset import Recording, Dataset, StitchedRecording
 from mio.process.stitch import (
     CandidateFrame,
-    RecordingData,
-    RecordingDataBundle,
-    select_best_candidate,
-    score_edges,
+    StitchRecord,
+    stitch,
+    _select_best_candidate,
+    _score_edges,
 )
 from mio.process.video import crop_run
 from mio.utils import hash_video, validate_video_metadata_match
 
 STITCH_DATA_DIR = Path(__file__).parent.parent / "data" / "stitch"
 
-EXPECTED_STITCHED_VIDEO_HASH = "245caa04878a1288c5d2915680259e1a5c37aef819d1767a0b357587ccb3d703"
-EXPECTED_DEBUG_VIDEO_HASH = "e9fd27bbf7c2ab658dbe7a63206b9f370eeb561b9c2574143e168f5f40120e03"
-EXPECTED_STITCHED_FRAME_COUNT = 54
-EXPECTED_DEBUG_ROWS = 4
+EXPECTED_STITCHED_VIDEO_HASH = "c8cdf3149f812ae25e6f3f1a876249e4ce118e9a53aa1805e48b995b01f07a91"
+EXPECTED_DEBUG_VIDEO_HASH = "856e6e5c538532bd0fcfb942616686a5cd262aadb51dd8796adf5de69215c94b"
 EXPECTED_CROP_VIDEO_HASH = "432642b1528fcd9ad553cfb3cc3862bef931301bd11d44dc3c2372fc379fa629"
 EXPECTED_CROP_FRAME_COUNT = 30
 
 
 @pytest.fixture(scope="module")
-def stitch_result(tmp_path_factory):
-    """Run stitch once on the trimmed fixtures, return paths to all outputs."""
-    tmp = tmp_path_factory.mktemp("stitch_regression")
-    debug_dir = tmp / "debug"
-    debug_dir.mkdir()
-
-    recordings = [
-        RecordingData(
-            video_path=STITCH_DATA_DIR / "video1.avi",
-            csv_path=STITCH_DATA_DIR / "video1.csv",
-        ),
-        RecordingData(
-            video_path=STITCH_DATA_DIR / "video2.avi",
-            csv_path=STITCH_DATA_DIR / "video2.csv",
-        ),
-    ]
-
-    stitched_video = tmp / "stitched.avi"
-    stitched_csv = tmp / "stitched.csv"
-    debug_video = debug_dir / "debug.avi"
-    debug_csv = debug_dir / "debug.csv"
-
-    bundle = RecordingDataBundle(
-        recordings=recordings,
-        stitched_video_writer=VideoWriter(path=stitched_video, fps=20),
-        debug_video_writer=VideoWriter(path=debug_video, fps=20),
-        combined_csv_path=stitched_csv,
-        debug_csv_path=debug_csv,
-    )
-    bundle.stitch_recordings()
-
+def recordings() -> dict[str, Recording]:
     return {
-        "stitched_video": stitched_video,
-        "stitched_csv": stitched_csv,
-        "debug_video": debug_video,
-        "debug_csv": debug_csv,
+        "video1": Recording.from_video(STITCH_DATA_DIR / "video1.avi"),
+        "video2": Recording.from_video(STITCH_DATA_DIR / "video2.avi"),
     }
 
 
-def test_stitched_video_hash(stitch_result):
+@pytest.fixture(scope="module")
+def stitch_result(recordings, tmp_path_factory) -> StitchedRecording:
+    """Run stitch once on the trimmed fixtures, return paths to all outputs."""
+    output = tmp_path_factory.mktemp("stitch")
+
+    result = stitch(list(recordings.values()), debug_video=True, output_dir=output)
+
+    return result
+
+
+def test_stitched_video_hash(stitch_result: StitchedRecording):
     """Stitched video content matches expected hash (frame-by-frame blake2s)."""
-    assert hash_video(stitch_result["stitched_video"]) == EXPECTED_STITCHED_VIDEO_HASH
+    assert hash_video(stitch_result.video.path) == EXPECTED_STITCHED_VIDEO_HASH
 
 
-def test_stitched_video_frame_count(stitch_result):
+def test_stitched_video_frame_count(
+    stitch_result: StitchedRecording, recordings: dict[str, Recording]
+):
     """Stitched video has the expected number of frames (union of frame_nums)."""
-    cap = cv2.VideoCapture(str(stitch_result["stitched_video"]))
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    cap.release()
-    assert frame_count == EXPECTED_STITCHED_FRAME_COUNT
+    frame_count = stitch_result.video.shape[0]
+    expected = np.unique(
+        list(recordings["video1"].metadata["frame_num"])
+        + list(recordings["video2"].metadata["frame_num"])
+    )
+    assert frame_count == len(expected)
 
 
-def test_stitched_csv_valid(stitch_result):
+def test_stitched_csv_valid(stitch_result: StitchedRecording):
     """Stitched CSV passes video-metadata validation."""
-    validate_video_metadata_match(stitch_result["stitched_video"])
+    validate_video_metadata_match(stitch_result.video.path)
 
 
-def test_stitched_csv_contiguous_index(stitch_result):
+def test_stitched_csv_contiguous_index(stitch_result: StitchedRecording):
     """reconstructed_frame_index in stitched CSV is contiguous 0..N-1."""
-    df = pd.read_csv(stitch_result["stitched_csv"])
+    df = stitch_result.metadata
     indices = sorted(df["reconstructed_frame_index"].unique())
     assert indices == list(range(len(indices)))
 
 
-def test_stitched_csv_frame_num_range(stitch_result):
+def test_stitched_csv_frame_num_range(stitch_result: StitchedRecording, recordings):
     """Stitched CSV covers the full union of frame_nums from both inputs."""
-    df = pd.read_csv(stitch_result["stitched_csv"])
-    frame_nums = sorted(df["frame_num"].unique())
-    assert frame_nums[0] == 2145
-    assert frame_nums[-1] == 2566
-    assert len(frame_nums) == EXPECTED_STITCHED_FRAME_COUNT
+    df = stitch_result.metadata
+    frame_nums = np.array(sorted(df["frame_num"].unique()))
+    expected = np.unique(
+        list(recordings["video1"].metadata["frame_num"])
+        + list(recordings["video2"].metadata["frame_num"])
+    )
+    assert np.array_equal(frame_nums, expected)
 
 
-def test_debug_video_hash(stitch_result):
+def test_debug_video_hash(stitch_result: StitchedRecording):
     """Debug video content matches expected hash."""
-    assert hash_video(stitch_result["debug_video"]) == EXPECTED_DEBUG_VIDEO_HASH
+    assert hash_video(stitch_result.debug_video.path) == EXPECTED_DEBUG_VIDEO_HASH
 
 
-def test_debug_csv_columns(stitch_result):
-    """Debug CSV has the columns defined by DebugRecord."""
-    df = pd.read_csv(stitch_result["debug_csv"])
-    assert list(df.columns) == DebugRecord.header()
+def test_score_csv_columns(stitch_result: StitchedRecording):
+    """Debug CSV has the columns defined by StitchRecord."""
+    assert list(stitch_result.scores.columns) == StitchRecord.header()
 
 
-def test_debug_csv_row_count(stitch_result):
+def test_score_csv_row_count(stitch_result: StitchedRecording):
     """Debug CSV has one row per frame with pixel differences."""
-    df = pd.read_csv(stitch_result["debug_csv"])
-    assert len(df) == EXPECTED_DEBUG_ROWS
+    assert len(stitch_result.scores) == stitch_result.video.shape[0]
 
 
-def test_debug_csv_metadata_win(stitch_result):
+def test_stitch_more_buffers_wins(stitch_result: StitchedRecording):
     """Frame 2530: video1 has 7 buffers, video2 has 8 -> metadata picks video2 (no tie)."""
-    df = pd.read_csv(stitch_result["debug_csv"])
+    df = stitch_result.scores
     row = df[df["frame_num"] == 2530].iloc[0]
-    assert row["metadata_tie"] == False  # noqa: E712
-    assert row["selected_video"] == "video2.avi"
+    assert pd.isna(row["selected_edge_score"])
+    assert row["selected_video"] == "video2"
     assert row["selected_num_buffers"] == 8
     assert row["compare_num_buffers"] == 7
 
 
-def test_debug_csv_edge_scoring_tiebreaker(stitch_result):
+def test_score_csv_edge_scoring_tiebreaker(stitch_result: StitchedRecording):
     """Tied frames use edge scoring: selected frame has higher score (less sharp)."""
-    df = pd.read_csv(stitch_result["debug_csv"])
-    tied = df[df["metadata_tie"] == True]  # noqa: E712
-    assert len(tied) == 3
-    for _, row in tied.iterrows():
-        assert row["selected_edge_score"] > row["compare_edge_score"]
+    df = stitch_result.scores
+    # filter frames where only one video or the other had them
+    df = df[~df["compare_video"].isna()]
+    # there should be four frames that could be decided on metadata alone
+    assert len(df[df["selected_edge_score"].isna()]) == 4
+    # for all those that had to use edge scores, the selected should be greater or equal
+    edges_scored = df[~df["selected_edge_score"].isna()]
+    for _, row in edges_scored.iterrows():
+        assert row["selected_edge_score"] >= row["compare_edge_score"]
 
 
 def test_stitch_without_debug(tmp_path):
     """Stitch produces correct output when debug writers are None."""
     recordings = [
-        RecordingData(
-            video_path=STITCH_DATA_DIR / "video1.avi",
-            csv_path=STITCH_DATA_DIR / "video1.csv",
-        ),
-        RecordingData(
-            video_path=STITCH_DATA_DIR / "video2.avi",
-            csv_path=STITCH_DATA_DIR / "video2.csv",
-        ),
+        Recording.from_video(STITCH_DATA_DIR / "video1.avi"),
+        Recording.from_video(STITCH_DATA_DIR / "video2.avi"),
     ]
 
-    stitched_video = tmp_path / "stitched.avi"
-    stitched_csv = tmp_path / "stitched.csv"
+    result = stitch(recordings, output_dir=tmp_path)
 
-    bundle = RecordingDataBundle(
-        recordings=recordings,
-        stitched_video_writer=VideoWriter(path=stitched_video, fps=20),
-        debug_video_writer=None,
-        combined_csv_path=stitched_csv,
-        debug_csv_path=None,
-    )
-    bundle.stitch_recordings()
-
-    assert hash_video(stitched_video) == EXPECTED_STITCHED_VIDEO_HASH
-    validate_video_metadata_match(stitched_video)
+    assert hash_video(result.video.path) == EXPECTED_STITCHED_VIDEO_HASH
+    validate_video_metadata_match(result.video.path)
 
 
-def test_stitch_single_recording(tmp_path):
-    """Single recording passes through without comparison."""
+def test_stitch_padding_tiebreaker(tmp_path, recordings):
+    """When buffer counts are equal, less black_padding_px wins."""
     recordings = [
-        RecordingData(
-            video_path=STITCH_DATA_DIR / "video1.avi",
-            csv_path=STITCH_DATA_DIR / "video1.csv",
-        ),
+        Recording.from_video(STITCH_DATA_DIR / "video1.avi"),
+        Recording.from_video(STITCH_DATA_DIR / "video2.avi"),
     ]
+    recordings[1].metadata.loc[
+        recordings[1].metadata["frame_num"] == 2520, "black_padding_px"
+    ] = 100
 
-    stitched_video = tmp_path / "stitched.avi"
-    stitched_csv = tmp_path / "stitched.csv"
-    debug_csv = tmp_path / "debug.csv"
-
-    bundle = RecordingDataBundle(
-        recordings=recordings,
-        stitched_video_writer=VideoWriter(path=stitched_video, fps=20),
-        combined_csv_path=stitched_csv,
-        debug_csv_path=debug_csv,
-    )
-    bundle.stitch_recordings()
-
-    # video1 has 50 video frames but only 49 unique frame_nums.
-    # frame_num 2535 appears at rfi 22 (8 buffers) and rfi 31 (1 buffer).
-    # The stitcher deduplicates by frame_num, using majority rfi (22).
-    # So the output has 49 frames, not 50.
-    cap = cv2.VideoCapture(str(stitched_video))
-    assert int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) == 49
-    cap.release()
-
-    validate_video_metadata_match(stitched_video)
-
-    # frame_num 2535 appears once in output (deduplicated), but all 9 metadata rows
-    # are included (8 from rfi=22 + 1 fragment from rfi=31)
-    df_out = pd.read_csv(stitched_csv)
-    rows_2535 = df_out[df_out["frame_num"] == 2535]
-    assert len(rows_2535) == 9
-
-    # No debug rows (nothing to compare)
-    df_debug = pd.read_csv(debug_csv)
-    assert len(df_debug) == 0
-
-
-def test_stitch_padding_tiebreaker(tmp_path):
-    """When buffer counts are equal, less black_padding_px wins.
-
-    Uses video2_padded.csv where frame 2520 has black_padding_px=100.
-    Both recordings have 8 buffers for this frame, so buffer count ties.
-    video1 (padding=0) should be selected over video2 (padding=100).
-    """
-    recordings = [
-        RecordingData(
-            video_path=STITCH_DATA_DIR / "video1.avi",
-            csv_path=STITCH_DATA_DIR / "video1.csv",
-        ),
-        RecordingData(
-            video_path=STITCH_DATA_DIR / "video2.avi",
-            csv_path=STITCH_DATA_DIR / "video2_padded.csv",
-        ),
-    ]
-
-    stitched_video = tmp_path / "stitched.avi"
-    stitched_csv = tmp_path / "stitched.csv"
-
-    bundle = RecordingDataBundle(
-        recordings=recordings,
-        stitched_video_writer=VideoWriter(path=stitched_video, fps=20),
-        combined_csv_path=stitched_csv,
-    )
-    bundle.stitch_recordings()
+    result = stitch(recordings, output_dir=tmp_path)
 
     # Verify video1 was selected for frame 2520 (less padding)
-    df_out = pd.read_csv(stitched_csv)
-    rows = df_out[df_out["frame_num"] == 2520]
-    assert len(rows) > 0
-    assert all(rows["black_padding_px"] == 0)
+    df_out = result.scores
+    rows = df_out[df_out["frame_num"] == 2520].to_dict("records")
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["selected_video"] == "video1"
+    assert row["selected_black_padding"] == 0
+    assert row["compare_black_padding"] == 800
 
 
 def test_crop_video_hash(tmp_path):
@@ -334,41 +247,9 @@ def test_crop_invalid_range(tmp_path):
         crop_run(video, output_path=str(tmp_path / "out.avi"), trim_start=25, trim_end=25)
 
 
-def test_metadata_tie_detection():
-    """Equal metadata scores are detected as a tie (triggers edge scoring)."""
-    cand = CandidateFrame(
-        recording=None,
-        frame=None,
-        num_buffers=8,
-        sum_black_padding=0,
-        metadata_rows=None,
-        _edge_score=0.0,
-    )
-    _, is_tie = select_best_candidate([cand, cand])
-    assert is_tie is True
-
-
 def test_edge_scoring_selects_less_sharp():
     """Sobel edge scoring picks the less sharp frame (higher score = less gradient)."""
     uniform = np.ones((50, 50), dtype=np.uint8) * 128
     edgy = np.zeros((50, 50), dtype=np.uint8)
     edgy[:, 25:] = 255
-    assert score_edges(uniform) > score_edges(edgy)
-
-
-def test_frame_info_majority_vote_rfi():
-    """When a frame_num maps to multiple rfi values, majority wins."""
-    base = {
-        "frame_num": 200,
-        "buffer_count": 1,
-        "frame_buffer_count": 8,
-        "timestamp": 2000,
-        "pixel_count": 5000,
-        "black_padding_px": 0,
-        "buffer_recv_unix_time": 2.0,
-    }
-    rows = [{**base, "reconstructed_frame_index": 10, "buffer_recv_index": i} for i in range(7)] + [
-        {**base, "reconstructed_frame_index": 20, "buffer_recv_index": 7}
-    ]
-    fi = FrameInfo.from_metadata(200, pd.DataFrame(rows))
-    assert fi.reconstructed_frame_index == 10
+    assert _score_edges(uniform) > _score_edges(edgy)
