@@ -170,3 +170,89 @@ def stitch(inputs: tuple, output: Path | None = None, debug_video: bool = False)
     recordings = [Recording.from_video(Path(p)) for p in inputs]
     stitched = run_stitch(recordings, debug_video=debug_video, output_dir=output, progress=True)
     click.echo(f"Stitched videos to {stitched.video.path}")
+
+
+@process.command()
+@click.option(
+    "-i",
+    "--inputs",
+    required=True,
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Paths to video files. Each requires a .csv with the same stem name.",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(file_okay=False),
+    default=None,
+    help="Base path for output files (stitched, cropped, denoised) or directory. "
+    "If not specified, uses input directory.",
+)
+@click.option(
+    "-c",
+    "--denoise_config",
+    required=True,
+    type=str,
+    help="Path to the YAML processing configuration file.",
+)
+@click.option(
+    "-s",
+    "--trim-start",
+    type=int,
+    default=0,
+    help="Number of frames to remove from the start (default: 0).",
+)
+@click.option(
+    "-e",
+    "--trim-end",
+    type=int,
+    default=0,
+    help="Number of frames to remove from the end (default: 0).",
+)
+def workflow(
+    inputs: tuple,
+    output: str | None,
+    denoise_config: str,
+    trim_start: int,
+    trim_end: int,
+) -> None:
+    """
+    Complete workflow: stitch → trim → denoise with validation at each step.
+    """
+    inputs = [Path(i) for i in inputs]
+    if output is None:
+        output_dir = inputs[0].parent
+    else:
+        output_dir = Path(output).expanduser()
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    if len(inputs) == 1:
+        click.echo("Only one input video provided, skipping stitching")
+        stitched_video = inputs[0]
+    else:
+        click.echo("Stitching videos...")
+        recordings = [Recording.from_video(p) for p in inputs]
+        stitched = run_stitch(recordings, output_dir=output_dir, progress=True)
+        stitched_video = stitched.video.path
+
+    if trim_start == 0 and trim_end == 0:
+        click.echo("Not trimming, trim start and end both zero")
+        trimmed_video = stitched_video
+    else:
+        click.echo("Trimming video...")
+        trimmed_video = run_trim(stitched_video, output_dir, trim_start, trim_end, progress=True)
+
+    trimmed = Recording.from_video(trimmed_video)
+    if trimmed.metadata is None:
+        raise FileNotFoundError(f"No metadata csv found for video {trimmed_video}")
+
+    denoise_config_parsed = DenoiseConfig.from_any(denoise_config)
+    final_video = run_denoise(
+        trimmed_video,
+        denoise_config_parsed,
+        csv_df=trimmed.metadata,
+        debug_dir=output_dir / "debug",
+        progress=True,
+    )
+    click.echo(f"Processed video written to {final_video}")
