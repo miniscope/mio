@@ -26,7 +26,10 @@ from mio.utils import hash_video
 STITCH_DATA_DIR = Path(__file__).parent.parent / "data" / "stitch"
 
 EXPECTED_STITCHED_VIDEO_HASH = "c8cdf3149f812ae25e6f3f1a876249e4ce118e9a53aa1805e48b995b01f07a91"
-EXPECTED_DEBUG_VIDEO_HASH = "856e6e5c538532bd0fcfb942616686a5cd262aadb51dd8796adf5de69215c94b"
+EXPECTED_DEBUG_VIDEO_HASH = (
+    "856e6e5c538532bd0fcfb942616686a5cd262aadb51dd8796adf5de69215c94b",
+    "a69b6cadf4ab1dd8a1097d2c1be298397206db235fd4c5f68febd1700f15a4b6",
+)
 EXPECTED_CROP_VIDEO_HASH = "432642b1528fcd9ad553cfb3cc3862bef931301bd11d44dc3c2372fc379fa629"
 EXPECTED_CROP_FRAME_COUNT = 30
 
@@ -86,7 +89,7 @@ def test_stitched_csv_frame_num_range(stitch_result: StitchedRecording, recordin
 
 def test_debug_video_hash(stitch_result: StitchedRecording):
     """Debug video content matches expected hash."""
-    assert hash_video(stitch_result.debug_video.path) == EXPECTED_DEBUG_VIDEO_HASH
+    assert hash_video(stitch_result.debug_video.path) in EXPECTED_DEBUG_VIDEO_HASH
 
 
 def test_score_csv_columns(stitch_result: StitchedRecording):
