@@ -1,6 +1,6 @@
 import pytest
 
-from mio import DEVICE_DIR
+from mio.const import DEVICE_DIR
 from mio.models.stream import ADCScaling, StreamDevConfig, StreamBufferHeader
 
 from ..conftest import CONFIG_DIR
