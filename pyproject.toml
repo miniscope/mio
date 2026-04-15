@@ -99,6 +99,7 @@ format.composite = [
     "black mio",
     "ruff check --fix",
 ]
+docs-prod = "sphinx-build -M html ./docs ./docs/_build -W -P -E -a"
 
 [tool.pdm.build]
 includes = ["mio"]
