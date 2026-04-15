@@ -370,7 +370,7 @@ def test_writer_calls_match_avi_frame_count(tmp_path: Path, set_okdev_input, mon
     Count write_frame calls from VideoWriter and compare against the number
     of frames reported in the AVI.
     """
-    call_count = {"calls": 0}
+    call_count = {"calls": 0, "ok": 0, "failed": 0}
     original = VideoWriter.write_frame
 
     def wrapped(self, frame):  # type: ignore[no-redef]
