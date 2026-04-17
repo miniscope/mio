@@ -5,7 +5,7 @@ Low-level interfaces with external hardware.
 ## OpalKelly
 
 ```{eval-rst}
-.. autoclass:: mio.devices.opalkelly.okDev
+.. autoclass:: mio.interfaces.opalkelly.okDev
     :members:
     :undoc-members:
 ```
