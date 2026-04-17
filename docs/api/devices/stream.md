@@ -3,7 +3,7 @@
 This module is a data acquisition module that captures video streams from Miniscopes based on the `Miniscope-SAMD-Framework` firmware. The firmware repository will be published in future updates but is currently under development and private.
 
 ## Command
-After [installation](../../guide/installation.md) and customizing [device configurations](stream-dev-config) and [runtime configuration](../models/config.md) if necessary, run the command described in [CLI Usage](../cli/index).
+After [installation](../../guide/installation.md) and customizing [device configurations](stream-dev-config) and [runtime configuration](../models/config.md) if necessary, run the command described in [CLI Usage](../../cli/index).
 
 One example of this command is the following:
 ```bash
