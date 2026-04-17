@@ -133,3 +133,47 @@ def test_cli_trim_no_trim(tmp_path):
         ],
     )
     assert result.exit_code == 0, result.output
+
+
+def test_cli_workflow(tmp_path):
+    """mio process workflow (stitch + denoise) completes end-to-end."""
+    out_dir = tmp_path / "out"
+    runner = CliRunner()
+    result = runner.invoke(
+        process,
+        [
+            "workflow",
+            "-i",
+            str(STITCH_DATA_DIR / "video1.avi"),
+            "-i",
+            str(STITCH_DATA_DIR / "video2.avi"),
+            "-o",
+            str(out_dir),
+            "-c",
+            "denoise_example",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_cli_workflow_with_trim(tmp_path):
+    """mio process workflow with trim completes end-to-end on stitched input."""
+    out_dir = tmp_path / "out"
+    runner = CliRunner()
+    result = runner.invoke(
+        process,
+        [
+            "workflow",
+            "-i",
+            str(STITCH_DATA_DIR / "video1.avi"),
+            "-i",
+            str(STITCH_DATA_DIR / "video2.avi"),
+            "-o",
+            str(out_dir),
+            "-c",
+            "denoise_example",
+            "--trim-start",
+            "2",
+        ],
+    )
+    assert result.exit_code == 0, result.output
