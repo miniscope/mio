@@ -154,6 +154,8 @@ def test_cli_workflow(tmp_path):
         ],
     )
     assert result.exit_code == 0, result.output
+    denoised = out_dir / "user_data" / "output" / "video1__video2_stitched_patch.avi"
+    assert denoised.exists()
 
 
 def test_cli_workflow_with_trim(tmp_path):
@@ -177,3 +179,7 @@ def test_cli_workflow_with_trim(tmp_path):
         ],
     )
     assert result.exit_code == 0, result.output
+    trimmed = out_dir / "video1__video2_stitched_trimmed.avi"
+    denoised = out_dir / "user_data" / "output" / "video1__video2_stitched_trimmed_patch.avi"
+    assert trimmed.exists()
+    assert denoised.exists()
