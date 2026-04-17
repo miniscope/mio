@@ -42,7 +42,7 @@ class UpdateBatch(MiniscopeConfig, ConfigYAMLMixin):
         results: list[tuple[str | None, int, PermittedKey, int]] = []
 
         if not self.devices:
-            raise ValueError("interfaces list must not be empty in UpdateBatch")
+            raise ValueError("devices list must not be empty in UpdateBatch")
 
         for entry in self.devices:
             entry_port = entry.port if entry.port is not None else default_port
