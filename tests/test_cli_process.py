@@ -15,7 +15,7 @@ from mio.utils import hash_video
 
 STITCH_DATA_DIR = Path(__file__).parent / "data" / "stitch"
 
-EXPECTED_STITCHED_VIDEO_HASH = "69217a3079908094e11121d042354a7c1f55b6482ca1a51e1b250dfd1ed0eef9"
+EXPECTED_STITCHED_VIDEO_HASH = "c8cdf3149f812ae25e6f3f1a876249e4ce118e9a53aa1805e48b995b01f07a91"
 EXPECTED_CROP_VIDEO_HASH = "432642b1528fcd9ad553cfb3cc3862bef931301bd11d44dc3c2372fc379fa629"
 
 
@@ -36,7 +36,8 @@ def test_cli_stitch(tmp_path):
         ],
     )
     assert result.exit_code == 0, result.output
-    out_video = out_dir / "video1_stitched.avi"
+    out_video = out_dir / "video1__video2_stitched.avi"
+    assert out_video.exists()
     assert hash_video(out_video) == EXPECTED_STITCHED_VIDEO_HASH
 
 
@@ -154,8 +155,11 @@ def test_cli_workflow(tmp_path):
         ],
     )
     assert result.exit_code == 0, result.output
+    stitched = out_dir / "video1__video2_stitched.avi"
     denoised = out_dir / "user_data" / "output" / "video1__video2_stitched_patch.avi"
+    assert stitched.exists()
     assert denoised.exists()
+    assert hash_video(stitched) == EXPECTED_STITCHED_VIDEO_HASH
 
 
 def test_cli_workflow_with_trim(tmp_path):
