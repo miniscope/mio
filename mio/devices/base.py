@@ -1,5 +1,5 @@
-from abc import ABC, abstractmethod
+"""Base device class."""
 
 
-class Device(ABC):
+class Device:
     """Abstract device parent class"""

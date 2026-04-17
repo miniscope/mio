@@ -9,10 +9,10 @@ from pathlib import Path
 import click
 
 from mio.cli.common import ConfigIDOrPath
+from mio.devices.stream import StreamDevice
 from mio.models.process import FrequencyMaskingConfig
 from mio.models.stream import StreamDevConfig
 from mio.ntp import prompt_ntp_sync
-from mio.devices.stream import StreamDevice
 
 
 @click.group()

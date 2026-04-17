@@ -18,11 +18,11 @@ from bitstring import BitArray, Bits
 
 from mio import init_logger
 from mio.bit_operation import BufferFormatter
-from mio.interfaces.mocks import okDevMock
+from mio.devices.base import Device
 from mio.exceptions import EndOfRecordingException, StreamReadError
+from mio.interfaces.mocks import okDevMock
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.models.process import FrequencyMaskingConfig
-from mio.devices.base import Device
 from mio.models.stream import (
     RuntimeMetadata,
     StreamBufferHeader,
