@@ -22,6 +22,7 @@ from mio.interfaces.mocks import okDevMock
 from mio.exceptions import EndOfRecordingException, StreamReadError
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.models.process import FrequencyMaskingConfig
+from mio.devices.base import Device
 from mio.models.stream import (
     RuntimeMetadata,
     StreamBufferHeader,
@@ -58,7 +59,7 @@ def exact_iter(f: Callable, sentinel: Any) -> Generator[Any, None, None]:
             yield val
 
 
-class StreamDaq:
+class StreamDevice(Device):
     """
     A combined class for configuring and reading frames from a UART and FPGA source.
     Supported devices and required inputs are described in StreamDevConfig model documentation.
@@ -805,7 +806,7 @@ if __name__ == "__main__":
     import warnings
 
     warnings.warn(
-        "Calling the stream_daq.py module directly is deprecated - use the `mio` cli. "
+        "Calling the stream.py module directly is deprecated - use the `mio` cli. "
         "try:\n\n  mio stream capture --help",
         stacklevel=1,
     )

@@ -106,7 +106,7 @@ class RuntimeMetadata(MiniscopeConfig):
 class StreamBufferHeaderFormat(BufferHeaderFormat):
     """
     Refinements of :class:`~mio.models.buffer.BufferHeaderFormat` for
-    :class:`~mio.stream_daq.StreamDaq`
+    :class:`~mio.devices.stream.StreamDevice`
 
     Parameters
     ----------
@@ -128,7 +128,7 @@ class StreamBufferHeaderFormat(BufferHeaderFormat):
 class StreamBufferHeader(BufferHeader):
     """
     Refinements of :class:`.BufferHeader` for
-    :class:`~mio.stream_daq.StreamDaq`
+    :class:`~mio.devices.stream.StreamDevice`
     """
 
     pixel_count: int
@@ -242,7 +242,7 @@ class StreamBufferHeader(BufferHeader):
 
 class StreamDevRuntime(MiniscopeConfig):
     """
-    Runtime configuration for :class:`.StreamDaq`
+    Runtime configuration for :class:`.StreamDevice`
 
     Included within :class:`.StreamDevConfig` to separate config that is not
     unique to the device, but how that device is controlled at runtime.

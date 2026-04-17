@@ -1,30 +1,24 @@
 import re
 from pathlib import Path
 
-import multiprocessing
 import numpy as np
-import os
 import pytest
 import pandas as pd
-import sys
-import signal
-import time
-from contextlib import contextmanager
-from bitstring import BitArray, Bits
+from bitstring import Bits
 from typing import Generator
 import warnings
 import cv2
 
 from mio.const import BASE_DIR
-from mio.stream_daq import StreamDevConfig, StreamDaq, iter_buffers
+from mio.devices.stream import StreamDevConfig, StreamDevice, iter_buffers
 from mio.models.process import FrequencyMaskingConfig
 from mio.utils import hash_video, hash_file
 from mio.io import VideoWriter
-from .conftest import DATA_DIR, CONFIG_DIR
+from ..conftest import DATA_DIR
 
 
 @pytest.fixture(params=[pytest.param(5, id="buffer-size-5"), pytest.param(10, id="buffer-size-10")])
-def default_streamdaq(set_okdev_input, request) -> StreamDaq:
+def default_streamdaq(set_okdev_input, request) -> StreamDevice:
 
     daqConfig = StreamDevConfig.from_id("test-wireless-200px")
     daqConfig.runtime.frame_buffer_queue_size = request.param
@@ -34,7 +28,7 @@ def default_streamdaq(set_okdev_input, request) -> StreamDaq:
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)
 
-    daq_inst = StreamDaq(device_config=daqConfig)
+    daq_inst = StreamDevice(device_config=daqConfig)
     return daq_inst
 
 
@@ -89,7 +83,7 @@ def test_video_output(
     data_file = DATA_DIR / data
     set_okdev_input(data_file)
 
-    daq_inst = StreamDaq(device_config=daqConfig)
+    daq_inst = StreamDevice(device_config=daqConfig)
     daq_inst.capture(
         source="fpga",
         video=output_video,
@@ -138,7 +132,7 @@ def test_binary_output(config, data, set_okdev_input, tmp_path):
 
     output_file = tmp_path / "output.bin"
 
-    daq_inst = StreamDaq(device_config=daqConfig)
+    daq_inst = StreamDevice(device_config=daqConfig)
     daq_inst.capture(source="fpga", binary=output_file, show_video=False)
 
     assert output_file.exists()
@@ -250,7 +244,7 @@ def test_csv_no_duplicates(tmp_path, set_okdev_input):
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)
 
-    daq_inst = StreamDaq(device_config=daqConfig)
+    daq_inst = StreamDevice(device_config=daqConfig)
     daq_inst._buffer_npix = bad_buffer_npix
 
     assert daq_inst.buffer_npix == bad_buffer_npix
@@ -390,7 +384,7 @@ def test_writer_calls_match_avi_frame_count(tmp_path: Path, set_okdev_input, mon
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)
 
-    daq = StreamDaq(device_config=daqConfig)
+    daq = StreamDevice(device_config=daqConfig)
     daq.capture(source="fpga", video=output_video, metadata=None, show_video=False)
 
     assert output_video.exists()

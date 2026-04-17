@@ -1,6 +1,6 @@
-# devices
+# interfaces
 
-Interfaces to external devices like miniscopes and DAQs
+Low-level interfaces with external hardware.
 
 ## OpalKelly
 

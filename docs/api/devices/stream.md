@@ -1,8 +1,9 @@
-# stream_daq
+# stream
+
 This module is a data acquisition module that captures video streams from Miniscopes based on the `Miniscope-SAMD-Framework` firmware. The firmware repository will be published in future updates but is currently under development and private.
 
 ## Command
-After [installation](../guide/installation.md) and customizing [device configurations](stream-dev-config) and [runtime configuration](models/config.md) if necessary, run the command described in [CLI Usage](../cli/index).
+After [installation](../../guide/installation.md) and customizing [device configurations](stream-dev-config) and [runtime configuration](../models/config.md) if necessary, run the command described in [CLI Usage](../cli/index).
 
 One example of this command is the following:
 ```bash
@@ -17,7 +18,7 @@ A window displaying the image transferred from the Miniscope and a graph plottin
 
 (stream-dev-config)=
 ## Device configuration
-A YAML file is used to configure Stream DAQ based on the device configuration. The device configuration needs to match the imaging and data capture hardware for proper operation. This file is used to set up hardware, define data formats, and set data preambles. The contents of this YAML file will be parsed into a model [mio.models.stream](../api/models/stream.md), which then configures the Stream DAQ.
+A YAML file is used to configure Stream DAQ based on the device configuration. The device configuration needs to match the imaging and data capture hardware for proper operation. This file is used to set up hardware, define data formats, and set data preambles. The contents of this YAML file will be parsed into a model [mio.models.stream](../models/stream.md), which then configures the Stream DAQ.
 
 ### FPGA (Opal Kelly) configuration
 The `bitstream` field in the device configuration yaml file specifies the image that will be uploaded to the opal kelly board. This file needs to be placed in `mio.devices`.
@@ -49,7 +50,7 @@ baudrate: null
 # Preamble for each data buffer.
 preamble: 0x12345678
 
-# Image format. StreamDaq will calculate buffer size, etc. based on these parameters
+# Image format. StreamDevice will calculate buffer size, etc. based on these parameters
 frame_width: 200
 frame_height: 200
 pix_depth: 8
@@ -91,7 +92,7 @@ runtime:
 ```
 
 ```{eval-rst}
-.. automodule:: mio.stream_daq
+.. automodule:: mio.devices.stream
     :members:
     :undoc-members:
 ```

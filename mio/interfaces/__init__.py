@@ -1,3 +1,3 @@
 """
-Control interfaces for external hardware interfaces
+Low-level interfaces to external hardware.
 """

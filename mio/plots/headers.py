@@ -108,13 +108,13 @@ def plot_headers(
 
 class StreamPlotter:
     """
-    Plot headers from StreamDaq.
+    Plot headers from StreamDevice.
 
     .. note::
 
         Eventually this should get generalized into a plotter object that
         can take an arbitrary set of keys and values, but for now is
-        somewhat specific to :class:`.StreamDaq` , at least in the type hints.
+        somewhat specific to :class:`.StreamDevice` , at least in the type hints.
 
     """
 

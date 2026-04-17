@@ -18,7 +18,7 @@ class BufferHeaderFormat(MiniscopeConfig, ConfigYAMLMixin):
     ----------
     linked_list: int
         Index of data buffers within the circulating structure.
-        This increments with each buffer until it reaches [`num_buffers`](../api/stream_daq.md),
+        This increments with each buffer until it reaches [`num_buffers`](../api/stream.md),
         then resets to zero.
     frame_num: int
         The index of the image frame, which increments with each image frame
