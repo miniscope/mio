@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import Field, computed_field, field_validator
 
-from mio.const import DEVICE_DIR
+from mio.const import INTERFACES_DIR
 from mio.models import MiniscopeConfig
 from mio.models.buffer import BufferHeader, BufferHeaderFormat
 from mio.models.mixins import ConfigYAMLMixin
@@ -419,7 +419,7 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
         the device path
         """
         if not value.is_absolute():
-            value = DEVICE_DIR / value
+            value = INTERFACES_DIR / value
         return value
 
     @field_validator("bitstream", mode="after")

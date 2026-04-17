@@ -1,6 +1,6 @@
 import pytest
 
-from mio.const import DEVICE_DIR
+from mio.const import INTERFACES_DIR
 from mio.models.stream import ADCScaling, StreamDevConfig, StreamBufferHeader
 
 from ..conftest import CONFIG_DIR
@@ -25,13 +25,13 @@ def test_preamble_hex_parsing(config):
 
 def test_absolute_bitstream():
     """
-    Relative paths should be resolved relative to the devices dir
+    Relative paths should be resolved relative to the interfaces dir
     """
     example = CONFIG_DIR / "wireless_example.yml"
 
     instance = StreamDevConfig.from_yaml(example)
     assert instance.bitstream.is_absolute()
-    assert str(instance.bitstream).startswith(str(DEVICE_DIR))
+    assert str(instance.bitstream).startswith(str(INTERFACES_DIR))
 
 
 _default_adc_scale = {

@@ -17,8 +17,8 @@ MOCK_DIR = Path(__file__).parent / "mock"
 
 @pytest.fixture(autouse=True)
 def mock_okdev(monkeypatch):
-    from mio.devices.mocks import okDevMock
-    from mio.devices import opalkelly
+    from mio.interfaces.mocks import okDevMock
+    from mio.interfaces import opalkelly
     from mio import stream_daq
 
     monkeypatch.setattr(opalkelly, "okDev", okDevMock)
@@ -55,7 +55,7 @@ def set_okdev_input(monkeypatch):
     """
 
     def _set_okdev_input(file: Union[str, Path]):
-        from mio.devices.mocks import okDevMock
+        from mio.interfaces.mocks import okDevMock
 
         monkeypatch.setattr(okDevMock, "DATA_FILE", file)
         os.environ["PYTEST_OKDEV_DATA_FILE"] = str(file)

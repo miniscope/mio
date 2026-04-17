@@ -1,7 +1,7 @@
 """
-Hardware mocks for devices.
+Hardware mocks for interfaces.
 
-Used in testing, but kept in-package since for now some devices
+Used in testing, but kept in-package since for now some interfaces
 need modifications to their source (and we can't import from tests)
 
 Not to be considered part of the public interface of mio <3
@@ -23,7 +23,7 @@ from mio.exceptions import EndOfRecordingException
 
 class okDevMock:
     """
-    Mock class for :class:`~mio.devices.opalkelly.okDev`
+    Mock class for :class:`~mio.interfaces.opalkelly.okDev`
     """
 
     DATA_FILE: Path | None = None
