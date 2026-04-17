@@ -17,6 +17,9 @@ STITCH_DATA_DIR = Path(__file__).parent / "data" / "stitch"
 
 EXPECTED_STITCHED_VIDEO_HASH = "c8cdf3149f812ae25e6f3f1a876249e4ce118e9a53aa1805e48b995b01f07a91"
 EXPECTED_CROP_VIDEO_HASH = "432642b1528fcd9ad553cfb3cc3862bef931301bd11d44dc3c2372fc379fa629"
+EXPECTED_STITCHED_TRIMMED_VIDEO_HASH = (
+    "2c62b65ddd537e94e7d3f29e7c46523357d70aefed02d46baa9726ee57798af9"
+)
 
 
 def test_cli_stitch(tmp_path):
@@ -110,6 +113,44 @@ def test_cli_trim(tmp_path):
     out_video = out_dir / "video1_trimmed.avi"
     assert out_video.exists()
     assert hash_video(out_video) == EXPECTED_CROP_VIDEO_HASH
+
+
+def test_cli_trim_stitched(tmp_path):
+    """mio process trim on a stitched output produces correct cropped video."""
+    out_dir = tmp_path / "out"
+    runner = CliRunner()
+    stitch_result = runner.invoke(
+        process,
+        [
+            "stitch",
+            "-i",
+            str(STITCH_DATA_DIR / "video1.avi"),
+            "-i",
+            str(STITCH_DATA_DIR / "video2.avi"),
+            "-o",
+            str(out_dir),
+        ],
+    )
+    assert stitch_result.exit_code == 0, stitch_result.output
+    stitched = out_dir / "video1__video2_stitched.avi"
+    trim_result = runner.invoke(
+        process,
+        [
+            "trim",
+            "-i",
+            str(stitched),
+            "-o",
+            str(out_dir),
+            "-s",
+            "2",
+            "-e",
+            "2",
+        ],
+    )
+    assert trim_result.exit_code == 0, trim_result.output
+    trimmed = out_dir / "video1__video2_stitched_trimmed.avi"
+    assert trimmed.exists()
+    assert hash_video(trimmed) == EXPECTED_STITCHED_TRIMMED_VIDEO_HASH
 
 
 def test_cli_trim_no_trim(tmp_path):

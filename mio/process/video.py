@@ -702,7 +702,7 @@ def trim(
         The path to the input video file.
     output_path : Optional[str], optional
         The path to the output video file.
-        If None, defaults to input path with "_cropped" suffix.
+        If None, defaults to input path with "_trimmed" suffix.
     csv_df : Optional[pd.DataFrame], optional
         Pre-validated CSV DataFrame. If provided, uses this instead of
         reading from disk.

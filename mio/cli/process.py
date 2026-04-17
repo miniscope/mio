@@ -118,9 +118,9 @@ def trim(
     input_path = Path(input)
     recording = Recording.from_video(input_path)
     if not output:
-        output_path = input_path.parent / (input_path.stem + "_cropped" + input_path.suffix)
+        output_path = input_path.parent / (input_path.stem + "_trimmed" + input_path.suffix)
     elif (output := Path(output)).is_dir():
-        output_path = output / (input_path.stem + "_cropped" + input_path.suffix)
+        output_path = output / (input_path.stem + "_trimmed" + input_path.suffix)
     else:
         output_path = Path(output)
 
