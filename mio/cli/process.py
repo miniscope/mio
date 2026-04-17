@@ -241,7 +241,13 @@ def workflow(
         trimmed_video = stitched_video
     else:
         click.echo("Trimming video...")
-        trimmed_video = run_trim(stitched_video, output_dir, trim_start, trim_end, progress=True)
+        trimmed_video = run_trim(
+            stitched_video,
+            output_dir,
+            start=trim_start,
+            end=trim_end,
+            progress=True,
+        )
 
     trimmed = Recording.from_video(trimmed_video)
     if trimmed.metadata is None:

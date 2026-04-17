@@ -619,7 +619,7 @@ def denoise(
         f"(input had {reader.frame_count}, dropped {dropped_count})"
     )
 
-    csv_df = csv_df if csv_df else pd.read_csv(video_path.with_suffix(".csv"))
+    csv_df = csv_df if csv_df is not None else pd.read_csv(video_path.with_suffix(".csv"))
 
     modified_csv_df = _drop_frames_by_index(csv_df, noise_patch_processor.dropped_frame_indices)
     modified_csv_df.to_csv(output_video_path.with_suffix(".csv"), index=False)
@@ -649,13 +649,14 @@ def denoise(
 def _drop_frames_by_index(
     df: pd.DataFrame,
     dropped_frame_indices: list[int],
+    index_column: str = "reconstructed_frame_index",
 ) -> pd.DataFrame:
     """
-    Drop rows with ``reconstructed_frame_index`` es in the dropped frame indices,
-    and then recreate the ``reconstructed_frame_index`` monotonically increasing from 0
+    Drop rows whose ``index_column`` value is in the dropped frame indices,
+    and then recreate ``index_column`` monotonically increasing from 0.
     """
-    filtered = df[~df["reconstructed_frame_index"].isin(dropped_frame_indices)].copy()
-    filtered["reconstructed_frame_index"] = filtered.groupby("reconstructed_frame_index").ngroup()
+    filtered = df[~df[index_column].isin(dropped_frame_indices)].copy()
+    filtered[index_column] = filtered.groupby(index_column).ngroup()
     return filtered
 
 
@@ -786,5 +787,13 @@ def trim(
         trimmed_indices = list(range(start)) + list(range(end_idx, total_frames + 1))
         trimmed_df = _drop_frames_by_index(csv_df, trimmed_indices)
         trimmed_df.to_csv(output_path_obj.with_suffix(".csv"), index=False)
+
+    input_scores_path = input_path.parent / (input_path.stem + "_scores.csv")
+    if input_scores_path.exists():
+        scores_df = pd.read_csv(input_scores_path)
+        trimmed_indices = list(range(start)) + list(range(end_idx, total_frames + 1))
+        trimmed_scores = _drop_frames_by_index(scores_df, trimmed_indices, index_column="index")
+        output_scores_path = output_path_obj.parent / (output_path_obj.stem + "_scores.csv")
+        trimmed_scores.to_csv(output_scores_path, index=False)
 
     return output_path_obj
