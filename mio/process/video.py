@@ -40,7 +40,7 @@ class BaseVideoProcessor:
     named_frame (NamedFrame): A NamedFrame object.
     """
 
-    def __init__(self, name: str, output_dir: Path):
+    def __init__(self, name: str, output_dir: Path, force: bool = False):
         """
         Initialize the BaseVideoProcessor object.
 
@@ -57,6 +57,7 @@ class BaseVideoProcessor:
         self.output_dir: Path = output_dir
         self.output_video: list[np.ndarray] = []
         self.output_enable: bool = True
+        self.force = force
 
     @property
     def output_named_video(self) -> NamedVideo:
@@ -87,9 +88,7 @@ class BaseVideoProcessor:
         if self.output_enable:
             logger.debug(f"Exporting {self.name} video to {self.output_dir}")
             self.output_named_video.export(
-                output_path=self.output_dir / self.name,
-                fps=20,
-                suffix=False,
+                output_path=self.output_dir / self.name, fps=20, suffix=False, force=self.force
             )
         else:
             logger.info(f"{self.name} output disabled.")
@@ -116,10 +115,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
     """
 
     def __init__(
-        self,
-        name: str,
-        noise_patch_config: NoisePatchConfig,
-        output_dir: Path,
+        self, name: str, noise_patch_config: NoisePatchConfig, output_dir: Path, force: bool = False
     ) -> None:
         """
         Initialize the NoisePatchProcessor object.
@@ -128,7 +124,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
         name (str): The name of the video processor.
         noise_patch_config (NoisePatchConfig): The noise patch configuration.
         """
-        super().__init__(name, output_dir)
+        super().__init__(name, output_dir, force)
         self.noise_patch_config: NoisePatchConfig = noise_patch_config
         self.noise_detect_helper = InvalidFrameDetector(noise_patch_config=noise_patch_config)
         self.noise_patchs: list[np.ndarray] = []
@@ -214,9 +210,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
         if self.noise_patch_config.output_noise_patch:
             logger.debug(f"Exporting {self.name} noise patch to {self.output_dir}")
             self.noise_patch_named_video.export(
-                output_path=self.output_dir / f"{self.name}",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )
         else:
             logger.info(f"{self.name} noise patch output disabled.")
@@ -228,9 +222,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
         if self.noise_patch_config.output_diff:
             logger.info(f"Exporting {self.name} difference frames to {self.output_dir}")
             self.diff_frames_named_video.export(
-                output_path=self.output_dir / f"{self.name}",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )
         else:
             logger.info(f"{self.name} difference frames output disabled.")
@@ -242,9 +234,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
         if self.noise_patch_config.output_noisy_frames:
             logger.debug(f"Exporting {self.name} noisy frames to {self.output_dir}")
             self.noisy_frames_named_video.export(
-                output_path=self.output_dir / f"{self.name}",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )
             with open(self.output_dir / f"{self.name}_dropped_frames.txt", "w") as f:
                 for index in self.dropped_frame_indices:
@@ -274,6 +264,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         width: int,
         height: int,
         output_dir: Path,
+        force: bool = False,
     ) -> None:
         """
         Initialize the FreqencyMaskProcessor object.
@@ -282,7 +273,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         name (str): The name of the video processor.
         freq_mask_config (FrequencyMaskingConfig): The frequency masking configuration.
         """
-        super().__init__(name, output_dir)
+        super().__init__(name, output_dir, force)
         self.freq_mask_config: FrequencyMaskingConfig = freq_mask_config
         self.freq_mask_helper = FrequencyMaskHelper(
             height=height, width=width, freq_mask_config=freq_mask_config
@@ -342,9 +333,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         if self.freq_mask_config.output_freq_domain:
             logger.debug(f"Exporting {self.name} frequency domain to {self.output_dir}")
             self.freq_domain_named_video.export(
-                output_path=self.output_dir / f"{self.name}",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )
         else:
             logger.info(f"{self.name} frequency domain output disabled.")
@@ -376,7 +365,7 @@ class PassThroughProcessor(BaseVideoProcessor):
     A class to pass through a video.
     """
 
-    def __init__(self, name: str, output_dir: Path):
+    def __init__(self, name: str, output_dir: Path, force: bool = False):
         """
         Initialize the PassThroughProcessor object.
 
@@ -387,7 +376,7 @@ class PassThroughProcessor(BaseVideoProcessor):
         Returns:
         PassThroughProcessor: A PassThroughProcessor object.
         """
-        super().__init__(name, output_dir)
+        super().__init__(name, output_dir, force)
 
     @property
     def pass_through_named_video(self) -> NamedVideo:
@@ -429,6 +418,7 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
         minimum_projection_config: MinimumProjectionConfig,
         output_dir: Path,
         video_frames: list[np.ndarray],
+        force: bool = False,
     ):
         """
         Initialize the MinimumProjectionProcessor object.
@@ -440,7 +430,7 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
         Returns:
         MinimumProjectionProcessor: A MinimumProjectionProcessor object.
         """
-        super().__init__(name, output_dir)
+        super().__init__(name, output_dir, force)
 
         if not video_frames:
             logger.warning("No frames provided for minimum projection. Skipping processing.")
@@ -474,17 +464,11 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
 
         self.output_frames = ZStackHelper.normalize_video_stack(self.output_frames)
 
-    def export_minimum_projection(self) -> None:
-        """
-        Export the minimum projection to a file.
-        """
-
     def batch_export_videos(self) -> None:
         """
         Batch export the videos to a file. Whether to export or not is controlled in each method.
         """
         self.export_output_video()
-        self.export_minimum_projection()
 
 
 def denoise(
@@ -493,6 +477,7 @@ def denoise(
     csv_df: pd.DataFrame | None = None,
     debug_dir: Path | None = None,
     progress: bool = False,
+    force: bool = False,
 ) -> Path:
     """
     Preprocess a video file and display the results.
@@ -513,6 +498,8 @@ def denoise(
         (output video and CSV) will still be saved to output_dir.
     progress : bool
         Display a progress bar
+    force : bool
+        Overwrite any existing files
 
     Returns
     -------
@@ -534,19 +521,18 @@ def denoise(
     debug_dir.mkdir(parents=True, exist_ok=True)
 
     raw_frame_processor = PassThroughProcessor(
-        name=pathstem + "_raw",
-        output_dir=debug_dir,
+        name=pathstem + "_raw", output_dir=debug_dir, force=force
     )
 
     output_frame_processor = PassThroughProcessor(
-        name=pathstem + "_output",
-        output_dir=output_dir,
+        name=pathstem + "_output", output_dir=output_dir, force=force
     )
 
     noise_patch_processor = NoisePatchProcessor(
         output_dir=output_dir,
         name=pathstem + "_patch",
         noise_patch_config=config.noise_patch,
+        force=force,
     )
 
     freq_mask_processor = FreqencyMaskProcessor(
@@ -555,6 +541,7 @@ def denoise(
         freq_mask_config=config.frequency_masking,
         width=reader.width,
         height=reader.height,
+        force=force,
     )
 
     if config.interactive_display.display_freq_mask:
@@ -693,6 +680,7 @@ def trim(
     start: int = 0,
     end: int = 0,
     progress: bool = False,
+    force: bool = False,
 ) -> Path:
     """
     Crop a video file by trimming frames from both ends.
@@ -713,6 +701,8 @@ def trim(
         Number of frames to remove from the end. Default 0.
     progress : bool
         Display a progress bar
+    force : bool
+        If True, overwrite any existing file.
 
     Returns
     -------
@@ -751,7 +741,7 @@ def trim(
         f"({expected_output_frames} frames, removing {start} from start, {end} from end)"
     )
 
-    writer = VideoWriter(path=output_path_obj, fps=fps)
+    writer = VideoWriter(path=output_path_obj, fps=fps, force=force)
 
     if progress:
         iterator = tqdm(reader.read_frames(), total=total_frames, desc="Cropping frames")

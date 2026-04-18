@@ -28,6 +28,7 @@ class VideoWriter:
         path: str | Path,
         fps: int,
         output_dict: dict | None = None,
+        force: bool = False,
     ):
         """
         Initialize the VideoWriter object.
@@ -38,7 +39,13 @@ class VideoWriter:
 
         input_dict = {"-framerate": str(fps)}
 
-        self.writer = FFmpegWriter(filename=str(path), inputdict=input_dict, outputdict=output_dict)
+        self.path = Path(path)
+        if force:
+            self.path.unlink(missing_ok=True)
+
+        self.writer = FFmpegWriter(
+            filename=str(self.path), inputdict=input_dict, outputdict=output_dict
+        )
 
     def write_frame(self, frame: np.ndarray) -> bool:
         """

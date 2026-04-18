@@ -77,6 +77,7 @@ def stitch(
     debug_video: bool = False,
     output_dir: Path | None = None,
     progress: bool = False,
+    force: bool = False,
 ) -> StitchedRecording:
     """
     Combine multiple recordings from the same device into a single recording
@@ -105,12 +106,16 @@ def stitch(
     scores_path = output_dir / (name + "_scores.csv")
     video_path = output_dir / (name + ".avi")
     debug_video_path = output_dir / (name + "_debug.avi")
-    scores_writer = BufferedCSVWriter(scores_path, header=StitchRecord.header())
-    metadata_writer = BufferedCSVWriter(metadata_path, header=list(recordings[0].metadata.columns))
-    video_writer = VideoWriter(video_path, int(recordings[0].video.video.get(cv2.CAP_PROP_FPS)))
+    scores_writer = BufferedCSVWriter(scores_path, header=StitchRecord.header(), force=force)
+    metadata_writer = BufferedCSVWriter(
+        metadata_path, header=list(recordings[0].metadata.columns), force=force
+    )
+    video_writer = VideoWriter(
+        video_path, int(recordings[0].video.video.get(cv2.CAP_PROP_FPS)), force=force
+    )
     if debug_video:
         debug_video_writer = VideoWriter(
-            debug_video_path, int(recordings[0].video.video.get(cv2.CAP_PROP_FPS))
+            debug_video_path, int(recordings[0].video.video.get(cv2.CAP_PROP_FPS)), force=force
         )
     else:
         debug_video_writer = None

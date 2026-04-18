@@ -48,11 +48,14 @@ def process() -> None:
         "Output directory for denoised files. " "If not specified, uses directory of input video."
     ),
 )
-def denoise(
-    input: Path,
-    denoise_config: str,
-    output_dir: str | None,
-) -> None:
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Overwrite any existing files",
+)
+def denoise(input: Path, denoise_config: str, output_dir: str | None, force: bool = False) -> None:
     """
     Denoise a video file by detecting and removing frames with noisy areas.
 
@@ -70,7 +73,7 @@ def denoise(
         default_output_dir = input.parent
         denoise_config_parsed.output_dir = str(default_output_dir)
 
-    run_denoise(input, denoise_config_parsed, csv_df=recording.metadata, progress=True)
+    run_denoise(input, denoise_config_parsed, csv_df=recording.metadata, progress=True, force=force)
 
 
 @process.command()
@@ -104,11 +107,15 @@ def denoise(
     default=0,
     help="Number of frames to remove from the end. Default: 0.",
 )
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Overwrite any existing files",
+)
 def trim(
-    input: str,
-    output: Path | None,
-    trim_start: int,
-    trim_end: int,
+    input: str, output: Path | None, trim_start: int, trim_end: int, force: bool = False
 ) -> None:
     """
     Crop a video by removing frames from the start and/or end.
@@ -131,6 +138,7 @@ def trim(
         start=trim_start,
         end=trim_end,
         progress=True,
+        force=force,
     )
     click.echo(f"Cropped output written to {trimmed_output}")
 
@@ -157,7 +165,16 @@ def trim(
     is_flag=True,
     help="Output path for debug video showing frame comparisons.",
 )
-def stitch(inputs: tuple, output: Path | None = None, debug_video: bool = False) -> None:
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Overwrite any existing files",
+)
+def stitch(
+    inputs: tuple, output: Path | None = None, debug_video: bool = False, force: bool = False
+) -> None:
     """
     Stitch multiple video recordings into one by selecting the best frame
     for each device timestamp using metadata scoring and edge detection.
@@ -168,7 +185,9 @@ def stitch(inputs: tuple, output: Path | None = None, debug_video: bool = False)
         raise click.ClickException("At least 2 input videos are required for stitching.")
 
     recordings = [Recording.from_video(Path(p)) for p in inputs]
-    stitched = run_stitch(recordings, debug_video=debug_video, output_dir=output, progress=True)
+    stitched = run_stitch(
+        recordings, debug_video=debug_video, output_dir=output, progress=True, force=force
+    )
     click.echo(f"Stitched videos to {stitched.video.path}")
 
 
@@ -210,12 +229,20 @@ def stitch(inputs: tuple, output: Path | None = None, debug_video: bool = False)
     default=0,
     help="Number of frames to remove from the end (default: 0).",
 )
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Overwrite any existing files",
+)
 def workflow(
     inputs: tuple,
     output: str | None,
     denoise_config: str,
     trim_start: int,
     trim_end: int,
+    force: bool = False,
 ) -> None:
     """
     Complete workflow: stitch → trim → denoise with validation at each step.
@@ -233,7 +260,7 @@ def workflow(
     else:
         click.echo("Stitching videos...")
         recordings = [Recording.from_video(p) for p in inputs]
-        stitched = run_stitch(recordings, output_dir=output_dir, progress=True)
+        stitched = run_stitch(recordings, output_dir=output_dir, progress=True, force=force)
         stitched_video = stitched.video.path
 
     if trim_start == 0 and trim_end == 0:
@@ -242,11 +269,7 @@ def workflow(
     else:
         click.echo("Trimming video...")
         trimmed_video = run_trim(
-            stitched_video,
-            output_dir,
-            start=trim_start,
-            end=trim_end,
-            progress=True,
+            stitched_video, output_dir, start=trim_start, end=trim_end, progress=True, force=force
         )
 
     trimmed = Recording.from_video(trimmed_video)
@@ -260,5 +283,6 @@ def workflow(
         csv_df=trimmed.metadata,
         debug_dir=output_dir / "debug",
         progress=True,
+        force=force,
     )
     click.echo(f"Processed video written to {final_video}")

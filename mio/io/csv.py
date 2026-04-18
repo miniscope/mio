@@ -22,6 +22,8 @@ class BufferedCSVWriter:
         passed to :meth:`.append`
     buffer_size : int, optional
         The number of rows to buffer before writing to the file (default is 100).
+    force: bool
+        If True, remove any existing file and start a new one
 
     Attributes
     ----------
@@ -33,12 +35,17 @@ class BufferedCSVWriter:
         The buffer for storing rows before writing.
     """
 
-    def __init__(self, file_path: str | Path, header: list[str], buffer_size: int = 100):
+    def __init__(
+        self, file_path: str | Path, header: list[str], buffer_size: int = 100, force: bool = False
+    ):
         self.file_path: Path = Path(file_path)
         self.header = header
         self.buffer_size = buffer_size
         self.buffer = []
         self.logger = init_logger("BufferedCSVWriter")
+
+        if force:
+            self.file_path.unlink(missing_ok=True)
 
         # write header in first row
         self.buffer.append(self.header)
