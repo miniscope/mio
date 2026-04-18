@@ -57,6 +57,7 @@ but provide iterators or other accessors to get their contents by slicing syntax
 
 import re
 import sys
+import warnings
 from pathlib import Path
 from typing import Annotated as A
 from typing import Any, Literal, TypeAlias
@@ -156,6 +157,21 @@ class Recording(MiniscopeIOModel):
         if self.metadata is not None and "reconstructed_frame_index" in self.metadata:
             video_frames = set(range(self.video.shape[0]))
             metadata_frames = set(self.metadata["reconstructed_frame_index"].unique())
+
+            # handle off-by-one error
+            # https://github.com/miniscope/mio/pull/133#issuecomment-4270192079
+            # lets focus on fixing the underlying bug before expanding this check beyond 1 frame.
+            if len(metadata_frames) == len(video_frames) + 1:
+                warnings.warn(
+                    f"Metadata for {self.video.path} has an extra frame that was not "
+                    "written to video, trimming loaded metadata.",
+                    stacklevel=2,
+                )
+                self.metadata = self.metadata[
+                    self.metadata["reconstructed_frame_index"].isin(video_frames)
+                ]
+                metadata_frames = set(self.metadata["reconstructed_frame_index"].unique())
+
             assert video_frames == metadata_frames, (
                 f"Metadata has different number of frames than video:\n"
                 f"Metadata extra: {_format_ranges(metadata_frames - video_frames)}\n"
