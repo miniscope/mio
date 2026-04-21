@@ -201,7 +201,7 @@ follow_imports = "silent"
 warn_unreachable = true
 
 [tool.black]
-target-version = ['py310', 'py311', 'py312', 'py313', 'py314']
+target-version = ['py310', 'py311', 'py312', 'py313']
 include = "mio/.*\\.py$"
 extend-exclude = 'mio/vendor/.*'
 line-length = 100

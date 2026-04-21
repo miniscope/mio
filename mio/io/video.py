@@ -42,6 +42,8 @@ class VideoWriter:
         self.path = Path(path)
         if force:
             self.path.unlink(missing_ok=True)
+        elif self.path.exists():
+            raise FileExistsError(f"{self.path} exists! use force=True to overwrite.")
 
         self.writer = FFmpegWriter(
             filename=str(self.path), inputdict=input_dict, outputdict=output_dict

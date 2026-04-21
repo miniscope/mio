@@ -38,7 +38,7 @@ def test_export_video_frame(monkeypatch):
     named_frame.export(output_path="output_path", fps=20, suffix=True)
 
     # Verify init_video was called with correct parameters
-    mock_VideoWriter.assert_called_once_with(path=Path("output_path_test.avi"), fps=20)
+    mock_VideoWriter.assert_called_once_with(path=Path("output_path_test.avi"), fps=20, force=False)
 
     assert mock_instance.write_frame.call_count == len(frames)
 
