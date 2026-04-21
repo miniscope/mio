@@ -17,7 +17,7 @@ import cv2
 
 from mio.const import BASE_DIR
 from mio.stream_daq import StreamDevConfig, StreamDaq, iter_buffers
-from mio.models.process import FreqencyMaskingConfig
+from mio.models.process import FrequencyMaskingConfig
 from mio.utils import hash_video, hash_file
 from mio.io import VideoWriter
 from .conftest import DATA_DIR, CONFIG_DIR
@@ -82,7 +82,7 @@ def test_video_output(
     daqConfig.runtime.serial_buffer_queue_size = buffer_size
 
     if filter_config:
-        processor_for_visualization = FreqencyMaskingConfig.from_id(filter_config)
+        processor_for_visualization = FrequencyMaskingConfig.from_id(filter_config)
     else:
         processor_for_visualization = None
 
@@ -365,9 +365,10 @@ def test_iter_buffers(read_size: int, tmp_path: Path):
     assert all([buf == buffer for buf in got_buffers])
 
 
-def test_writer_returns_match_avi_frame_count(tmp_path: Path, set_okdev_input, monkeypatch):
+def test_writer_calls_match_avi_frame_count(tmp_path: Path, set_okdev_input, monkeypatch):
     """
-    Count write_frame calls and True returns from VideoWriter and compare the number of True returns against the number of frames reported in the AVI.
+    Count write_frame calls from VideoWriter and compare against the number
+    of frames reported in the AVI.
     """
     call_count = {"calls": 0, "ok": 0, "failed": 0}
     original = VideoWriter.write_frame

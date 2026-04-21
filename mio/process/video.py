@@ -6,13 +6,15 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pandas as pd
+from tqdm import tqdm
 
 from mio import init_logger
-from mio.io import VideoReader
+from mio.io import VideoReader, VideoWriter
 from mio.models.frames import NamedFrame, NamedVideo
 from mio.models.process import (
     DenoiseConfig,
-    FreqencyMaskingConfig,
+    FrequencyMaskingConfig,
     MinimumProjectionConfig,
     NoisePatchConfig,
 )
@@ -38,7 +40,7 @@ class BaseVideoProcessor:
     named_frame (NamedFrame): A NamedFrame object.
     """
 
-    def __init__(self, name: str, output_dir: Path):
+    def __init__(self, name: str, output_dir: Path, force: bool = False):
         """
         Initialize the BaseVideoProcessor object.
 
@@ -55,6 +57,7 @@ class BaseVideoProcessor:
         self.output_dir: Path = output_dir
         self.output_video: list[np.ndarray] = []
         self.output_enable: bool = True
+        self.force = force
 
     @property
     def output_named_video(self) -> NamedVideo:
@@ -73,6 +76,9 @@ class BaseVideoProcessor:
         Parameters:
         frame (np.ndarray): The frame to append.
         """
+        if input_frame is None:
+            logger.warning("Attempted to append None frame, skipping.")
+            return
         self.output_video.append(input_frame)
 
     def export_output_video(self) -> None:
@@ -80,16 +86,14 @@ class BaseVideoProcessor:
         Export the video to a file.
         """
         if self.output_enable:
-            logger.info(f"Exporting {self.name} video to {self.output_dir}")
+            logger.debug(f"Exporting {self.name} video to {self.output_dir}")
             self.output_named_video.export(
-                output_path=self.output_dir / "output",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / self.name, fps=20, suffix=False, force=self.force
             )
         else:
             logger.info(f"{self.name} output disabled.")
 
-    def process_frame(self) -> None:
+    def process_frame(self, input_frame: np.ndarray, index: int) -> None:
         """
         Process a single frame. This method should be implemented in the subclass.
 
@@ -111,10 +115,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
     """
 
     def __init__(
-        self,
-        name: str,
-        noise_patch_config: NoisePatchConfig,
-        output_dir: Path,
+        self, name: str, noise_patch_config: NoisePatchConfig, output_dir: Path, force: bool = False
     ) -> None:
         """
         Initialize the NoisePatchProcessor object.
@@ -123,7 +124,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
         name (str): The name of the video processor.
         noise_patch_config (NoisePatchConfig): The noise patch configuration.
         """
-        super().__init__(name, output_dir)
+        super().__init__(name, output_dir, force)
         self.noise_patch_config: NoisePatchConfig = noise_patch_config
         self.noise_detect_helper = InvalidFrameDetector(noise_patch_config=noise_patch_config)
         self.noise_patchs: list[np.ndarray] = []
@@ -138,15 +139,21 @@ class NoisePatchProcessor(BaseVideoProcessor):
                 "The mean_error method is unstable and not fully tested yet." " Use with caution."
             )
 
-    def process_frame(self, input_frame: np.ndarray) -> np.ndarray | None:
+    def process_frame(self, input_frame: np.ndarray, index: int) -> np.ndarray | None:
         """
         Process a single frame.
 
-        Parameters:
-        raw_frame (np.ndarray): The raw frame to process.
+        Parameters
+        ----------
+        input_frame : np.ndarray
+            The frame to process.
+        index : int
+            The frame number within the video.
 
-        Returns:
-        Optional[np.ndarray]: The processed frame. If the frame is noisy, a None is returned.
+        Returns
+        -------
+        Optional[np.ndarray]
+            The processed frame. If the frame is noisy, a None is returned.
         """
         if input_frame is None:
             return None
@@ -154,13 +161,12 @@ class NoisePatchProcessor(BaseVideoProcessor):
         if self.noise_patch_config.enable:
             invalid, noisy_area = self.noise_detect_helper.find_invalid_area(input_frame)
 
-            # Handle noisy frames
             if not invalid:
                 self.append_output_frame(input_frame)
                 return input_frame
             else:
-                index = len(self.output_video) + len(self.noise_patchs)
-                logger.info(f"Dropping frame {index} of original video due to noise.")
+                msg = f"Dropping frame {index} of original video due to noise."
+                logger.debug(msg)
                 logger.debug(f"Adding noise patch for frame {index}.")
                 self.noise_patchs.append((noisy_area * np.iinfo(np.uint8).max).astype(np.uint8))
                 self.noisy_frames.append(input_frame)
@@ -202,11 +208,9 @@ class NoisePatchProcessor(BaseVideoProcessor):
             return
 
         if self.noise_patch_config.output_noise_patch:
-            logger.info(f"Exporting {self.name} noise patch to {self.output_dir}")
+            logger.debug(f"Exporting {self.name} noise patch to {self.output_dir}")
             self.noise_patch_named_video.export(
-                output_path=self.output_dir / f"{self.name}",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )
         else:
             logger.info(f"{self.name} noise patch output disabled.")
@@ -218,9 +222,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
         if self.noise_patch_config.output_diff:
             logger.info(f"Exporting {self.name} difference frames to {self.output_dir}")
             self.diff_frames_named_video.export(
-                output_path=self.output_dir / f"{self.name}",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )
         else:
             logger.info(f"{self.name} difference frames output disabled.")
@@ -230,13 +232,10 @@ class NoisePatchProcessor(BaseVideoProcessor):
         Export the noisy frames to a file.
         """
         if self.noise_patch_config.output_noisy_frames:
-            logger.info(f"Exporting {self.name} noisy frames to {self.output_dir}")
+            logger.debug(f"Exporting {self.name} noisy frames to {self.output_dir}")
             self.noisy_frames_named_video.export(
-                output_path=self.output_dir / f"{self.name}",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )
-            # Can be anything. Just for now.
             with open(self.output_dir / f"{self.name}_dropped_frames.txt", "w") as f:
                 for index in self.dropped_frame_indices:
                     f.write(f"{index}\n")
@@ -261,20 +260,21 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
     def __init__(
         self,
         name: str,
-        freq_mask_config: FreqencyMaskingConfig,
+        freq_mask_config: FrequencyMaskingConfig,
         width: int,
         height: int,
         output_dir: Path,
+        force: bool = False,
     ) -> None:
         """
         Initialize the FreqencyMaskProcessor object.
 
         Parameters:
         name (str): The name of the video processor.
-        freq_mask_config (FreqencyMaskingConfig): The frequency masking configuration.
+        freq_mask_config (FrequencyMaskingConfig): The frequency masking configuration.
         """
-        super().__init__(name, output_dir)
-        self.freq_mask_config: FreqencyMaskingConfig = freq_mask_config
+        super().__init__(name, output_dir, force)
+        self.freq_mask_config: FrequencyMaskingConfig = freq_mask_config
         self.freq_mask_helper = FrequencyMaskHelper(
             height=height, width=width, freq_mask_config=freq_mask_config
         )
@@ -304,7 +304,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         """
         return NamedVideo(name="freq_domain", video=self.freq_domain_frames)
 
-    def process_frame(self, input_frame: np.ndarray) -> np.ndarray | None:
+    def process_frame(self, input_frame: np.ndarray, index: int) -> np.ndarray | None:
         """
         Process a single frame.
 
@@ -331,11 +331,9 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         Export the frequency domain to a file.
         """
         if self.freq_mask_config.output_freq_domain:
-            logger.info(f"Exporting {self.name} frequency domain to {self.output_dir}")
+            logger.debug(f"Exporting {self.name} frequency domain to {self.output_dir}")
             self.freq_domain_named_video.export(
-                output_path=self.output_dir / f"{self.name}",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )
         else:
             logger.info(f"{self.name} frequency domain output disabled.")
@@ -345,7 +343,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         Export the frequency mask to a file.
         """
         if self.freq_mask_config.output_mask:
-            logger.info(f"Exporting {self.name} frequency mask to {self.output_dir}")
+            logger.debug(f"Exporting {self.name} frequency mask to {self.output_dir}")
             self.freq_mask_named_frame.export(
                 output_path=self.output_dir / f"{self.name}",
                 suffix=True,
@@ -367,7 +365,7 @@ class PassThroughProcessor(BaseVideoProcessor):
     A class to pass through a video.
     """
 
-    def __init__(self, name: str, output_dir: Path):
+    def __init__(self, name: str, output_dir: Path, force: bool = False):
         """
         Initialize the PassThroughProcessor object.
 
@@ -378,7 +376,7 @@ class PassThroughProcessor(BaseVideoProcessor):
         Returns:
         PassThroughProcessor: A PassThroughProcessor object.
         """
-        super().__init__(name, output_dir)
+        super().__init__(name, output_dir, force)
 
     @property
     def pass_through_named_video(self) -> NamedVideo:
@@ -387,7 +385,7 @@ class PassThroughProcessor(BaseVideoProcessor):
         """
         return NamedVideo(name=self.name, video=self.output_video)
 
-    def process_frame(self, input_frame: np.ndarray) -> np.ndarray:
+    def process_frame(self, input_frame: np.ndarray, index: int) -> np.ndarray:
         """
         Process a single frame.
 
@@ -420,6 +418,7 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
         minimum_projection_config: MinimumProjectionConfig,
         output_dir: Path,
         video_frames: list[np.ndarray],
+        force: bool = False,
     ):
         """
         Initialize the MinimumProjectionProcessor object.
@@ -431,7 +430,7 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
         Returns:
         MinimumProjectionProcessor: A MinimumProjectionProcessor object.
         """
-        super().__init__(name, output_dir)
+        super().__init__(name, output_dir, force)
 
         if not video_frames:
             logger.warning("No frames provided for minimum projection. Skipping processing.")
@@ -465,29 +464,47 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
 
         self.output_frames = ZStackHelper.normalize_video_stack(self.output_frames)
 
-    def export_minimum_projection(self) -> None:
-        """
-        Export the minimum projection to a file.
-        """
-
     def batch_export_videos(self) -> None:
         """
         Batch export the videos to a file. Whether to export or not is controlled in each method.
         """
         self.export_output_video()
-        self.export_minimum_projection()
 
 
-def denoise_run(
-    video_path: str,
+def denoise(
+    video_path: Path,
     config: DenoiseConfig,
-) -> None:
+    csv_df: pd.DataFrame | None = None,
+    debug_dir: Path | None = None,
+    progress: bool = False,
+    force: bool = False,
+) -> Path:
     """
     Preprocess a video file and display the results.
 
-    Parameters:
-    video_path (str): The path to the video file.
-    config (DenoiseConfig): The denoise configuration.
+    Parameters
+    ----------
+    video_path : str
+        The path to the video file.
+    config : DenoiseConfig
+        The denoise configuration.
+    csv_df : Optional[pd.DataFrame], optional
+        Pre-validated CSV DataFrame. If provided, uses this instead of
+        reading from disk.
+    debug_dir : Optional[Path], optional
+        Directory for intermediate/debug files.
+        If provided, intermediate files (noisy frames, patches, frequency masks, etc.)
+        will be saved here instead of the main output_dir. Main output files
+        (output video and CSV) will still be saved to output_dir.
+    progress : bool
+        Display a progress bar
+    force : bool
+        Overwrite any existing files
+
+    Returns
+    -------
+    Path
+        Path to the output video file.
     """
     if plt is None:
         raise ModuleNotFoundError(
@@ -495,95 +512,278 @@ def denoise_run(
             "install it manually or install miniscope-io with `pip install miniscope-io[plot]`"
         )
 
-    reader = VideoReader(video_path)
+    reader = VideoReader(str(video_path))
     pathstem = Path(video_path).stem
 
-    output_dir = Path.cwd() / config.output_dir
-    if not output_dir.exists():
-        output_dir.mkdir(parents=True)
+    output_dir = video_path.parent / config.output_dir
+    debug_dir = debug_dir if debug_dir is not None else output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    debug_dir.mkdir(parents=True, exist_ok=True)
 
     raw_frame_processor = PassThroughProcessor(
-        name=pathstem + "_raw",
-        output_dir=output_dir,
+        name=pathstem + "_raw", output_dir=debug_dir, force=force
     )
 
     output_frame_processor = PassThroughProcessor(
-        name=pathstem + "_output",
-        output_dir=output_dir,
+        name=pathstem + "_output", output_dir=output_dir, force=force
     )
 
     noise_patch_processor = NoisePatchProcessor(
         output_dir=output_dir,
         name=pathstem + "_patch",
         noise_patch_config=config.noise_patch,
+        force=force,
     )
 
     freq_mask_processor = FreqencyMaskProcessor(
-        output_dir=output_dir,
+        output_dir=debug_dir,
         name=pathstem + "_freq_mask",
         freq_mask_config=config.frequency_masking,
         width=reader.width,
         height=reader.height,
+        force=force,
     )
 
     if config.interactive_display.display_freq_mask:
         freq_mask_processor.freq_mask_named_frame.display()
 
+    if progress:
+        iterator = tqdm(reader.read_frames(), total=reader.frame_count, desc="Processing frames")
+    else:
+        iterator = reader.read_frames()
+
     try:
-        for index, frame in reader.read_frames():
+        for index, frame in iterator:
             if config.end_frame and index > config.end_frame and config.end_frame != -1:
                 break
 
-            raw_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            input_frame = raw_frame_processor.process_frame(raw_frame)
-            patched_frame = noise_patch_processor.process_frame(input_frame)
-            freq_masked_frame = freq_mask_processor.process_frame(patched_frame)
-            _ = output_frame_processor.process_frame(freq_masked_frame)
+            if len(frame.shape) != 2:
+                raise ValueError(f"Frame {index} has shape {frame.shape}, expected 2D grayscale.")
+            raw_frame = frame
+            input_frame = raw_frame_processor.process_frame(raw_frame, index)
+            patched_frame = noise_patch_processor.process_frame(input_frame, index)
+            freq_masked_frame = freq_mask_processor.process_frame(patched_frame, index)
+            _ = output_frame_processor.process_frame(freq_masked_frame, index)
 
     finally:
         reader.release()
 
-        output_frames = output_frame_processor.output_video
+    output_frames = output_frame_processor.output_video
+    minimum_projection_processor = MinProjSubtractProcessor(
+        name=pathstem + "min_proj",
+        output_dir=debug_dir,
+        video_frames=output_frames,
+        minimum_projection_config=config.minimum_projection,
+    )
+    minimum_projection_processor.normalize_stack()
 
-        if not isinstance(output_frames, list):
-            raise ValueError("Output frames must be a list.")
-        for frame in output_frames:
-            if not isinstance(frame, np.ndarray):
-                logger.warning(f"Frame is not a numpy array: {type(frame)}")
-        minimum_projection_processor = MinProjSubtractProcessor(
-            name=pathstem + "min_proj",
-            output_dir=output_dir,
-            video_frames=output_frames,
-            minimum_projection_config=config.minimum_projection,
+    noise_patch_processor.export_output_video()
+
+    noise_patch_processor.output_dir = debug_dir
+    noise_patch_processor.export_noise_patch()
+    noise_patch_processor.export_diff_frames()
+    noise_patch_processor.export_noisy_video()
+
+    freq_mask_processor.batch_export_videos()
+    minimum_projection_processor.batch_export_videos()
+
+    dropped_frames = noise_patch_processor.dropped_frame_indices
+    if dropped_frames:
+        logger.info(
+            f"Excluded {len(dropped_frames)} frames due to noise: "
+            f"{dropped_frames[:20]}{'...' if len(dropped_frames) > 20 else ''}"
         )
-        minimum_projection_processor.normalize_stack()
+    else:
+        logger.info("No frames were excluded during processing.")
 
-        noise_patch_processor.batch_export_videos()
-        freq_mask_processor.batch_export_videos()
-        minimum_projection_processor.batch_export_videos()
+    output_video_name = noise_patch_processor.name
+    output_video_path = output_dir / f"{output_video_name}.avi"
 
-        if len(noise_patch_processor.output_named_video.video) == 0:
-            logger.warning("No output video available for display.")
-        elif (
-            len(noise_patch_processor.output_named_video.video)
-            < config.interactive_display.end_frame
-        ):
-            logger.warning(
-                f"Output video has {len(noise_patch_processor.output_named_video.video)} frames."
-                f" End frame for interactive plot is {config.interactive_display.end_frame}."
-                " End frame for interactive plot exceeds the number of frames in the video."
-                " Skipping interactive display."
-            )
-        elif config.interactive_display.show_videos:
-            videos = [
-                noise_patch_processor.output_named_video,
-                freq_mask_processor.output_named_video,
-                freq_mask_processor.freq_domain_named_video,
-                minimum_projection_processor.min_proj_named_frame,
-            ]
-            video_plotter = VideoPlotter(
-                videos=videos,
-                start_frame=config.interactive_display.start_frame,
-                end_frame=config.interactive_display.end_frame,
-            )
-            video_plotter.show()
+    actual_output_frame_count = len(output_frame_processor.output_video)
+    dropped_count = len(noise_patch_processor.dropped_frame_indices)
+    logger.debug(
+        f"Output video will have {actual_output_frame_count} frames "
+        f"(input had {reader.frame_count}, dropped {dropped_count})"
+    )
+
+    csv_df = csv_df if csv_df is not None else pd.read_csv(video_path.with_suffix(".csv"))
+
+    modified_csv_df = _drop_frames_by_index(csv_df, noise_patch_processor.dropped_frame_indices)
+    modified_csv_df.to_csv(output_video_path.with_suffix(".csv"), index=False)
+    if "buffer_recv_unix_time" in modified_csv_df:
+        timestamp_df = _make_frame_timestamp_csv(modified_csv_df)
+        timestamp_df.to_csv(
+            output_video_path.with_name(output_video_path.stem + "_timestamp.csv"), index=False
+        )
+
+    if config.interactive_display.show_videos:
+        videos = [
+            noise_patch_processor.output_named_video,
+            freq_mask_processor.output_named_video,
+            freq_mask_processor.freq_domain_named_video,
+            minimum_projection_processor.min_proj_named_frame,
+        ]
+        video_plotter = VideoPlotter(
+            videos=videos,
+            start_frame=config.interactive_display.start_frame,
+            end_frame=config.interactive_display.end_frame,
+        )
+        video_plotter.show()
+
+    return output_video_path
+
+
+def _drop_frames_by_index(
+    df: pd.DataFrame,
+    dropped_frame_indices: list[int],
+    index_column: str = "reconstructed_frame_index",
+) -> pd.DataFrame:
+    """
+    Drop rows whose ``index_column`` value is in the dropped frame indices,
+    and then recreate ``index_column`` monotonically increasing from 0.
+    """
+    filtered = df[~df[index_column].isin(dropped_frame_indices)].copy()
+    filtered[index_column] = filtered.groupby(index_column).ngroup()
+    return filtered
+
+
+def _make_frame_timestamp_csv(csv_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Export a frame-timestamp CSV file mapping reconstructed_frame_index to unix timestamps.
+
+    The CSV includes both the first and last buffer timestamps for each frame.
+
+    Parameters
+    ----------
+    output_video_path : Path
+        Path to the output video file.
+    csv_df : pd.DataFrame
+        The modified CSV DataFrame with reconstructed_frame_index and
+        buffer_recv_unix_time.
+    """
+    frame_timestamps = (
+        csv_df.groupby("reconstructed_frame_index")["buffer_recv_unix_time"]
+        .agg(["min", "max"])
+        .reset_index()
+    )
+
+    frame_timestamps.columns = ["frame", "timestamp_first", "timestamp_last"]
+
+    frame_timestamps = frame_timestamps.sort_values("frame")
+    return frame_timestamps
+
+
+def trim(
+    video_path: Path,
+    output_path: Path | None = None,
+    csv_df: pd.DataFrame | None = None,
+    start: int = 0,
+    end: int = 0,
+    progress: bool = False,
+    force: bool = False,
+) -> Path:
+    """
+    Crop a video file by trimming frames from both ends.
+
+    Parameters
+    ----------
+    video_path : str
+        The path to the input video file.
+    output_path : Optional[str], optional
+        The path to the output video file.
+        If None, defaults to input path with "_trimmed" suffix.
+    csv_df : Optional[pd.DataFrame], optional
+        Pre-validated CSV DataFrame. If provided, uses this instead of
+        reading from disk.
+    start : int
+        Number of frames to remove from the beginning. Default 0.
+    end : int
+        Number of frames to remove from the end. Default 0.
+    progress : bool
+        Display a progress bar
+    force : bool
+        If True, overwrite any existing file.
+
+    Returns
+    -------
+    Path
+        Path to the output video file.
+    """
+    reader = VideoReader(str(video_path))
+    input_path = Path(video_path)
+
+    if output_path is None:
+        output_path_obj = input_path.parent / f"{input_path.stem}_trimmed{input_path.suffix}"
+    elif output_path.is_dir() or output_path.suffix == "":
+        output_path_obj = output_path / f"{input_path.stem}_trimmed{input_path.suffix}"
+    else:
+        output_path_obj = output_path
+
+    output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+    total_frames = int(reader.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = reader.cap.get(cv2.CAP_PROP_FPS)
+
+    if start < 0:
+        raise ValueError(f"start must be >= 0, got {start}")
+    if end < 0:
+        raise ValueError(f"end must be >= 0, got {end}")
+    if start + end >= total_frames:
+        raise ValueError(
+            f"start ({start}) + end ({end}) " f"must be < total_frames ({total_frames})"
+        )
+
+    start_idx = start
+    end_idx = total_frames - end
+    expected_output_frames = end_idx - start_idx
+    logger.info(
+        f"Trimming video: keeping frames {start_idx}-{end_idx-1} "
+        f"({expected_output_frames} frames, removing {start} from start, {end} from end)"
+    )
+
+    writer = VideoWriter(path=output_path_obj, fps=fps, force=force)
+
+    if progress:
+        iterator = tqdm(reader.read_frames(), total=total_frames, desc="Cropping frames")
+    else:
+        iterator = reader.read_frames()
+
+    frames_written = 0
+    try:
+        for index, frame in iterator:
+            if index < start_idx:
+                continue
+            if index >= end_idx:
+                break
+
+            writer.write_frame(frame)
+            frames_written += 1
+
+    finally:
+        reader.release()
+        writer.close()
+
+    logger.info(f"Successfully cropped video: wrote {frames_written} frames to {output_path_obj}")
+
+    if frames_written != expected_output_frames:
+        logger.warning(
+            f"Frame count mismatch: expected {expected_output_frames} frames, "
+            f"but wrote {frames_written} frames"
+        )
+
+    if csv_df is None and (input_csv_path := input_path.with_suffix(".csv")).exists():
+        csv_df = pd.read_csv(input_csv_path)
+    if csv_df is not None:
+        trimmed_indices = list(range(start)) + list(range(end_idx, total_frames + 1))
+        trimmed_df = _drop_frames_by_index(csv_df, trimmed_indices)
+        trimmed_df.to_csv(output_path_obj.with_suffix(".csv"), index=False)
+
+    input_scores_path = input_path.parent / (input_path.stem + "_scores.csv")
+    if input_scores_path.exists():
+        scores_df = pd.read_csv(input_scores_path)
+        trimmed_indices = list(range(start)) + list(range(end_idx, total_frames + 1))
+        trimmed_scores = _drop_frames_by_index(scores_df, trimmed_indices, index_column="index")
+        output_scores_path = output_path_obj.parent / (output_path_obj.stem + "_scores.csv")
+        trimmed_scores.to_csv(output_scores_path, index=False)
+
+    return output_path_obj

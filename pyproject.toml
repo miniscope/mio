@@ -16,7 +16,7 @@ dependencies = [
     "pandas>=2.1.0",
     "pydantic>=2.3.0",
     "pyserial>=3.5",
-    "tqdm>=4.66.1",
+    "tqdm>=4.67.1",
     "bitstring>=4.2.3",
     "pydantic-settings>=2.0.3",
     "rich>=13.6.0",
@@ -26,7 +26,7 @@ dependencies = [
     'typing-extensions>=4.10.0; python_version<"3.13"',
     "scikit-video>=1.1.11",
     "scipy>=1.13.0",
-    "numpydantic>=1.8.0",
+    "numpydantic>=1.8.1",
 ]
 
 readme = "README.md"
@@ -201,7 +201,7 @@ follow_imports = "silent"
 warn_unreachable = true
 
 [tool.black]
-target-version = ['py310', 'py311', 'py312', 'py313', 'py314']
+target-version = ['py310', 'py311', 'py312', 'py313']
 include = "mio/.*\\.py$"
 extend-exclude = 'mio/vendor/.*'
 line-length = 100

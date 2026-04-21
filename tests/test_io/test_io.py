@@ -13,7 +13,7 @@ from mio.exceptions import EndOfRecordingException
 from mio.models.frames import SDCardFrame
 from mio.utils import hash_file, hash_video
 
-from .fixtures import wirefree, wirefree_battery
+from ..fixtures import wirefree, wirefree_battery
 
 
 @pytest.fixture
@@ -195,7 +195,7 @@ def test_relative_path():
     """
     # get absolute path of working directory, then get relative path to data from there
     abs_cwd = Path(os.getcwd()).resolve()
-    abs_child = Path(__file__).parent.parent / "data" / "wirefree_example.img"
+    abs_child = Path(__file__).parents[2] / "data" / "wirefree_example.img"
     rel_path = abs_child.relative_to(abs_cwd)
 
     assert not rel_path.is_absolute()

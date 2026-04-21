@@ -4,12 +4,8 @@ The junk drawer my dogs
 
 import hashlib
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import cv2
-
-if TYPE_CHECKING:
-    pass
 
 
 def hash_file(path: Path | str) -> str:
@@ -63,3 +59,25 @@ def hash_video(
         h.update(frame)  # type: ignore
 
     return h.hexdigest()
+
+
+def _format_ranges(indices: list[int] | set[int]) -> list[str]:
+    """Convert a sorted list of missing frame indices into readable ranges."""
+    if not indices:
+        return []
+    indices = sorted(indices)
+
+    ranges = []
+    start = indices[0]
+    end = indices[0]
+
+    for idx in indices[1:]:
+        if idx == end + 1:
+            end = idx
+        else:
+            ranges.append(f"{start}-{end}" if start != end else str(start))
+            start = idx
+            end = idx
+
+    ranges.append(f"{start}-{end}" if start != end else str(start))
+    return ranges

@@ -10,7 +10,7 @@ import numpy as np
 from mio import init_logger
 from mio.models.process import (
     BlackAreaDetectorConfig,
-    FreqencyMaskingConfig,
+    FrequencyMaskingConfig,
     GradientDetectorConfig,
     MSEDetectorConfig,
     NoisePatchConfig,
@@ -345,14 +345,14 @@ class FrequencyMaskHelper(BaseSingleFrameHelper):
     Helper class for frequency masking operations.
     """
 
-    def __init__(self, height: int, width: int, freq_mask_config: FreqencyMaskingConfig):
+    def __init__(self, height: int, width: int, freq_mask_config: FrequencyMaskingConfig):
         """
         Initialize the FreqMaskHelper object and generate a frequency mask.
 
         Parameters:
             height (int): The height of the image.
             width (int): The width of the image.
-            freq_mask_config (FreqencyMaskingConfig): Configuration for frequency masking
+            freq_mask_config (FrequencyMaskingConfig): Configuration for frequency masking
 
         Returns:
             FreqMaskHelper: A FreqMaskHelper object.

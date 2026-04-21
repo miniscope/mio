@@ -1,9 +1,11 @@
-id: denoise_example
+id: denoise_patch
 mio_model: mio.models.process.DenoiseConfig
-mio_version: 0.6.1
+mio_version: 0.8.2.dev54+gd5d835d7.d20251205
 noise_patch:
   enable: true
-  method: [gradient, black_area]
+  method:
+  - gradient
+  - black_area
   mean_error_config:
     threshold: 40
     device_config_id: wireless-200px
@@ -13,34 +15,33 @@ noise_patch:
   gradient_config:
     threshold: 20
   black_area_config:
-    consecutive_threshold: 5
+    consecutive_threshold: 200
     value_threshold: 0
   output_result: true
   output_noise_patch: true
-  output_diff: true
+  output_diff: false
   output_noisy_frames: true
 frequency_masking:
   id: frequency_masking_example
   mio_model: mio.models.process.FrequencyMaskingConfig
   mio_version: 0.6.1
-  enable: true
+  enable: false
   cast_float32: true
   spatial_LPF_cutoff_radius: 15
   vertical_BEF_cutoff: 2
   horizontal_BEF_cutoff: 0
-  output_mask: true
-  output_result: true
-  output_freq_domain: true
+  output_mask: false
+  output_result: false
+  output_freq_domain: false
 minimum_projection:
-  enable: true
+  enable: false
   normalize: true
-  output_result: true
-  output_min_proj: true
-interactive_display: # Mostly for debugging purposes
+  output_result: false
+  output_min_proj: false
+interactive_display:
   show_videos: false
   start_frame: 40
   end_frame: 140
   display_freq_mask: false
-end_frame: -1 #-1 means all frames
-output_result: true
-output_dir: user_data/output
+end_frame: -1
+output_result: false

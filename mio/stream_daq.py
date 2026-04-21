@@ -21,7 +21,7 @@ from mio.bit_operation import BufferFormatter
 from mio.devices.mocks import okDevMock
 from mio.exceptions import EndOfRecordingException, StreamReadError
 from mio.io import BufferedCSVWriter, VideoWriter
-from mio.models.process import FreqencyMaskingConfig
+from mio.models.process import FrequencyMaskingConfig
 from mio.models.stream import (
     RuntimeMetadata,
     StreamBufferHeader,
@@ -456,7 +456,6 @@ class StreamDaq:
         frame_index_counter = 0
         try:
             for frame_data, header_list in exact_iter(frame_buffer_queue.get, None):
-
                 if not frame_data or len(frame_data) == 0:
                     try:
                         imagearray.put(
@@ -533,7 +532,7 @@ class StreamDaq:
         binary: Path | None = None,
         show_video: bool | None = True,
         show_metadata: bool | None = False,
-        freq_mask_config: FreqencyMaskingConfig | None = None,
+        freq_mask_config: FrequencyMaskingConfig | None = None,
     ) -> None:
         """
         Entry point to start frame capture.

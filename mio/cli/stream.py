@@ -9,7 +9,7 @@ from pathlib import Path
 import click
 
 from mio.cli.common import ConfigIDOrPath
-from mio.models.process import FreqencyMaskingConfig
+from mio.models.process import FrequencyMaskingConfig
 from mio.models.stream import StreamDevConfig
 from mio.ntp import prompt_ntp_sync
 from mio.stream_daq import StreamDaq
@@ -116,7 +116,7 @@ def capture(
         binary_output = None
 
     if freq_mask_config:
-        freq_mask_config = FreqencyMaskingConfig.from_any(freq_mask_config)
+        freq_mask_config = FrequencyMaskingConfig.from_any(freq_mask_config)
     else:
         freq_mask_config = None
 

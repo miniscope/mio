@@ -28,6 +28,7 @@ class VideoWriter:
         path: str | Path,
         fps: int,
         output_dict: dict | None = None,
+        force: bool = False,
     ):
         """
         Initialize the VideoWriter object.
@@ -38,7 +39,15 @@ class VideoWriter:
 
         input_dict = {"-framerate": str(fps)}
 
-        self.writer = FFmpegWriter(filename=str(path), inputdict=input_dict, outputdict=output_dict)
+        self.path = Path(path)
+        if force:
+            self.path.unlink(missing_ok=True)
+        elif self.path.exists():
+            raise FileExistsError(f"{self.path} exists! use force=True to overwrite.")
+
+        self.writer = FFmpegWriter(
+            filename=str(self.path), inputdict=input_dict, outputdict=output_dict
+        )
 
     def write_frame(self, frame: np.ndarray) -> bool:
         """
@@ -82,6 +91,11 @@ class VideoReader:
         self.logger.info(f"Opened video at {video_path}")
 
     @property
+    def frame_count(self) -> int:
+        """Total number of frames in the video."""
+        return int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    @property
     def height(self) -> int:
         """
         The height of the video frames.
@@ -102,6 +116,7 @@ class VideoReader:
         """
         if self._cap is None:
             self._cap = cv2.VideoCapture(str(self.video_path))
+            self._cap.set(cv2.CAP_PROP_CONVERT_RGB, 0.0)
         return self._cap
 
     def read_frames(self) -> Iterator[tuple[int, np.ndarray]]:
@@ -109,17 +124,29 @@ class VideoReader:
         Read frames from the video file along with their index.
 
         Yields:
-        Tuple[int, np.ndarray]: The index and the next frame in the video.
+        tuple[int, np.ndarray]: The 0-based index and the frame data.
         """
         while self.cap.isOpened():
+            # Get frame position BEFORE reading - CAP_PROP_POS_FRAMES returns
+            # the 0-based index of the next frame to be captured/decoded
+            index = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             ret, frame = self.cap.read()
             if not ret:
                 break
 
-            index = int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
             self.logger.debug(f"Reading frame {index}")
 
             yield index, frame
+
+    def read_frame(self, index: int) -> np.ndarray | None:
+        """
+        Read a frame from the video file.
+        """
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, index)
+        ret, frame = self.cap.read()
+        if not ret:
+            return None
+        return frame
 
     def release(self) -> None:
         """

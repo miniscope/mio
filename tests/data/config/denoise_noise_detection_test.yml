@@ -1,4 +1,4 @@
-id: denoise_example
+id: denoise_noise_detection_test
 mio_model: mio.models.process.DenoiseConfig
 mio_version: 0.6.1
 noise_patch:
@@ -14,7 +14,7 @@ noise_patch:
     threshold: 20
   black_area_config:
     consecutive_threshold: 5
-    value_threshold: 0
+    value_threshold: 16
   output_result: true
   output_noise_patch: true
   output_diff: true
@@ -36,11 +36,11 @@ minimum_projection:
   normalize: true
   output_result: true
   output_min_proj: true
-interactive_display: # Mostly for debugging purposes
+interactive_display:
   show_videos: false
   start_frame: 40
   end_frame: 140
   display_freq_mask: false
-end_frame: -1 #-1 means all frames
+end_frame: -1
 output_result: true
 output_dir: user_data/output

@@ -119,7 +119,9 @@ class NamedVideo(BaseVideo):
         description="Name of the video.",
     )
 
-    def export(self, output_path: Path | str, suffix: bool = False, fps: int = 20) -> None:
+    def export(
+        self, output_path: Path | str, suffix: bool = False, fps: int = 20, force: bool = False
+    ) -> None:
         """
         Export the frame data to a file.
         """
@@ -133,10 +135,7 @@ class NamedVideo(BaseVideo):
             output_path = output_path.with_name(output_path.stem + f"_{self.name}")
         if not all(isinstance(frame, np.ndarray) for frame in self.video):
             raise ValueError("Not all frames are numpy arrays.")
-        writer = VideoWriter(
-            path=output_path.with_suffix(".avi"),
-            fps=fps,
-        )
+        writer = VideoWriter(path=output_path.with_suffix(".avi"), fps=fps, force=force)
         logger.info(
             f"Writing video to {output_path}.avi:"
             f"{self.video[0].shape[1]}x{self.video[0].shape[0]}"

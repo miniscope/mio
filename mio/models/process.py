@@ -154,7 +154,7 @@ class NoisePatchConfig(BaseModel):
     )
 
 
-class FreqencyMaskingConfig(MiniscopeConfig, ConfigYAMLMixin):
+class FrequencyMaskingConfig(MiniscopeConfig, ConfigYAMLMixin):
     """
     Configuration for frequency filtering.
     This includes a spatial low-pass filter and vertical and horizontal band elimination filters.
@@ -232,7 +232,7 @@ class DenoiseConfig(MiniscopeConfig, ConfigYAMLMixin):
         default=None,
         description="Configuration for patch based noise handling.",
     )
-    frequency_masking: FreqencyMaskingConfig | None = Field(
+    frequency_masking: FrequencyMaskingConfig | None = Field(
         default=None,
         description="Configuration for frequency masking.",
     )
