@@ -70,8 +70,6 @@ from pydantic import (
     Discriminator,
     Field,
     Tag,
-    ValidationInfo,
-    field_validator,
     model_validator,
 )
 
@@ -79,9 +77,9 @@ from mio.models import MiniscopeIOModel
 from mio.utils import _format_ranges
 
 if sys.version_info < (3, 11):
-    from typing_extensions import Self
+    from typing_extensions import Self, TypedDict
 else:
-    from typing import Self
+    from typing import Self, TypedDict
 
 VIDEO_EXTENSIONS = (".avi", ".mp4")
 RECORDING_TYPES = Literal["raw", "stitched"]
@@ -100,6 +98,29 @@ class RecordingDerivation(MiniscopeIOModel):
     """Which other recordings this recording was derived from"""
 
 
+class RecordingPaths(TypedDict):
+    """Filenames for potential parts of a recording"""
+
+    video: Path
+    """{stem}.avi"""
+    metadata: Path
+    """{stem}.csv"""
+    timestamps: Path
+    """{stem}_timestamps.csv"""
+    binary: Path
+    """{stem}.bin"""
+
+
+def paths_from_video(video: Path) -> RecordingPaths:
+    """Given some path to a root video, create the expected paths for its components"""
+    return RecordingPaths(
+        video=video,
+        metadata=video.with_suffix(".csv"),
+        timestamps=video.with_name(video.stem + "_timestamps.csv"),
+        binary=video.with_suffix(".bin"),
+    )
+
+
 class Recording(MiniscopeIOModel):
     """A single set of matching data streams from a device within a dataset."""
 
@@ -111,11 +132,22 @@ class Recording(MiniscopeIOModel):
     """A video created as part of this recording"""
     metadata: pd.DataFrame | None = None
     """Metadata for frames within the video"""
+    timestamps: pd.DataFrame | None = None
+    """
+    Timestamps table, (currently) stored as ``{video_name}_timestamps.csv`` next to the video.
+    When instantiating a recording, if a metadata file exists but timestamps do not,
+    they are automatically generated. 
+    """
     binary: Path | None = None
     """Path to any raw binary version of the data in the video"""
     derived_from: RecordingDerivation | None = None
 
     model_config = ConfigDict(arbitrary_types_allowed=True, validate_default=True)
+
+    @property
+    def paths(self) -> RecordingPaths:
+        """Given some video, the expected paths for its related components"""
+        return paths_from_video(self.video.path)
 
     @classmethod
     def from_video(cls, path: Path) -> "RecordingUnion":
@@ -129,27 +161,19 @@ class Recording(MiniscopeIOModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _load_metadata(cls, v: dict) -> dict:
-        if v.get("metadata") is not None:
-            return v
+    def _load_csvs(cls, v: dict) -> dict:
         video = v.get("video")
         video_path: Path = video.path if isinstance(video, VideoProxy) else Path(video)
-        metadata_path = video_path.with_suffix(".csv")
-        if metadata_path.exists():
-            v["metadata"] = pd.read_csv(metadata_path)
-        return v
+        paths = paths_from_video(video_path)
+        for key, path in paths.items():
+            if key in v:
+                continue
+            elif path.suffix == ".csv" and path.exists():
+                v[key] = pd.read_csv(path)
+            elif path.suffix != ".csv" and path.exists():
+                v[key] = path
 
-    @field_validator("binary", mode="after")
-    @classmethod
-    def _get_binary_path(cls, v: Path | None, info: ValidationInfo) -> Path | None:
-        """Get binary path if it exists"""
-        if v is not None:
-            return v
-        video_proxy: VideoProxy = info.data["video"]
-        video_path = video_proxy.path
-        binary_path = video_path.with_suffix(".bin")
-        if binary_path.exists():
-            return binary_path
+        return v
 
     @model_validator(mode="after")
     def _metadata_length_matches_video(self) -> Self:
@@ -177,6 +201,17 @@ class Recording(MiniscopeIOModel):
                 f"Metadata extra: {_format_ranges(metadata_frames - video_frames)}\n"
                 f"Video extra: {_format_ranges(video_frames - metadata_frames)}"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _ensure_timestamps(self) -> Self:
+        """Ensure that timestamps are created if metadata exists but timestamps don't"""
+        if self.metadata is not None and self.timestamps is None:
+            from mio.process.video import _make_frame_timestamp_csv
+
+            timestamps = _make_frame_timestamp_csv(self.metadata)
+            timestamps.to_csv(self.paths["timestamps"], index=False)
+            self.timestamps = timestamps
         return self
 
 

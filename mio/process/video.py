@@ -635,46 +635,6 @@ def denoise(
     return output_video_path
 
 
-def _drop_frames_by_index(
-    df: pd.DataFrame,
-    dropped_frame_indices: Collection[int],
-    index_column: str = "reconstructed_frame_index",
-) -> pd.DataFrame:
-    """
-    Drop rows whose ``index_column`` value is in the dropped frame indices,
-    and then recreate ``index_column`` monotonically increasing from 0.
-    """
-    filtered = df[~df[index_column].isin(dropped_frame_indices)].copy()
-    filtered[index_column] = filtered.groupby(index_column).ngroup()
-    return filtered
-
-
-def _make_frame_timestamp_csv(csv_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Export a frame-timestamp CSV file mapping reconstructed_frame_index to unix timestamps.
-
-    The CSV includes both the first and last buffer timestamps for each frame.
-
-    Parameters
-    ----------
-    output_video_path : Path
-        Path to the output video file.
-    csv_df : pd.DataFrame
-        The modified CSV DataFrame with reconstructed_frame_index and
-        buffer_recv_unix_time.
-    """
-    frame_timestamps = (
-        csv_df.groupby("reconstructed_frame_index")["buffer_recv_unix_time"]
-        .agg(["min", "max"])
-        .reset_index()
-    )
-
-    frame_timestamps.columns = ["frame", "timestamp_first", "timestamp_last"]
-
-    frame_timestamps = frame_timestamps.sort_values("frame")
-    return frame_timestamps
-
-
 def trim(
     video_path: Path,
     output_path: Path | None = None,
@@ -858,3 +818,45 @@ def remove_frames(
         filtered.to_csv(output_path.with_suffix(".csv"), index=False)
 
     return Recording.from_video(output_path)
+
+
+def _drop_frames_by_index(
+    df: pd.DataFrame,
+    dropped_frame_indices: Collection[int],
+    index_column: str = "reconstructed_frame_index",
+) -> pd.DataFrame:
+    """
+    Drop rows whose ``index_column`` value is in the dropped frame indices,
+    and then recreate ``index_column`` monotonically increasing from 0.
+    """
+    filtered = df[~df[index_column].isin(dropped_frame_indices)].copy()
+    filtered[index_column] = filtered.groupby(index_column).ngroup()
+    return filtered
+
+
+def _make_frame_timestamp_csv(csv_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Export a frame-timestamp CSV file mapping reconstructed_frame_index to unix timestamps.
+
+    The CSV includes both the first and last buffer timestamps for each frame.
+
+    .. todo::
+
+        Find a better place for this! the metadata csv operations deserve their own place!
+
+    Parameters
+    ----------
+    csv_df : pd.DataFrame
+        The modified CSV DataFrame with reconstructed_frame_index and
+        buffer_recv_unix_time.
+    """
+    frame_timestamps = (
+        csv_df.groupby("reconstructed_frame_index")["buffer_recv_unix_time"]
+        .agg(["min", "max"])
+        .reset_index()
+    )
+
+    frame_timestamps.columns = ["frame", "timestamp_first", "timestamp_last"]
+
+    frame_timestamps = frame_timestamps.sort_values("frame")
+    return frame_timestamps
