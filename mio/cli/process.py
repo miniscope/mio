@@ -155,9 +155,9 @@ def trim(
 @click.option(
     "-o",
     "--output",
-    type=click.Path(),
+    type=click.Path(dir_okay=False),
     default=None,
-    help="Path to the output video file or directory. "
+    help="Path to the output video file."
     "If not specified, add a '_removed' suffix and write to same directory",
 )
 @click.option(
@@ -181,7 +181,7 @@ def remove_frames(input: str, output: str | None, frames: str, force: bool = Fal
     """
     input = Path(input)
     recording = Recording.from_video(input)
-    if not recording.metadata:
+    if recording.metadata is None:
         click.echo("Recording has no matching metadata! Just removing frames from video")
 
     output = Path(output) if output else input.with_stem(input.stem + "_removed")

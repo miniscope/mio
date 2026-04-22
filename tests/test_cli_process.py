@@ -242,19 +242,19 @@ def test_cli_remove_frames(tmp_path):
     shutil.copy(src, dst)
     shutil.copy(src_csv, dst_csv)
 
-    out_dir = tmp_path / "output"
+    out_video = tmp_path / "output.avi"
+    assert not out_video.exists()
     runner = CliRunner()
     result = runner.invoke(
         process,
         [
             "remove-frames",
             "-i", str(dst),
-            "-o", str(out_dir),
+            "-o", str(out_video),
             "-f", "0,5,10",
         ],
     )
     assert result.exit_code == 0, result.output
-    out_video = out_dir / "video1_removed.avi"
     assert out_video.exists()
     assert hash_video(out_video) == EXPECTED_REMOVE_FRAMES_HASH
 
