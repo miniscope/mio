@@ -11,14 +11,8 @@ from mio.models.dataset import Recording
 from mio.models.process import DenoiseConfig
 from mio.process.stitch import stitch as run_stitch
 from mio.process.video import denoise as run_denoise
+from mio.process.video import remove_frames as run_remove_frames
 from mio.process.video import trim as run_trim
-from mio.process.video import remove_frames_run
-from mio.utils import (
-    DEFAULT_PROCESS_DIR,
-    extract_mismatch_details,
-    resolve_output_path,
-    validate_video_metadata_match,
-)
 
 logger = init_logger("mio.cli.process")
 
@@ -164,7 +158,7 @@ def trim(
     type=click.Path(),
     default=None,
     help="Path to the output video file or directory. "
-    f"If not specified, saves to {DEFAULT_PROCESS_DIR}/ directory with '_removed' suffix.",
+    "If not specified, add a '_removed' suffix and write to same directory",
 )
 @click.option(
     "-f",
@@ -174,47 +168,34 @@ def trim(
     help="Comma-separated list of 0-based frame indices to remove (e.g. '0,5,10,42').",
 )
 @click.option(
-    "-t",
-    "--timestamp-csv",
-    type=click.Path(exists=True, dir_okay=False),
-    default=None,
-    help="Path to a timestamp CSV file to update. " "Used when no full metadata CSV is available.",
+    "--force",
+    is_flag=True,
+    default=False,
 )
-def remove_frames(
-    input: str,
-    output: str | None,
-    frames: str,
-    timestamp_csv: Optional[str],
-) -> None:
+def remove_frames(input: str, output: str | None, frames: str, force: bool = False) -> None:
     """
     Remove specific frames by index from a video.
 
     A manual cleanup step for removing individual bad frames after reviewing
-    the output. Updates the companion metadata CSV and/or timestamp CSV.
+    the output. Also updates the companion CSV metadata to match.
     """
-    csv_df = _validate_with_prompt(input)
+    input = Path(input)
+    recording = Recording.from_video(input)
+    if not recording.metadata:
+        click.echo("Recording has no matching metadata! Just removing frames from video")
+
+    output = Path(output) if output else input.with_stem(input.stem + "_removed")
 
     frame_indices = [int(x.strip()) for x in frames.split(",")]
 
-    input_path = Path(input)
-    output_arg = output if output is not None else DEFAULT_PROCESS_DIR
-    output_path = resolve_output_path(input_path, "_removed", output_arg)
-
-    result = remove_frames_run(
-        input,
-        frame_indices_to_remove=frame_indices,
-        output_path=str(output_path),
-        csv_df=csv_df,
-        timestamp_csv_path=timestamp_csv,
+    run_remove_frames(
+        recording,
+        remove_indices=frame_indices,
+        output_path=output,
+        progress=True,
+        force=force,
     )
-
-    try:
-        validate_video_metadata_match(result)
-    except VideoMetadataError as e:
-        raise click.ClickException(
-            f"Frame count alignment failed after removing frames: {e}"
-        ) from None
-    click.echo(f"✅ Frame count alignment verified: {result}")
+    click.echo(f"Video written to {output} with frames {frames} removed from {input}")
 
 
 @process.command()
