@@ -787,3 +787,101 @@ def trim(
         trimmed_scores.to_csv(output_scores_path, index=False)
 
     return output_path_obj
+
+
+def remove_frames_run(
+    video_path: str,
+    frame_indices_to_remove: list[int],
+    output_path: str | None = None,
+    csv_df: pd.DataFrame | None = None,
+) -> Path:
+    """
+    Remove specific frames by index from a video.
+
+    Parameters
+    ----------
+    video_path : str
+        Path to the input video file.
+    frame_indices_to_remove : list[int]
+        0-based frame indices to remove.
+    output_path : Optional[str], optional
+        Path to the output video file.
+        If None, defaults to input path with "_removed" suffix.
+    csv_df : Optional[pd.DataFrame], optional
+        Pre-validated CSV DataFrame. If provided, uses this instead of
+        reading from disk.
+
+    Returns
+    -------
+    Path
+        Path to the output video file.
+    """
+    reader = VideoReader(video_path)
+    input_path = Path(video_path)
+
+    if output_path is None:
+        output_path_obj = input_path.parent / f"{input_path.stem}_removed{input_path.suffix}"
+    else:
+        output_path_obj = Path(output_path).expanduser()
+        if output_path_obj.is_dir() or not output_path_obj.suffix:
+            if not output_path_obj.exists():
+                output_path_obj.mkdir(parents=True, exist_ok=True)
+            output_path_obj = output_path_obj / f"{input_path.stem}_removed{input_path.suffix}"
+
+    output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+    total_frames = int(reader.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = reader.cap.get(cv2.CAP_PROP_FPS)
+
+    removal_set = set(frame_indices_to_remove)
+
+    invalid = [i for i in removal_set if i < 0 or i >= total_frames]
+    if invalid:
+        raise ValueError(f"Frame indices out of range [0, {total_frames - 1}]: {sorted(invalid)}")
+    if len(removal_set) >= total_frames:
+        raise ValueError(f"Cannot remove all {total_frames} frames")
+
+    expected_output_frames = total_frames - len(removal_set)
+    logger.info(
+        f"Removing {len(removal_set)} frames from {total_frames} "
+        f"(output: {expected_output_frames} frames)"
+    )
+
+    writer = VideoWriter(path=output_path_obj, fps=fps)
+
+    frames_written = 0
+    try:
+        frame_iter = tqdm(reader.read_frames(), total=total_frames, desc="Removing frames")
+        for index, frame in frame_iter:
+            if index in removal_set:
+                continue
+
+            if len(frame.shape) != 2:
+                raise ValueError(f"Frame {index} has shape {frame.shape}, expected 2D grayscale.")
+
+            writer.write_frame(frame)
+            frames_written += 1
+
+    finally:
+        reader.release()
+        writer.close()
+
+    logger.info(f"Successfully removed frames: wrote {frames_written} frames to {output_path_obj}")
+
+    if frames_written != expected_output_frames:
+        logger.warning(
+            f"Frame count mismatch: expected {expected_output_frames} frames, "
+            f"but wrote {frames_written} frames"
+        )
+
+    modified_csv_df = _modify_csv_metadata(
+        video_path,
+        output_path_obj,
+        dropped_frame_indices=sorted(removal_set),
+        csv_df=csv_df,
+    )
+
+    if modified_csv_df is not None:
+        _export_frame_timestamp_csv(output_path_obj, modified_csv_df)
+
+    return output_path_obj
