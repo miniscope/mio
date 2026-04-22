@@ -2,6 +2,7 @@
 This module contains functions for pre-processing video data.
 """
 
+from collections.abc import Collection
 from pathlib import Path
 
 import cv2
@@ -11,6 +12,7 @@ from tqdm import tqdm
 
 from mio import init_logger
 from mio.io import VideoReader, VideoWriter
+from mio.models.dataset import Recording
 from mio.models.frames import NamedFrame, NamedVideo
 from mio.models.process import (
     DenoiseConfig,
@@ -633,46 +635,6 @@ def denoise(
     return output_video_path
 
 
-def _drop_frames_by_index(
-    df: pd.DataFrame,
-    dropped_frame_indices: list[int],
-    index_column: str = "reconstructed_frame_index",
-) -> pd.DataFrame:
-    """
-    Drop rows whose ``index_column`` value is in the dropped frame indices,
-    and then recreate ``index_column`` monotonically increasing from 0.
-    """
-    filtered = df[~df[index_column].isin(dropped_frame_indices)].copy()
-    filtered[index_column] = filtered.groupby(index_column).ngroup()
-    return filtered
-
-
-def _make_frame_timestamp_csv(csv_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Export a frame-timestamp CSV file mapping reconstructed_frame_index to unix timestamps.
-
-    The CSV includes both the first and last buffer timestamps for each frame.
-
-    Parameters
-    ----------
-    output_video_path : Path
-        Path to the output video file.
-    csv_df : pd.DataFrame
-        The modified CSV DataFrame with reconstructed_frame_index and
-        buffer_recv_unix_time.
-    """
-    frame_timestamps = (
-        csv_df.groupby("reconstructed_frame_index")["buffer_recv_unix_time"]
-        .agg(["min", "max"])
-        .reset_index()
-    )
-
-    frame_timestamps.columns = ["frame", "timestamp_first", "timestamp_last"]
-
-    frame_timestamps = frame_timestamps.sort_values("frame")
-    return frame_timestamps
-
-
 def trim(
     video_path: Path,
     output_path: Path | None = None,
@@ -787,3 +749,114 @@ def trim(
         trimmed_scores.to_csv(output_scores_path, index=False)
 
     return output_path_obj
+
+
+def remove_frames(
+    recording: Recording | Path,
+    remove_indices: list[int],
+    output_path: Path,
+    force: bool = False,
+    progress: bool = False,
+) -> Recording:
+    """
+    Remove specific frames by index from a video.
+
+    Parameters
+    ----------
+    recording : Recording | Path
+        Recording object, or path to video.
+    remove_indices : list[int]
+        0-based frame indices to remove.
+    output_path : Optional[str], optional
+        Path to the output video file.
+        If None, defaults to input path with "_removed" suffix.
+    force : bool
+        If True, overwrite any existing file. Default False.
+    progress : bool
+        If True, show a progress bar. Default False.
+
+    Returns
+    -------
+    Recording
+        The video and generated metadata
+    """
+    if not isinstance(recording, Recording):
+        recording = Recording.from_video(recording)
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    total_frames = int(recording.video.shape[0])
+
+    removal_set = set(remove_indices)
+
+    invalid = [i for i in removal_set if i < 0 or i >= total_frames]
+    if invalid:
+        raise ValueError(f"Frame indices out of range [0, {total_frames - 1}]: {sorted(invalid)}")
+    if len(removal_set) >= total_frames:
+        raise ValueError(f"Cannot remove all {total_frames} frames")
+
+    writer = VideoWriter(
+        path=output_path, fps=int(recording.video.video.get(cv2.CAP_PROP_FPS)), force=force
+    )
+
+    iterator = (i for i in range(total_frames) if i not in removal_set)
+    if progress:
+        iterator = tqdm(iterator, total=total_frames, desc="Removing frames")
+
+    try:
+        for idx in iterator:
+            frame = recording.video[idx]
+            writer.write_frame(frame)
+    finally:
+        writer.close()
+        if progress:
+            iterator.close()
+
+    if recording.metadata is not None:
+        filtered = _drop_frames_by_index(recording.metadata, removal_set)
+        filtered.to_csv(output_path.with_suffix(".csv"), index=False)
+
+    return Recording.from_video(output_path)
+
+
+def _drop_frames_by_index(
+    df: pd.DataFrame,
+    dropped_frame_indices: Collection[int],
+    index_column: str = "reconstructed_frame_index",
+) -> pd.DataFrame:
+    """
+    Drop rows whose ``index_column`` value is in the dropped frame indices,
+    and then recreate ``index_column`` monotonically increasing from 0.
+    """
+    filtered = df[~df[index_column].isin(dropped_frame_indices)].copy()
+    filtered[index_column] = filtered.groupby(index_column).ngroup()
+    return filtered
+
+
+def _make_frame_timestamp_csv(csv_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Export a frame-timestamp CSV file mapping reconstructed_frame_index to unix timestamps.
+
+    The CSV includes both the first and last buffer timestamps for each frame.
+
+    .. todo::
+
+        Find a better place for this! the metadata csv operations deserve their own place!
+
+    Parameters
+    ----------
+    csv_df : pd.DataFrame
+        The modified CSV DataFrame with reconstructed_frame_index and
+        buffer_recv_unix_time.
+    """
+    frame_timestamps = (
+        csv_df.groupby("reconstructed_frame_index")["buffer_recv_unix_time"]
+        .agg(["min", "max"])
+        .reset_index()
+    )
+
+    frame_timestamps.columns = ["frame", "timestamp_first", "timestamp_last"]
+
+    frame_timestamps = frame_timestamps.sort_values("frame")
+    return frame_timestamps

@@ -20,6 +20,7 @@ EXPECTED_CROP_VIDEO_HASH = "432642b1528fcd9ad553cfb3cc3862bef931301bd11d44dc3c23
 EXPECTED_STITCHED_TRIMMED_VIDEO_HASH = (
     "2c62b65ddd537e94e7d3f29e7c46523357d70aefed02d46baa9726ee57798af9"
 )
+EXPECTED_REMOVE_FRAMES_HASH = "b76b80f45316bad0a808802b8f5c0d65b99f6f59bc6422b84c1c2a7026ca4b15"
 
 
 def test_cli_stitch(tmp_path):
@@ -228,3 +229,32 @@ def test_cli_workflow_with_trim(tmp_path):
     denoised = out_dir / "user_data" / "output" / "video1__video2_stitched_trimmed_patch.avi"
     assert trimmed.exists()
     assert denoised.exists()
+
+
+def test_cli_remove_frames(tmp_path):
+    """mio process remove-frames removes specified frames."""
+    src = STITCH_DATA_DIR / "video1.avi"
+    src_csv = STITCH_DATA_DIR / "video1.csv"
+    dst = tmp_path / "video1.avi"
+    dst_csv = tmp_path / "video1.csv"
+    shutil.copy(src, dst)
+    shutil.copy(src_csv, dst_csv)
+
+    out_video = tmp_path / "output.avi"
+    assert not out_video.exists()
+    runner = CliRunner()
+    result = runner.invoke(
+        process,
+        [
+            "remove-frames",
+            "-i",
+            str(dst),
+            "-o",
+            str(out_video),
+            "-f",
+            "0,5,10",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert out_video.exists()
+    assert hash_video(out_video) == EXPECTED_REMOVE_FRAMES_HASH

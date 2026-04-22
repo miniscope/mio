@@ -11,6 +11,7 @@ from mio.models.dataset import Recording
 from mio.models.process import DenoiseConfig
 from mio.process.stitch import stitch as run_stitch
 from mio.process.video import denoise as run_denoise
+from mio.process.video import remove_frames as run_remove_frames
 from mio.process.video import trim as run_trim
 
 logger = init_logger("mio.cli.process")
@@ -141,6 +142,60 @@ def trim(
         force=force,
     )
     click.echo(f"Cropped output written to {trimmed_output}")
+
+
+@process.command(name="remove-frames")
+@click.option(
+    "-i",
+    "--input",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to the video file. Each requires a .csv with the same stem name.",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(dir_okay=False),
+    default=None,
+    help="Path to the output video file."
+    "If not specified, add a '_removed' suffix and write to same directory",
+)
+@click.option(
+    "-f",
+    "--frames",
+    required=True,
+    type=str,
+    help="Comma-separated list of 0-based frame indices to remove (e.g. '0,5,10,42').",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+)
+def remove_frames(input: str, output: str | None, frames: str, force: bool = False) -> None:
+    """
+    Remove specific frames by index from a video.
+
+    A manual cleanup step for removing individual bad frames after reviewing
+    the output. Also updates the companion CSV metadata to match.
+    """
+    input = Path(input)
+    recording = Recording.from_video(input)
+    if recording.metadata is None:
+        click.echo("Recording has no matching metadata! Just removing frames from video")
+
+    output = Path(output) if output else input.with_stem(input.stem + "_removed")
+
+    frame_indices = [int(x.strip()) for x in frames.split(",")]
+
+    run_remove_frames(
+        recording,
+        remove_indices=frame_indices,
+        output_path=output,
+        progress=True,
+        force=force,
+    )
+    click.echo(f"Video written to {output} with frames {frames} removed from {input}")
 
 
 @process.command()
