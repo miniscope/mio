@@ -39,11 +39,11 @@ class MinimumProjectionConfig(BaseModel):
 
 class GradientDetectorConfig(BaseModel):
     """
-    Configraiton for detecting invalid frames based on gradient.
+    Configuration for detecting invalid frames based on gradient.
     """
 
     threshold: float = Field(
-        ...,
+        default=20,
         description="Threshold for detecting invalid frames based on gradient.",
     )
 
@@ -80,17 +80,17 @@ class NoisePatchConfig(BaseModel):
         description="Enable patch based noise handling.",
     )
     method: list[Literal["gradient", "black_area"]] = Field(
-        default="gradient",
+        default_factory=lambda: ["gradient", "black_area"],
         description="Method for detecting noise."
         "gradient: Detection based on the gradient of the frame row."
         "black_area: Detection based on the number of consecutive black pixels in a row.",
     )
-    gradient_config: GradientDetectorConfig | None = Field(
-        default=None,
+    gradient_config: GradientDetectorConfig = Field(
+        default_factory=GradientDetectorConfig,
         description="Configuration for detecting invalid frames based on gradient.",
     )
-    black_area_config: BlackAreaDetectorConfig | None = Field(
-        default=None,
+    black_area_config: BlackAreaDetectorConfig = Field(
+        default_factory=BlackAreaDetectorConfig,
         description="Configuration for detecting invalid frames based on black area.",
     )
     output_result: bool = Field(

@@ -632,6 +632,10 @@ def score_noise(
         for idx in iterator:
             record = {"reconstructed_frame_index": idx}
             frame = recording.video[idx]
+            # FIXME: video proxy should return grayscale as grayscale
+            # https://github.com/miniscope/mio/issues/175
+            if len(frame.shape) == 3 and frame.shape[-1] == 3:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             for method, detector in detectors.items():
                 _, noise_mask = detector.find_invalid_area(frame)
                 record[method] = np.count_nonzero(noise_mask)

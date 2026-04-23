@@ -21,6 +21,7 @@ from tqdm import tqdm
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.logging import init_logger
 from mio.models.dataset import Dataset, Recording, StitchedRecording
+from mio.models.process import NoisePatchConfig
 
 logger = init_logger(name="stitch")
 
@@ -74,6 +75,7 @@ def align(recordings: list[Recording]) -> pd.DataFrame:
 
 def stitch(
     recordings: list[Recording],
+    noise_config: NoisePatchConfig | None = None,
     dataset: Dataset | None = None,
     debug_video: bool = False,
     output_dir: Path | None = None,
@@ -90,9 +92,24 @@ def stitch(
     It does not handle stitching or aligning videos that were recorded with *different* devices,
     for that use the :attr:`.Dataset.alignment_map`
     which aligns simultaneous frames in different recordings.
+
+    Args:
+        recordings (list[Recording]): List of recordings to stitch.
+        noise_config (NoisePatchConfig | None): Configuration used for scoring
+            noise per frame (with :func:`.score_noise` ). If None, use defaults
+        dataset (Dataset | None): existing dataset, e.g. with existing alignment mapping
+        output_dir: (Path | None): where to write stitched video and metadata,
+            if None, same as recording directory
+        progress (bool): Show a progress bar. Default ``False``
+        force (bool): Overwrite existing stitched video and metadata CSV files
     """
     if len(recordings) != 2:
         raise NotImplementedError("Only stitching two videos simultaneously is supported!")
+
+    # ensure that the recordings have noise scores
+    # (does not recompute if they already exist)
+    for rec in recordings:
+        rec.score_noise(config=noise_config, progress=progress, force=force)
 
     if dataset is None:
         dataset = Dataset.from_recordings(recordings)
@@ -137,6 +154,10 @@ def stitch(
                         frames.append(np.zeros(rec.video.shape[1:], dtype=np.uint8))
                     continue
                 buffer_rows = rec.metadata[rec.metadata["reconstructed_frame_index"] == row[name]]
+                noise_row = rec.noise[rec.noise["reconstructed_frame_index"] == row[name]].iloc[0]
+                black_pixels = int(noise_row["black_area"]) if "black_area" in noise_row else 0
+                noisy_pixels = int(noise_row["noisy_area"]) if "noisy_area" in noise_row else 0
+
                 frames.append(rec.video[int(row[name])])
                 candidates.append(
                     CandidateFrame(
@@ -144,6 +165,8 @@ def stitch(
                         frame=frames[-1],
                         num_buffers=len(buffer_rows),
                         sum_black_padding=int(buffer_rows["black_padding_px"].fillna(0).sum()),
+                        black_pixels=black_pixels,
+                        noisy_pixels=noisy_pixels,
                         metadata_rows=buffer_rows,
                     )
                 )
@@ -179,6 +202,8 @@ class CandidateFrame:
     frame: np.ndarray
     num_buffers: int
     sum_black_padding: int
+    black_pixels: int
+    noisy_pixels: int
     metadata_rows: pd.DataFrame
     _edge_score: float | None = field(default=None, repr=False)
 
@@ -194,7 +219,9 @@ class CandidateFrame:
         """Higher is better: more buffers, less black padding.
         A bit overkill but left this for future extension.
         """
-        return (self.num_buffers, -self.sum_black_padding)
+        # To discuss - we are probably double counting padding and missing buffers,
+        # but keeping similar to existing method until we can decide what we want here -jls
+        return (self.num_buffers, -self.sum_black_padding - self.black_pixels - self.noisy_pixels)
 
 
 def _score_edges(frame: np.ndarray) -> float:
@@ -217,8 +244,12 @@ class StitchRecord(BaseModel):
     compare_video: str | None = None
     selected_num_buffers: int
     selected_black_padding: int
+    selected_black_pixels: int
+    selected_noisy_pixels: int
     compare_num_buffers: int | None = None
     compare_black_padding: int | None = None
+    compare_black_pixels: int | None = None
+    compare_noisy_pixels: int | None = None
     selected_edge_score: float | None = None
     compare_edge_score: float | None = None
 
@@ -247,6 +278,8 @@ def _select_best_candidate(
             selected_video=candidates[0].recording.name,
             selected_num_buffers=candidates[0].num_buffers,
             selected_black_padding=candidates[0].sum_black_padding,
+            selected_black_pixels=candidates[0].black_pixels,
+            selected_noisy_pixels=candidates[0].noisy_pixels,
             **kwargs,
         )
 
@@ -270,9 +303,13 @@ def _select_best_candidate(
         selected_video=selected.recording.name,
         selected_num_buffers=selected.num_buffers,
         selected_black_padding=selected.sum_black_padding,
+        selected_black_pixels=selected.black_pixels,
+        selected_noisy_pixels=selected.noisy_pixels,
         compare_video=other.recording.name,
         compare_num_buffers=other.num_buffers,
         compare_black_padding=other.sum_black_padding,
+        compare_black_pixels=other.black_pixels,
+        compare_noisy_pixels=other.noisy_pixels,
         **kwargs,
     )
 

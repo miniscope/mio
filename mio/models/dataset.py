@@ -63,10 +63,8 @@ from typing import Annotated as A
 from typing import Any, Literal, TypeAlias
 
 import pandas as pd
-from models.process import NoisePatchConfig
 from numpydantic import NDArraySchema
 from numpydantic.interface.video import VideoProxy
-from process.video import score_noise
 from pydantic import (
     ConfigDict,
     Discriminator,
@@ -76,6 +74,7 @@ from pydantic import (
 )
 
 from mio.models import MiniscopeIOModel
+from mio.models.process import NoisePatchConfig
 from mio.utils import _format_ranges
 
 if sys.version_info < (3, 11):
@@ -169,12 +168,17 @@ class Recording(MiniscopeIOModel):
             return RawVideoRecording(name=path.stem, video=path)
 
     def score_noise(
-        self, config: NoisePatchConfig, progress: bool = False, force: bool = False
+        self, config: NoisePatchConfig | None = None, progress: bool = False, force: bool = False
     ) -> pd.DataFrame:
         """
         Score the noise level in each frame with :func:`.score_noise`,
         saving as a csv with `{name}_noise.csv`
         """
+
+        from mio.process.video import score_noise
+
+        if config is None:
+            config = NoisePatchConfig()
         if not force:
             if self.noise is not None:
                 return self.noise
