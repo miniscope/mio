@@ -10,17 +10,18 @@ This is still hardcoded around the StreamDevConfig metadata fields.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 
 import cv2
 import numpy as np
 import pandas as pd
 from pydantic import BaseModel
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.logging import init_logger
-from mio.models.dataset import Dataset, Recording, StitchedRecording
+from mio.models.dataset import Dataset, Recording, StitchedRecording, paths_from_video
 from mio.models.process import NoisePatchConfig
 
 logger = init_logger(name="stitch")
@@ -315,11 +316,8 @@ def _select_best_candidate(
 
 
 def concat_recordings(
-    recordings: list[Recording],
-    output_video_path: Path,
-    output_csv_path: Path,
-    fps: int = 20,
-) -> None:
+    recordings: list[Recording], output_video_path: Path, progress: bool = False
+) -> Recording:
     """Concatenate sequential recording segments into a single video + CSV.
 
     Each recording's frames are appended in order. The CSV metadata is merged
@@ -332,49 +330,67 @@ def concat_recordings(
         Ordered list of recording segments to concatenate.
     output_video_path : Path
         Path for the combined output AVI.
-    output_csv_path : Path
-        Path for the combined output CSV.
-    fps : int
-        Frames per second for the output video.
+    progress : bool
+        Show a progress bar
     """
+    fps = int(recordings[0].video.video.get(cv2.CAP_PROP_FPS))
     video_writer = VideoWriter(path=output_video_path, fps=fps)
     metadata_parts: list[pd.DataFrame] = []
     rfi_offset = 0
     total_frames = 0
 
-    for i, rec in enumerate(tqdm(recordings, desc="Concatenating segments")):
-        # Copy all video frames
-        seg_frames = 0
-        total_frames = rec.video.shape[0]
-        for n in range(total_frames):
-            frame = rec.video[0]
-            video_writer.write_frame(frame)
-            seg_frames += 1
+    recs = (
+        tqdm(enumerate(recordings), desc="Concatenating recordings", position=0)
+        if progress
+        else enumerate(recordings)
+    )
+    frame_iter_cls = partial(trange, position=1) if progress else range
+    try:
+        for i, rec in recs:
+            # Copy all video frames
+            seg_frames = 0
+            total_frames = rec.video.shape[0]
 
-        # Offset reconstructed_frame_index in metadata
-        df = rec.metadata.copy()
-        max_rfi = int(df["reconstructed_frame_index"].max())
-        df["reconstructed_frame_index"] = df["reconstructed_frame_index"] + rfi_offset
-        metadata_parts.append(df)
+            for n in frame_iter_cls(total_frames):
+                frame = rec.video[n]
+                video_writer.write_frame(frame)
+                seg_frames += 1
 
-        logger.info(
-            f"Segment {i}: {rec.video.path.name} — " f"{seg_frames} frames, rfi_offset={rfi_offset}"
-        )
-        rfi_offset += max_rfi + 1
-        total_frames += seg_frames
+            # Offset reconstructed_frame_index in metadata
+            df = rec.metadata.copy()
+            max_rfi = int(df["reconstructed_frame_index"].max())
+            df["reconstructed_frame_index"] = df["reconstructed_frame_index"] + rfi_offset
+            metadata_parts.append(df)
 
-    video_writer.close()
+            logger.debug(
+                "Segment %s: %s — %s frames, rfi_offset=%s",
+                i,
+                rec.video.path.name,
+                seg_frames,
+                rfi_offset,
+            )
+            rfi_offset += max_rfi + 1
+            total_frames += seg_frames
+    finally:
+        video_writer.close()
+        if progress:
+            recs.close()
 
     combined_df = pd.concat(metadata_parts, ignore_index=True)
-    combined_df.to_csv(output_csv_path, index=False)
+    combined_df.to_csv(paths_from_video(output_video_path)["metadata"], index=False)
 
-    logger.info(
-        f"Concat completed: {total_frames} frames from "
-        f"{len(recordings)} segments -> {output_video_path}"
+    logger.debug(
+        "Concat completed: %s frames from %s segments -> %s",
+        total_frames,
+        len(recordings),
+        output_video_path,
     )
+    return Recording.from_video(output_video_path)
 
 
-def _build_timestamp_matches(recordings, threshold_ms: float = 25.0) -> list[dict[int, int]]:
+def _build_timestamp_matches(
+    recordings: list[Recording], threshold_ms: float = 25.0
+) -> list[dict[int, int]]:
     """
     Match frames across recordings by nearest unix timestamp.
 
@@ -402,7 +418,7 @@ def _build_timestamp_matches(recordings, threshold_ms: float = 25.0) -> list[dic
     ref_indices, ref_timestamps = per_rec_timestamps[0]
     matches: list[dict[int, int]] = []
 
-    for i, (ref_idx, ref_ts) in enumerate(zip(ref_indices, ref_timestamps)):
+    for ref_idx, ref_ts in zip(ref_indices, ref_timestamps):
         match: dict[int, int] = {0: int(ref_idx)}
         for rec_num in range(1, len(recordings)):
             other_indices, other_timestamps = per_rec_timestamps[rec_num]
@@ -422,4 +438,4 @@ def _build_timestamp_matches(recordings, threshold_ms: float = 25.0) -> list[dic
 
         if len(match) > 1:
             matches.append(match)
-        return matches
+    return matches

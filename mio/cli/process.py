@@ -2,7 +2,6 @@
 Command line interface for offline video pre-processing.
 """
 
-import re
 from pathlib import Path
 
 import click
@@ -203,102 +202,38 @@ def remove_frames(input: str, output: str | None, frames: str, force: bool = Fal
 
 @process.command()
 @click.option(
-    "-d",
-    "--directory",
+    "-i",
+    "--inputs",
     required=True,
-    type=click.Path(exists=True, file_okay=False),
-    help="Directory containing .avi segment files. All .avi files with companion "
-    ".csv files will be discovered and sorted in natural numeric order.",
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Paths to video files. Each requires a .csv with the same stem name.",
 )
 @click.option(
     "-o",
     "--output",
     type=click.Path(dir_okay=False),
-    default=None,
+    required=True,
     help="Path to the output concatenated video file or directory. "
     "If not specified, saves next to video with '_combined' suffix.",
 )
-@click.option(
-    "--fps",
-    type=int,
-    default=20,
-    help="Frames per second for output video.",
-)
 def concat(
-    directory: str,
-    output: str | None,
-    fps: int,
+    inputs: list[Path],
+    output: Path,
 ) -> None:
     """
     Concatenate sequential recording segments from one DAQ into a single video.
 
-    Discovers all .avi files in the given directory (that have companion .csv files),
-    sorts them by filename, and concatenates them into a single video + CSV with
-    contiguous reconstructed_frame_index.
-
     Use this to combine multiple segment files (e.g. long-2.avi, long-3.avi, ...)
     from the same DAQ before stitching across DAQs.
     """
-    dir_path = Path(directory)
-
-    def _natural_sort_key(path: Path) -> list:
-        """Sort by splitting name into text and numeric parts for natural ordering."""
-        return [
-            int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", path.name)
-        ]
-
-    avi_files = sorted(dir_path.glob("*.avi"), key=_natural_sort_key)
-
-    def _find_companion_csv(avi_path: Path) -> Optional[Path]:
-        """Find companion CSV, handling name mismatches like long-8-002.avi -> long-8.csv."""
-        # Try exact stem match first
-        csv_path = avi_path.with_suffix(".csv")
-        if csv_path.exists():
-            return csv_path
-        # Try stripping trailing numeric suffixes: long-8-002.avi -> long-8.csv
-        stem = avi_path.stem
-        stripped = re.sub(r"-\d+$", "", stem)
-        while stripped != stem:
-            csv_path = avi_path.parent / f"{stripped}.csv"
-            if csv_path.exists():
-                return csv_path
-            stem = stripped
-            stripped = re.sub(r"-\d+$", "", stem)
-        return None
-
-    # Filter to only AVIs that have a companion CSV
-    valid_pairs: list[tuple[Path, Path]] = []
-    for avi in avi_files:
-        csv_path = _find_companion_csv(avi)
-        if csv_path is not None:
-            valid_pairs.append((avi, csv_path))
-        else:
-            click.echo(f"  Skipping {avi.name} (no companion .csv found)")
-
-    if len(valid_pairs) < 2:
-        raise click.ClickException(
-            f"Need at least 2 .avi files with companion .csv files in {directory}, "
-            f"found {len(valid_pairs)}."
-        )
-
-    click.echo(f"Found {len(valid_pairs)} segments in {directory}:")
-    for avi, csv in valid_pairs:
-        click.echo(f"  {avi.name} -> {csv.name}")
-
-    recordings = [RecordingData(video_path=avi, csv_path=csv) for avi, csv in valid_pairs]
-
-    first_input_path = valid_pairs[0][0]
-    output_arg = output if output is not None else DEFAULT_PROCESS_DIR
-    combined_video_path = resolve_output_path(first_input_path, "_combined", output_arg)
-    combined_csv_path = combined_video_path.with_suffix(".csv")
+    if len(inputs) < 2:
+        raise click.ClickException("Need at least 2 .avi files to concat")
+    recordings = [Recording.from_video(Path(p)) for p in inputs]
+    output = Path(output)
 
     click.echo(f"Concatenating {len(recordings)} segments...")
-    concat_recordings(
-        recordings=recordings,
-        output_video_path=combined_video_path,
-        output_csv_path=combined_csv_path,
-        fps=fps,
-    )
+    concat_recordings(recordings=recordings, output_video_path=output, progress=True)
 
 
 @process.command()
