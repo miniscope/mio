@@ -290,89 +290,35 @@ def test_remove_frames_invalid(tmp_path):
         )
 
 
-def test_concat_recordings(tmp_path):
+def test_concat_recordings(tmp_path, recordings):
     """Concatenating two recordings produces contiguous frame indices and correct frame count."""
-    recordings = [
-        RecordingData(
-            video_path=STITCH_DATA_DIR / "video1.avi",
-            csv_path=STITCH_DATA_DIR / "video1.csv",
-        ),
-        RecordingData(
-            video_path=STITCH_DATA_DIR / "video2.avi",
-            csv_path=STITCH_DATA_DIR / "video2.csv",
-        ),
-    ]
 
     combined_video = tmp_path / "combined.avi"
-    combined_csv = tmp_path / "combined.csv"
 
-    concat_recordings(
-        recordings=recordings,
+    combined = concat_recordings(
+        recordings=list(recordings.values()),
         output_video_path=combined_video,
-        output_csv_path=combined_csv,
-        fps=20,
     )
 
     # Video frame count should be sum of both inputs
-    cap1 = cv2.VideoCapture(str(STITCH_DATA_DIR / "video1.avi"))
-    cap2 = cv2.VideoCapture(str(STITCH_DATA_DIR / "video2.avi"))
-    expected_frames = int(cap1.get(cv2.CAP_PROP_FRAME_COUNT)) + int(
-        cap2.get(cv2.CAP_PROP_FRAME_COUNT)
-    )
-    cap1.release()
-    cap2.release()
+    expected_frames = sum(r.video.n_frames for r in recordings.values())
+    # the Recording class also validates that the metadata has a matching length if present
+    # so its presence means that the metadata is also matching
+    assert combined.metadata is not None
 
-    cap = cv2.VideoCapture(str(combined_video))
-    actual_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    cap.release()
+    actual_frames = combined.video.n_frames
     assert actual_frames == expected_frames
 
     # CSV should have contiguous reconstructed_frame_index
-    df = pd.read_csv(combined_csv)
-    indices = sorted(df["reconstructed_frame_index"].unique())
-    assert indices == list(range(len(indices)))
-
-    # Second segment's rfi should start after first segment's max rfi
-    df1 = pd.read_csv(STITCH_DATA_DIR / "video1.csv")
-    max_rfi_1 = df1["reconstructed_frame_index"].max()
-    # Combined CSV should have indices beyond max_rfi_1
-    assert df["reconstructed_frame_index"].max() > max_rfi_1
+    df = combined.metadata
+    diffs = df["reconstructed_frame_index"].diff().iloc[1:].to_numpy()
+    assert (diffs <= 1).all() and (diffs >= 0).all()
 
 
 def test_stitch_timestamp_matching(tmp_path):
     """Timestamp matching produces a valid stitched output on real fixtures."""
-    recordings = [
-        RecordingData(
-            video_path=STITCH_DATA_DIR / "video1.avi",
-            csv_path=STITCH_DATA_DIR / "video1.csv",
-        ),
-        RecordingData(
-            video_path=STITCH_DATA_DIR / "video2.avi",
-            csv_path=STITCH_DATA_DIR / "video2.csv",
-        ),
-    ]
-
-    stitched_video = tmp_path / "stitched.avi"
-    stitched_csv = tmp_path / "stitched.csv"
-
-    bundle = RecordingDataBundle(
-        recordings=recordings,
-        stitched_video_writer=VideoWriter(path=stitched_video, fps=20),
-        combined_csv_path=stitched_csv,
+    raise NotImplementedError(
+        "We need an actual test of this "
+        "where we just pass two synthesized metadata dataframes "
+        "and ensure that they align as we expect."
     )
-    bundle.stitch_recordings(matching_method="timestamp", timestamp_threshold_ms=25.0)
-
-    # Should produce a non-empty stitched video
-    cap = cv2.VideoCapture(str(stitched_video))
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    cap.release()
-    assert frame_count > 0, "Timestamp matching produced no output frames"
-
-    # Stitched CSV should exist and have contiguous reconstructed_frame_index
-    df = pd.read_csv(stitched_csv)
-    indices = sorted(df["reconstructed_frame_index"].unique())
-    assert indices == list(range(len(indices)))
-
-    # Frame count should be similar to frame_num matching (within 20%)
-    assert abs(frame_count - EXPECTED_STITCHED_FRAME_COUNT) / EXPECTED_STITCHED_FRAME_COUNT < 0.2
-
