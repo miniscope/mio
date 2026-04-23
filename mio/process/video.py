@@ -131,15 +131,9 @@ class NoisePatchProcessor(BaseVideoProcessor):
         self.noise_detect_helper = InvalidFrameDetector(noise_patch_config=noise_patch_config)
         self.noise_patchs: list[np.ndarray] = []
         self.noisy_frames: list[np.ndarray] = []
-        self.diff_frames: list[np.ndarray] = []
         self.dropped_frame_indices: list[int] = []
 
         self.output_enable: bool = noise_patch_config.output_result
-
-        if "mean_error" in noise_patch_config.method:
-            logger.warning(
-                "The mean_error method is unstable and not fully tested yet." " Use with caution."
-            )
 
     def process_frame(self, input_frame: np.ndarray, index: int) -> np.ndarray | None:
         """
@@ -186,15 +180,6 @@ class NoisePatchProcessor(BaseVideoProcessor):
         return NamedVideo(name="patched_area", video=self.noise_patchs)
 
     @property
-    def diff_frames_named_video(self) -> NamedVideo:
-        """
-        Get the NamedFrame object for the difference frames.
-        """
-        if not hasattr(self.noise_patch_config, "diff_multiply"):
-            diff_multiply = 1
-        return NamedVideo(name=f"diff_{diff_multiply}x", video=self.diff_frames)
-
-    @property
     def noisy_frames_named_video(self) -> NamedVideo:
         """
         Get the NamedFrame object for the noisy frames.
@@ -217,18 +202,6 @@ class NoisePatchProcessor(BaseVideoProcessor):
         else:
             logger.info(f"{self.name} noise patch output disabled.")
 
-    def export_diff_frames(self) -> None:
-        """
-        Export the difference frames to a file.
-        """
-        if self.noise_patch_config.output_diff:
-            logger.info(f"Exporting {self.name} difference frames to {self.output_dir}")
-            self.diff_frames_named_video.export(
-                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
-            )
-        else:
-            logger.info(f"{self.name} difference frames output disabled.")
-
     def export_noisy_video(self) -> None:
         """
         Export the noisy frames to a file.
@@ -250,7 +223,6 @@ class NoisePatchProcessor(BaseVideoProcessor):
         """
         self.export_output_video()
         self.export_noise_patch()
-        self.export_diff_frames()
         self.export_noisy_video()
 
 
@@ -583,7 +555,6 @@ def denoise(
 
     noise_patch_processor.output_dir = debug_dir
     noise_patch_processor.export_noise_patch()
-    noise_patch_processor.export_diff_frames()
     noise_patch_processor.export_noisy_video()
 
     freq_mask_processor.batch_export_videos()

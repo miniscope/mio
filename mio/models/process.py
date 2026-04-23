@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 
 from mio.models import MiniscopeConfig
 from mio.models.mixins import ConfigYAMLMixin
-from mio.models.stream import StreamDevConfig
 
 
 class MinimumProjectionConfig(BaseModel):
@@ -36,45 +35,6 @@ class MinimumProjectionConfig(BaseModel):
         default=False,
         description="Output the minimum projection frame.",
     )
-
-
-class MSEDetectorConfig(BaseModel):
-    """
-    Configraiton for detecting invalid frames based on mean squared error.
-    """
-
-    threshold: float = Field(
-        ...,
-        description="Threshold for detecting invalid frames based on mean squared error.",
-    )
-    device_config_id: str | None = Field(
-        default=None,
-        description="ID of the stream device configuration used for aquiring the video."
-        "This is used in the mean_error method to compare frames"
-        " in the units of data transfer buffers.",
-    )
-    buffer_split: int = Field(
-        default=1,
-        description="Number of splits to make in the buffer when detecting noisy areas."
-        "This further splits the buffer into smaller patches to detect small noisy areas."
-        "This is used in the mean_error method.",
-    )
-    diff_multiply: int = Field(
-        default=1,
-        description="Multiplier for visualizing the diff between the current and previous frame.",
-    )
-
-    _device_config: StreamDevConfig | None = None
-
-    @property
-    def device_config(self) -> StreamDevConfig:
-        """
-        Get the device configuration based on the device_config_id.
-        This is used in the mean_error method to compare frames in the units of data buffers.
-        """
-        if self._device_config is None:
-            self._device_config = StreamDevConfig.from_any(self.device_config_id)
-        return self._device_config
 
 
 class GradientDetectorConfig(BaseModel):
@@ -119,17 +79,11 @@ class NoisePatchConfig(BaseModel):
         default=True,
         description="Enable patch based noise handling.",
     )
-    method: list[Literal["mean_error", "gradient", "black_area"]] = Field(
+    method: list[Literal["gradient", "black_area"]] = Field(
         default="gradient",
         description="Method for detecting noise."
         "gradient: Detection based on the gradient of the frame row."
-        "mean_error: Detection based on the mean error with the same row of the previous frame."
         "black_area: Detection based on the number of consecutive black pixels in a row.",
-    )
-    mean_error_config: MSEDetectorConfig | None = Field(
-        default=None,
-        description="Configuration for detecting invalid frames based on mean squared error."
-        " Any positive value or zero is valid.",
     )
     gradient_config: GradientDetectorConfig | None = Field(
         default=None,
@@ -147,12 +101,6 @@ class NoisePatchConfig(BaseModel):
         default=False,
         description="Output the noise patch video"
         "This highlights the noisy areas found in the video stream.",
-    )
-    output_diff: bool = Field(
-        default=False,
-        description="Output the diff video stream."
-        "The diff video stream shows the difference between the current and previous frame."
-        "This is used in the mean_error method.",
     )
     output_noisy_frames: bool = Field(
         default=True,

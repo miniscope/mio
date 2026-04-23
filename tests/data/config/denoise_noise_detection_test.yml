@@ -4,12 +4,6 @@ mio_version: 0.6.1
 noise_patch:
   enable: true
   method: [gradient, black_area]
-  mean_error_config:
-    threshold: 40
-    device_config_id: wireless-200px
-    buffer_split: 8
-    comparison_unit: 1000
-    diff_multiply: 1
   gradient_config:
     threshold: 20
   black_area_config:
