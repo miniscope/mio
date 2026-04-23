@@ -8,9 +8,9 @@ import os
 import queue
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Generator, Iterator
 from pathlib import Path
-from typing import Any, Callable, Generator, List, Literal, Optional, Tuple, Union
+from typing import Any, Literal, Union
 
 import cv2
 import numpy as np
@@ -81,8 +81,8 @@ class StreamDaq:
 
     def __init__(
         self,
-        device_config: Union[StreamDevConfig, ConfigSource],
-        header_fmt: Union[StreamBufferHeaderFormat, ConfigSource] = "stream-buffer-header",
+        device_config: StreamDevConfig | ConfigSource,
+        header_fmt: StreamBufferHeaderFormat | ConfigSource = "stream-buffer-header",
     ) -> None:
         """
         Constructer for the class.
@@ -114,14 +114,14 @@ class StreamDaq:
         self.preamble = self.config.preamble
         self.terminate: multiprocessing.Event = multiprocessing.Event()
 
-        self._buffer_npix: Optional[List[int]] = None
-        self._nbuffer_per_fm: Optional[int] = None
-        self._buffered_writer: Optional[BufferedCSVWriter] = None
-        self._header_plotter: Optional[StreamPlotter] = None
+        self._buffer_npix: list[int] | None = None
+        self._nbuffer_per_fm: int | None = None
+        self._buffered_writer: BufferedCSVWriter | None = None
+        self._header_plotter: StreamPlotter | None = None
         self._buffer_recv_index: int = 0
 
     @property
-    def buffer_npix(self) -> List[int]:
+    def buffer_npix(self) -> list[int]:
         """List of pixels per buffer for a frame"""
         if self._buffer_npix is None:
             self._buffer_npix = self.config.buffer_npix
@@ -139,7 +139,7 @@ class StreamDaq:
     def _trim(
         self,
         data: np.ndarray,
-        expected_size_array: List[int],
+        expected_size_array: list[int],
         header: StreamBufferHeader,
         logger: logging.Logger,
     ) -> np.ndarray:
@@ -206,7 +206,7 @@ class StreamDaq:
         serial_buffer_queue: multiprocessing.Queue,
         read_length: int = None,
         pre_first: bool = True,
-        capture_binary: Optional[Path] = None,
+        capture_binary: Path | None = None,
     ) -> None:
         """
         Function to read bitstream from OpalKelly device and store buffer in `serial_buffer_queue`.
@@ -281,7 +281,7 @@ class StreamDaq:
             except queue.Full:
                 locallogs.error("Serial buffer queue full, Could not put sentinel.")
 
-    def _parse_header(self, buffer: bytes) -> Tuple[StreamBufferHeader, np.ndarray]:
+    def _parse_header(self, buffer: bytes) -> tuple[StreamBufferHeader, np.ndarray]:
         """
         Function to parse header from each buffer.
 
@@ -509,7 +509,7 @@ class StreamDaq:
             except queue.Full:
                 locallogs.error("Image array queue full, Could not put sentinel.")
 
-    def alive_processes(self) -> List[multiprocessing.Process]:
+    def alive_processes(self) -> list[multiprocessing.Process]:
         """
         Return a list of alive processes.
 
@@ -525,14 +525,14 @@ class StreamDaq:
     def capture(
         self,
         source: Literal["uart", "fpga"],
-        read_length: Optional[int] = None,
-        video: Optional[Path] = None,
-        video_kwargs: Optional[dict] = None,
-        metadata: Optional[Path] = None,
-        binary: Optional[Path] = None,
-        show_video: Optional[bool] = True,
-        show_metadata: Optional[bool] = False,
-        freq_mask_config: Optional[FrequencyMaskingConfig] = None,
+        read_length: int | None = None,
+        video: Path | None = None,
+        video_kwargs: dict | None = None,
+        metadata: Path | None = None,
+        binary: Path | None = None,
+        show_video: bool | None = True,
+        show_metadata: bool | None = False,
+        freq_mask_config: FrequencyMaskingConfig | None = None,
     ) -> None:
         """
         Entry point to start frame capture.
@@ -703,10 +703,10 @@ class StreamDaq:
         image: np.ndarray,
         header_list: list[StreamBufferHeader],
         show_video: bool,
-        writer: Optional[VideoWriter],
+        writer: VideoWriter | None,
         show_metadata: bool,
-        metadata: Optional[Path] = None,
-        freq_mask_helper: Optional[FrequencyMaskHelper] = None,
+        metadata: Path | None = None,
+        freq_mask_helper: FrequencyMaskHelper | None = None,
     ) -> None:
         """
         Inner handler for :meth:`.capture` to process the frames from the frame queue.
@@ -753,7 +753,7 @@ def iter_buffers(
     source: Iterator[bytes],
     preamble: Bits,
     pre_first: bool = True,
-    capture_binary: Optional[Path] = None,
+    capture_binary: Path | None = None,
 ) -> Generator[bytes, None, None]:
     """
     Given some iterator that yields bytes (like a camera device),

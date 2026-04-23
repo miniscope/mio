@@ -2,7 +2,7 @@
 Models for device update batch configuration.
 """
 
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Literal
 
 from pydantic import Field
 
@@ -20,8 +20,8 @@ class DeviceUpdateEntry(MiniscopeConfig):
     """
 
     device_id: int = Field(description="Target device ID")
-    port: Optional[str] = Field(default=None, description="Serial port (optional)")
-    updates: Dict[PermittedKey, int] = Field(default_factory=dict)
+    port: str | None = Field(default=None, description="Serial port (optional)")
+    updates: dict[PermittedKey, int] = Field(default_factory=dict)
 
 
 class UpdateBatch(MiniscopeConfig, ConfigYAMLMixin):
@@ -31,15 +31,15 @@ class UpdateBatch(MiniscopeConfig, ConfigYAMLMixin):
         devices: [DeviceUpdateEntry, ...]
     """
 
-    devices: List[DeviceUpdateEntry]
+    devices: list[DeviceUpdateEntry]
 
     def iter_updates(
-        self, default_port: Optional[str]
-    ) -> List[Tuple[Optional[str], int, PermittedKey, int]]:
+        self, default_port: str | None
+    ) -> list[tuple[str | None, int, PermittedKey, int]]:
         """
         Yield (port, device_id, key, value) tuples for all updates in this batch.
         """
-        results: List[Tuple[Optional[str], int, PermittedKey, int]] = []
+        results: list[tuple[str | None, int, PermittedKey, int]] = []
 
         if not self.devices:
             raise ValueError("devices list must not be empty in UpdateBatch")

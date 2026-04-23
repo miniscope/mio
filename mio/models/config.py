@@ -3,7 +3,7 @@ Module-global configuration models
 """
 
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 import yaml
 from platformdirs import PlatformDirs
@@ -34,11 +34,11 @@ class LogConfig(MiniscopeIOModel):
     """
     Severity of log messages to process.
     """
-    level_file: Optional[LOG_LEVELS] = None
+    level_file: LOG_LEVELS | None = None
     """
     Severity for file-based logging. If unset, use ``level``
     """
-    level_stdout: Optional[LOG_LEVELS] = None
+    level_stdout: LOG_LEVELS | None = None
     """
     Severity for stream-based logging. If unset, use ``level``
     """
@@ -53,7 +53,7 @@ class LogConfig(MiniscopeIOModel):
 
     @field_validator("level", "level_file", "level_stdout", mode="before")
     @classmethod
-    def uppercase_levels(cls, value: Optional[str] = None) -> Optional[str]:
+    def uppercase_levels(cls, value: str | None = None) -> str | None:
         """
         Ensure log level strings are uppercased
         """
@@ -187,14 +187,14 @@ class _UserYamlConfigSource(YamlConfigSettingsSource):
         super().__init__(*args, **kwargs)
 
     @property
-    def user_config_path(self) -> Optional[Path]:
+    def user_config_path(self) -> Path | None:
         """
         Location of the user-level ``mio_config.yaml`` file,
         given the current state of prior config sources,
         including the global config file
         """
         config_file = None
-        user_dir: Optional[str] = self.current_state.get("user_dir", None)
+        user_dir: str | None = self.current_state.get("user_dir", None)
         if user_dir is None:
             # try and get from global config
             if _global_config_path.exists():

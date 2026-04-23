@@ -2,7 +2,7 @@
 Module for preprocessing data.
 """
 
-from typing import List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -47,7 +47,7 @@ class MSEDetectorConfig(BaseModel):
         ...,
         description="Threshold for detecting invalid frames based on mean squared error.",
     )
-    device_config_id: Optional[str] = Field(
+    device_config_id: str | None = Field(
         default=None,
         description="ID of the stream device configuration used for aquiring the video."
         "This is used in the mean_error method to compare frames"
@@ -64,7 +64,7 @@ class MSEDetectorConfig(BaseModel):
         description="Multiplier for visualizing the diff between the current and previous frame.",
     )
 
-    _device_config: Optional[StreamDevConfig] = None
+    _device_config: StreamDevConfig | None = None
 
     @property
     def device_config(self) -> StreamDevConfig:
@@ -119,23 +119,23 @@ class NoisePatchConfig(BaseModel):
         default=True,
         description="Enable patch based noise handling.",
     )
-    method: List[Literal["mean_error", "gradient", "black_area"]] = Field(
+    method: list[Literal["mean_error", "gradient", "black_area"]] = Field(
         default="gradient",
         description="Method for detecting noise."
         "gradient: Detection based on the gradient of the frame row."
         "mean_error: Detection based on the mean error with the same row of the previous frame."
         "black_area: Detection based on the number of consecutive black pixels in a row.",
     )
-    mean_error_config: Optional[MSEDetectorConfig] = Field(
+    mean_error_config: MSEDetectorConfig | None = Field(
         default=None,
         description="Configuration for detecting invalid frames based on mean squared error."
         " Any positive value or zero is valid.",
     )
-    gradient_config: Optional[GradientDetectorConfig] = Field(
+    gradient_config: GradientDetectorConfig | None = Field(
         default=None,
         description="Configuration for detecting invalid frames based on gradient.",
     )
-    black_area_config: Optional[BlackAreaDetectorConfig] = Field(
+    black_area_config: BlackAreaDetectorConfig | None = Field(
         default=None,
         description="Configuration for detecting invalid frames based on black area.",
     )
@@ -211,11 +211,11 @@ class InteractiveDisplayConfig(BaseModel):
         default=False,
         description="Enable interactive display.",
     )
-    start_frame: Optional[int] = Field(
+    start_frame: int | None = Field(
         default=...,
         description="Frame to start interactive display at.",
     )
-    end_frame: Optional[int] = Field(
+    end_frame: int | None = Field(
         default=...,
         description="Frame to end interactive display at.",
     )
@@ -230,23 +230,23 @@ class DenoiseConfig(MiniscopeConfig, ConfigYAMLMixin):
     Configuration for denoising a video.
     """
 
-    interactive_display: Optional[InteractiveDisplayConfig] = Field(
+    interactive_display: InteractiveDisplayConfig | None = Field(
         default=None,
         description="Configuration for interactively displaying the video.",
     )
-    noise_patch: Optional[NoisePatchConfig] = Field(
+    noise_patch: NoisePatchConfig | None = Field(
         default=None,
         description="Configuration for patch based noise handling.",
     )
-    frequency_masking: Optional[FrequencyMaskingConfig] = Field(
+    frequency_masking: FrequencyMaskingConfig | None = Field(
         default=None,
         description="Configuration for frequency masking.",
     )
-    end_frame: Optional[int] = Field(
+    end_frame: int | None = Field(
         default=None,
         description="Frame to end processing at. If None, process until the end of the video.",
     )
-    minimum_projection: Optional[MinimumProjectionConfig] = Field(
+    minimum_projection: MinimumProjectionConfig | None = Field(
         default=None,
         description="Configuration for processing based on minimum projection.",
     )
@@ -254,7 +254,7 @@ class DenoiseConfig(MiniscopeConfig, ConfigYAMLMixin):
         default=True,
         description="Output the result video stream.",
     )
-    output_dir: Optional[str] = Field(
+    output_dir: str | None = Field(
         default=None,
         description="Directory to save the output video streams and frames.",
     )

@@ -3,7 +3,6 @@ This module contains a helper class for frame operations.
 """
 
 from abc import abstractmethod
-from typing import Tuple
 
 import cv2
 import numpy as np
@@ -48,7 +47,7 @@ class BaseSingleFrameHelper:
         pass
 
     @abstractmethod
-    def find_invalid_area(self, frame: np.ndarray) -> Tuple[bool, np.ndarray]:
+    def find_invalid_area(self, frame: np.ndarray) -> tuple[bool, np.ndarray]:
         """
         Find the invalid area in a single frame.
 
@@ -93,7 +92,7 @@ class InvalidFrameDetector(BaseSingleFrameHelper):
                 raise ValueError("Black area config must be provided for black area detection")
             self.black_detector = BlackAreaDetector(noise_patch_config.black_area_config)
 
-    def find_invalid_area(self, frame: np.ndarray) -> Tuple[bool, np.ndarray]:
+    def find_invalid_area(self, frame: np.ndarray) -> tuple[bool, np.ndarray]:
         """
         Process a single frame and verify if it is valid.
 
@@ -141,7 +140,7 @@ class GradientNoiseDetector(BaseSingleFrameHelper):
         """
         self.config = config
 
-    def find_invalid_area(self, frame: np.ndarray) -> Tuple[bool, np.ndarray]:
+    def find_invalid_area(self, frame: np.ndarray) -> tuple[bool, np.ndarray]:
         """
         Process a single frame and verify if it is valid.
 
@@ -158,7 +157,7 @@ class GradientNoiseDetector(BaseSingleFrameHelper):
     def _detect_with_gradient(
         self,
         current_frame: np.ndarray,
-    ) -> Tuple[bool, np.ndarray]:
+    ) -> tuple[bool, np.ndarray]:
         """
         Detect noise using local contrast (second derivative) in the x-dimension
         (along rows, across columns)
@@ -196,7 +195,7 @@ class BlackAreaDetector(BaseSingleFrameHelper):
         """
         self.config = config
 
-    def find_invalid_area(self, frame: np.ndarray) -> Tuple[bool, np.ndarray]:
+    def find_invalid_area(self, frame: np.ndarray) -> tuple[bool, np.ndarray]:
         """
         Process a single frame and verify if it is valid.
 
@@ -213,7 +212,7 @@ class BlackAreaDetector(BaseSingleFrameHelper):
     def _detect_black_pixels(
         self,
         current_frame: np.ndarray,
-    ) -> Tuple[bool, np.ndarray]:
+    ) -> tuple[bool, np.ndarray]:
         """
         Detect black-out noise by checking for consecutive black pixels per row.
 
@@ -274,7 +273,7 @@ class MSENoiseDetector(BaseSingleFrameHelper):
         """
         self.previous_frame = previous_frame
 
-    def find_invalid_area(self, frame: np.ndarray) -> Tuple[bool, np.ndarray]:
+    def find_invalid_area(self, frame: np.ndarray) -> tuple[bool, np.ndarray]:
         """
         Process a single frame and verify if it is valid.
 
@@ -291,7 +290,7 @@ class MSENoiseDetector(BaseSingleFrameHelper):
         noisy, mask = self._detect_with_mean_error(frame)
         return noisy, mask
 
-    def _detect_with_mean_error(self, current_frame: np.ndarray) -> Tuple[bool, np.ndarray]:
+    def _detect_with_mean_error(self, current_frame: np.ndarray) -> tuple[bool, np.ndarray]:
         """
         Detect noise using mean error between current and previous frames.
 

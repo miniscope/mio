@@ -1,5 +1,22 @@
 # Changelog
 
+## Upcoming
+
+### *.*
+
+#### CLI
+
+- [`#141`](https://github.com/miniscope/mio/pull/141) - add cli commands for manipulating configs:
+  - `mio config create` to create a new config from a config model (use --list) to show available models
+  - `mio config path` to show the path to a config
+  - `mio config open` to open the config in default text editor
+- [`#154`](https://github.com/miniscope/mio/pull/154) - add cli command for removing frames from video:
+  - `mio process remove_frames` to remove frames by explicitly specified index from videos and metadata
+
+#### CI/CD
+
+- [`#157`](https://github.com/miniscope/mio/pull/157) - Add continuous deployment to PyPI 
+
 ## 0.9
 
 ### 0.9.0 - 2026-01-27 - Batch device update, NTP sync, driver import fix

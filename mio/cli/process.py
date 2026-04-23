@@ -3,54 +3,20 @@ Command line interface for offline video pre-processing.
 """
 
 import re
-import shutil
 from pathlib import Path
-from typing import Optional
 
 import click
 
-from mio.exceptions import VideoMetadataError
-from mio.io import VideoWriter
 from mio.logging import init_logger
-from mio.models.process import DenoiseConfig, NoisePatchConfig
-from mio.process.stitch import RecordingData, RecordingDataBundle, concat_recordings
-from mio.process.video import crop_run, denoise_run
-from mio.utils import (
-    DEFAULT_PROCESS_DIR,
-    extract_mismatch_details,
-    resolve_output_path,
-    validate_video_metadata_match,
-)
+from mio.models.dataset import Recording
+from mio.models.process import DenoiseConfig
+from mio.process.stitch import stitch as run_stitch
+from mio.process.stitch import concat_recordings
+from mio.process.video import denoise as run_denoise
+from mio.process.video import remove_frames as run_remove_frames
+from mio.process.video import trim as run_trim
 
 logger = init_logger("mio.cli.process")
-
-
-def _validate_with_prompt(video_path: str) -> Optional[object]:
-    """Validate video-metadata match, prompting user on failure.
-
-    Returns the validated DataFrame, or None if the user chose to continue
-    without CSV metadata.
-    """
-    try:
-        return validate_video_metadata_match(video_path)
-    except VideoMetadataError as e:
-        if e.csv_df is None:
-            if click.confirm(
-                f"{e}. Do you want to continue without generating output CSV metadata?",
-                default=False,
-            ):
-                logger.warning(f"{e}. Continuing without CSV metadata generation.")
-                return None
-            raise click.ClickException(f"{e}. Cannot proceed without CSV.") from None
-        else:
-            if click.confirm(
-                f"{e}. This may indicate a mismatch between the video and CSV. "
-                "Do you want to continue anyway?",
-                default=False,
-            ):
-                logger.warning(f"{e}. Proceeding anyway.")
-                return e.csv_df
-            raise click.ClickException(f"{e}. Cannot proceed.") from None
 
 
 @click.group()
@@ -82,37 +48,35 @@ def process() -> None:
     type=click.Path(),
     default=None,
     help=(
-        f"Output directory for denoised files. "
-        f"If not specified, uses {DEFAULT_PROCESS_DIR}/ directory."
+        "Output directory for denoised files. " "If not specified, uses directory of input video."
     ),
 )
-def denoise(
-    input: str,
-    denoise_config: str,
-    output_dir: Optional[str],
-) -> None:
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Overwrite any existing files",
+)
+def denoise(input: Path, denoise_config: str, output_dir: str | None, force: bool = False) -> None:
     """
     Denoise a video file by detecting and removing frames with noisy areas.
 
     Processing steps (noisy area detection, frequency masking, minimum
     projection subtraction) are configured via the YAML config file.
     """
-    csv_df = _validate_with_prompt(input)
+    input = Path(input)
+    recording = Recording.from_video(input)
 
     denoise_config_parsed = DenoiseConfig.from_any(denoise_config)
 
     if output_dir is not None:
         denoise_config_parsed.output_dir = str(Path(output_dir).expanduser())
     elif denoise_config_parsed.output_dir is None:
-        default_output_dir = Path.cwd() / DEFAULT_PROCESS_DIR
-        default_output_dir.mkdir(parents=True, exist_ok=True)
+        default_output_dir = input.parent
         denoise_config_parsed.output_dir = str(default_output_dir)
 
-    denoise_run(
-        input,
-        denoise_config_parsed,
-        csv_df=csv_df,
-    )
+    run_denoise(input, denoise_config_parsed, csv_df=recording.metadata, progress=True, force=force)
 
 
 @process.command()
@@ -121,7 +85,7 @@ def denoise(
     "--input",
     required=True,
     type=click.Path(exists=True, dir_okay=False),
-    help="Path to the video file to crop.",
+    help="Path to the video file to trim.",
 )
 @click.option(
     "-o",
@@ -130,7 +94,7 @@ def denoise(
     default=None,
     help="Path to the output video file or directory. If a directory, "
     "the output filename will be generated from the input filename. "
-    f"If not specified, saves to {DEFAULT_PROCESS_DIR}/ directory with '_cropped' suffix.",
+    "If not specified, saves to input file name with '_trimmed' suffix.",
 )
 @click.option(
     "-s",
@@ -146,36 +110,94 @@ def denoise(
     default=0,
     help="Number of frames to remove from the end. Default: 0.",
 )
-def crop(
-    input: str,
-    output: Optional[str],
-    trim_start: int,
-    trim_end: int,
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Overwrite any existing files",
+)
+def trim(
+    input: str, output: Path | None, trim_start: int, trim_end: int, force: bool = False
 ) -> None:
     """
     Crop a video by removing frames from the start and/or end.
 
     Also trims and renumbers the companion CSV metadata to match.
     """
-    csv_df = _validate_with_prompt(input)
-
     input_path = Path(input)
-    output_arg = output if output is not None else DEFAULT_PROCESS_DIR
-    output_path = resolve_output_path(input_path, "_cropped", output_arg)
+    recording = Recording.from_video(input_path)
+    if not output:
+        output_path = input_path.parent / (input_path.stem + "_trimmed" + input_path.suffix)
+    elif (output := Path(output)).is_dir():
+        output_path = output / (input_path.stem + "_trimmed" + input_path.suffix)
+    else:
+        output_path = Path(output)
 
-    cropped_output = crop_run(
-        input,
-        output_path=str(output_path),
-        csv_df=csv_df,
-        trim_start=trim_start,
-        trim_end=trim_end,
+    trimmed_output = run_trim(
+        input_path,
+        output_path=output_path,
+        csv_df=recording.metadata,
+        start=trim_start,
+        end=trim_end,
+        progress=True,
+        force=force,
     )
+    click.echo(f"Cropped output written to {trimmed_output}")
 
-    try:
-        validate_video_metadata_match(cropped_output)
-    except VideoMetadataError as e:
-        raise click.ClickException(f"Frame count alignment failed after cropping: {e}") from None
-    click.echo(f"✅ Frame count alignment verified: {cropped_output}")
+
+@process.command(name="remove-frames")
+@click.option(
+    "-i",
+    "--input",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Path to the video file. Each requires a .csv with the same stem name.",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(dir_okay=False),
+    default=None,
+    help="Path to the output video file."
+    "If not specified, add a '_removed' suffix and write to same directory",
+)
+@click.option(
+    "-f",
+    "--frames",
+    required=True,
+    type=str,
+    help="Comma-separated list of 0-based frame indices to remove (e.g. '0,5,10,42').",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+)
+def remove_frames(input: str, output: str | None, frames: str, force: bool = False) -> None:
+    """
+    Remove specific frames by index from a video.
+
+    A manual cleanup step for removing individual bad frames after reviewing
+    the output. Also updates the companion CSV metadata to match.
+    """
+    input = Path(input)
+    recording = Recording.from_video(input)
+    if recording.metadata is None:
+        click.echo("Recording has no matching metadata! Just removing frames from video")
+
+    output = Path(output) if output else input.with_stem(input.stem + "_removed")
+
+    frame_indices = [int(x.strip()) for x in frames.split(",")]
+
+    run_remove_frames(
+        recording,
+        remove_indices=frame_indices,
+        output_path=output,
+        progress=True,
+        force=force,
+    )
+    click.echo(f"Video written to {output} with frames {frames} removed from {input}")
 
 
 @process.command()
@@ -301,74 +323,25 @@ def concat(
 @click.option(
     "-o",
     "--output",
-    type=click.Path(),
+    type=click.Path(file_okay=False),
     default=None,
-    help="Path to the output stitched video file or directory. "
-    f"If not specified, uses {DEFAULT_PROCESS_DIR}/ directory with '_stitched' suffix.",
+    help="Directory for output videos and metadata. If none provided, same as the inputs.",
 )
 @click.option(
     "--debug-video",
-    type=click.Path(dir_okay=False),
-    default=None,
+    default=False,
+    is_flag=True,
     help="Output path for debug video showing frame comparisons.",
 )
 @click.option(
-    "--debug-csv",
-    type=click.Path(dir_okay=False),
-    default=None,
-    help="Output path for debug CSV with selection metadata.",
-)
-@click.option(
-    "--fps",
-    type=int,
-    default=20,
-    help="Frames per second for output video.",
-)
-@click.option(
-    "--match-by",
-    type=click.Choice(["frame_num", "timestamp"]),
-    default="frame_num",
-    help="Frame matching strategy. 'frame_num' matches by device frame number. "
-    "'timestamp' matches by nearest buffer_recv_unix_time.",
-)
-@click.option(
-    "--timestamp-threshold",
-    type=float,
-    default=25.0,
-    help="Max time difference in ms for timestamp matching (default: 25).",
-)
-@click.option(
-    "--max-frames",
-    type=int,
-    default=-1,
-    help="Maximum number of frames to process. -1 means all frames. "
-    "Useful for quick test runs.",
-)
-@click.option(
-    "--selection-mode",
-    type=click.Choice(["metadata", "noise_aware"]),
-    default="metadata",
-    help="Frame selection strategy. 'metadata' uses buffer count + edge scoring (default). "
-    "'noise_aware' uses noise detection to pick clean frames and skip both-bad pairs.",
-)
-@click.option(
-    "--noise-config",
-    type=str,
-    default=None,
-    help="Denoise config ID or YAML path for noise detection (used with --selection-mode noise_aware). "
-    "Uses the noise_patch section from the config.",
+    "-f",
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Overwrite any existing files",
 )
 def stitch(
-    inputs: tuple,
-    output: Optional[str],
-    debug_video: Optional[str],
-    debug_csv: Optional[str],
-    fps: int,
-    match_by: str,
-    timestamp_threshold: float,
-    max_frames: int,
-    selection_mode: str,
-    noise_config: Optional[str],
+    inputs: tuple, output: Path | None = None, debug_video: bool = False, force: bool = False
 ) -> None:
     """
     Stitch multiple video recordings into one by selecting the best frame
@@ -379,59 +352,11 @@ def stitch(
     if len(inputs) < 2:
         raise click.ClickException("At least 2 input videos are required for stitching.")
 
-    noise_patch_config = None
-    if selection_mode == "noise_aware":
-        if noise_config is None:
-            raise click.ClickException(
-                "--noise-config is required when using --selection-mode noise_aware"
-            )
-        denoise_cfg = DenoiseConfig.from_any(noise_config)
-        noise_patch_config = denoise_cfg.noise_patch
-        click.echo(f"Noise-aware selection enabled (methods: {noise_patch_config.method})")
-
-    recordings = RecordingData.from_video_paths([Path(p) for p in inputs])
-
-    first_input_path = Path(inputs[0])
-    output_arg = output if output is not None else DEFAULT_PROCESS_DIR
-    stitched_video_path = resolve_output_path(first_input_path, "_stitched", output_arg)
-
-    output_csv_path = stitched_video_path.with_suffix(".csv")
-
-    debug_video_path = Path(debug_video) if debug_video else None
-    debug_csv_path = Path(debug_csv) if debug_csv else None
-
-    stitched_video_writer = VideoWriter(path=stitched_video_path, fps=fps)
-    debug_video_writer = VideoWriter(path=debug_video_path, fps=fps) if debug_video_path else None
-
-    # Set up debug dir for noise report when using noise_aware
-    stitch_debug_dir = None
-    if noise_patch_config is not None:
-        stitch_debug_dir = stitched_video_path.parent / "debug"
-        stitch_debug_dir.mkdir(parents=True, exist_ok=True)
-
-    recording_bundle = RecordingDataBundle(
-        recordings=recordings,
-        stitched_video_writer=stitched_video_writer,
-        debug_video_writer=debug_video_writer,
-        combined_csv_path=output_csv_path,
-        debug_csv_path=debug_csv_path,
-        noise_config=noise_patch_config,
-        debug_dir=stitch_debug_dir,
-        fps=fps,
+    recordings = [Recording.from_video(Path(p)) for p in inputs]
+    stitched = run_stitch(
+        recordings, debug_video=debug_video, output_dir=output, progress=True, force=force
     )
-
-    click.echo(f"Stitching {len(recordings)} recordings (match-by={match_by})...")
-    recording_bundle.stitch_recordings(
-        matching_method=match_by,
-        timestamp_threshold_ms=timestamp_threshold,
-        max_frames=max_frames,
-    )
-
-    try:
-        validate_video_metadata_match(stitched_video_path)
-    except VideoMetadataError as e:
-        raise click.ClickException(f"Frame count alignment failed after stitching: {e}") from None
-    click.echo(f"✅ Frame count alignment verified: {stitched_video_path}")
+    click.echo(f"Stitched videos to {stitched.video.path}")
 
 
 @process.command()
@@ -446,10 +371,10 @@ def stitch(
 @click.option(
     "-o",
     "--output",
-    type=click.Path(),
+    type=click.Path(file_okay=False),
     default=None,
     help="Base path for output files (stitched, cropped, denoised) or directory. "
-    f"If not specified, uses {DEFAULT_PROCESS_DIR}/ directory.",
+    "If not specified, uses input directory.",
 )
 @click.option(
     "-c",
@@ -473,253 +398,59 @@ def stitch(
     help="Number of frames to remove from the end (default: 0).",
 )
 @click.option(
-    "--fps",
-    type=int,
-    default=20,
-    help="Frames per second for stitched video.",
-)
-@click.option(
-    "--match-by",
-    type=click.Choice(["frame_num", "timestamp"]),
-    default="frame_num",
-    help="Frame matching strategy for stitching. 'frame_num' matches by device frame number. "
-    "'timestamp' matches by nearest buffer_recv_unix_time.",
-)
-@click.option(
-    "--timestamp-threshold",
-    type=float,
-    default=25.0,
-    help="Max time difference in ms for timestamp matching (default: 25).",
-)
-@click.option(
-    "--max-frames",
-    type=int,
-    default=-1,
-    help="Maximum number of frames to process during stitching. -1 means all frames. "
-    "Useful for quick test runs.",
-)
-@click.option(
-    "--selection-mode",
-    type=click.Choice(["metadata", "noise_aware"]),
-    default="metadata",
-    help="Frame selection strategy for stitching. 'metadata' uses buffer count + edge scoring (default). "
-    "'noise_aware' uses noise detection to pick clean frames and skip both-bad pairs.",
+    "-f",
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Overwrite any existing files",
 )
 def workflow(
     inputs: tuple,
-    output: Optional[str],
+    output: str | None,
     denoise_config: str,
     trim_start: int,
     trim_end: int,
-    fps: int,
-    match_by: str,
-    timestamp_threshold: float,
-    max_frames: int,
-    selection_mode: str,
+    force: bool = False,
 ) -> None:
     """
     Complete workflow: stitch → trim → denoise with validation at each step.
     """
-    first_input_path = Path(inputs[0])
+    inputs = [Path(i) for i in inputs]
     if output is None:
-        output_dir = Path.cwd() / DEFAULT_PROCESS_DIR
+        output_dir = inputs[0].parent
+    else:
+        output_dir = Path(output).expanduser()
         output_dir.mkdir(parents=True, exist_ok=True)
-        output_stem = first_input_path.stem
-    else:
-        output_path = Path(output).expanduser()
-        if output_path.is_dir() or not output_path.suffix:
-            if not output_path.exists():
-                output_path.mkdir(parents=True, exist_ok=True)
-            output_dir = output_path
-            output_stem = first_input_path.stem
-        else:
-            output_dir = output_path.parent
-            output_stem = output_path.stem
-
-    click.echo("Validating input videos and CSV metadata...")
-    validation_failures = []
-
-    for video_path in inputs:
-        video_path_obj = Path(video_path)
-        try:
-            validate_video_metadata_match(str(video_path_obj))
-        except VideoMetadataError as e:
-            validation_failures.append((video_path_obj, e))
-
-    if validation_failures:
-        click.echo("\n⚠️  Frame number validation found mismatches:")
-        click.echo("=" * 70)
-
-        for video_path_obj, error in validation_failures:
-            click.echo(f"\n📹 Video: {video_path_obj.name}")
-
-            details = extract_mismatch_details(video_path_obj, error.csv_df)
-            if "missing_count" in details:
-                click.echo("   ⚠️  Frame mismatch detected:")
-                click.echo(f"      • Video has {details['video_frame_count']} frames")
-                click.echo(f"      • CSV has {details['csv_frame_count']} unique frame indices")
-                click.echo(f"      • Missing {details['missing_count']} frame(s) in CSV")
-
-                if details.get("missing_ranges"):
-                    ranges_str = ", ".join(details["missing_ranges"][:10])
-                    if len(details["missing_ranges"]) > 10:
-                        ranges_str += f" ... ({len(details['missing_ranges'])} total ranges)"
-                    click.echo(f"      • Missing frame ranges: {ranges_str}")
-            else:
-                click.echo(f"   ❌ {error}")
-
-        click.echo("\n" + "=" * 70)
-        click.echo(
-            "\n⚠️  Warning: Missing frames in CSV metadata will be skipped during processing.\n"
-            "   This may result in incomplete output or data loss.\n"
-        )
-
-        if not click.confirm(
-            "Do you want to continue with the workflow despite these mismatches?",
-            default=False,
-        ):
-            raise click.ClickException(
-                "Workflow cancelled due to frame number validation failures."
-            )
-
-        logger.warning(
-            f"Proceeding with workflow despite {len(validation_failures)} "
-            "validation failure(s). Missing frames will be skipped."
-        )
-    else:
-        click.echo("✅ [input] All input videos validated successfully")
-
-    stitched_dir = output_dir / "stitched"
-    stitched_dir.mkdir(parents=True, exist_ok=True)
-    stitched_video_path = stitched_dir / f"{output_stem}_stitched.avi"
 
     if len(inputs) == 1:
-        click.echo("Only one input video provided, skipping stitching...")
-        input_video_path = Path(inputs[0])
-        input_csv_path = input_video_path.with_suffix(".csv")
-
-        click.echo(f"Copying single video to stitched directory: {stitched_video_path}")
-        shutil.copy2(input_video_path, stitched_video_path)
-        shutil.copy2(input_csv_path, stitched_video_path.with_suffix(".csv"))
-
-        click.echo(
-            f"✅ [stitch] Using single input video as stitched output: {stitched_video_path}"
-        )
+        click.echo("Only one input video provided, skipping stitching")
+        stitched_video = inputs[0]
     else:
-        recordings = RecordingData.from_video_paths([Path(p) for p in inputs])
-
-        output_csv_path = stitched_video_path.with_suffix(".csv")
-
-        debug_dir = stitched_dir / "debug"
-        debug_dir.mkdir(parents=True, exist_ok=True)
-        debug_video_path = debug_dir / f"{output_stem}_debug.avi"
-        debug_csv_path = debug_dir / f"{output_stem}_debug.csv"
-
-        stitched_video_writer = VideoWriter(path=stitched_video_path, fps=fps)
-        debug_video_writer = VideoWriter(path=debug_video_path, fps=fps)
-
-        # For noise_aware selection, extract noise_patch config from the denoise config
-        noise_patch_config = None
-        if selection_mode == "noise_aware":
-            denoise_config_parsed_early = DenoiseConfig.from_any(denoise_config)
-            noise_patch_config = denoise_config_parsed_early.noise_patch
-            click.echo(f"Noise-aware selection enabled (methods: {noise_patch_config.method})")
-
-        recording_bundle = RecordingDataBundle(
-            recordings=recordings,
-            stitched_video_writer=stitched_video_writer,
-            debug_video_writer=debug_video_writer,
-            combined_csv_path=output_csv_path,
-            debug_csv_path=debug_csv_path,
-            noise_config=noise_patch_config,
-            debug_dir=debug_dir if noise_patch_config is not None else None,
-            fps=fps,
-        )
-
-        click.echo(f"Stitching {len(recordings)} recordings (match-by={match_by})...")
-        recording_bundle.stitch_recordings(
-            matching_method=match_by,
-            timestamp_threshold_ms=timestamp_threshold,
-            max_frames=max_frames,
-        )
-
-        try:
-            validate_video_metadata_match(stitched_video_path)
-        except VideoMetadataError as e:
-            raise click.ClickException(
-                f"Frame count alignment failed after stitching: {e}"
-            ) from None
-        click.echo(f"✅ [stitch] Frame count alignment verified: {stitched_video_path}")
+        click.echo("Stitching videos...")
+        recordings = [Recording.from_video(p) for p in inputs]
+        stitched = run_stitch(recordings, output_dir=output_dir, progress=True, force=force)
+        stitched_video = stitched.video.path
 
     if trim_start == 0 and trim_end == 0:
-        click.echo("Skipping trim (both start and end are 0)...")
-        actual_cropped_video = stitched_video_path
-        click.echo("✅ [crop] No trimming needed, using stitched video as-is")
+        click.echo("Not trimming, trim start and end both zero")
+        trimmed_video = stitched_video
     else:
-        cropped_dir = output_dir / "cropped"
-        cropped_dir.mkdir(parents=True, exist_ok=True)
-        cropped_video = cropped_dir / f"{output_stem}_cropped.avi"
         click.echo("Trimming video...")
+        trimmed_video = run_trim(
+            stitched_video, output_dir, start=trim_start, end=trim_end, progress=True, force=force
+        )
 
-        try:
-            csv_df = validate_video_metadata_match(str(stitched_video_path))
-        except VideoMetadataError as e:
-            raise click.ClickException(f"Cannot crop: {e}") from None
-
-        click.echo(f"Trimming: removing first {trim_start} frames and last {trim_end} frames")
-
-        try:
-            actual_cropped_video = crop_run(
-                str(stitched_video_path),
-                output_path=str(cropped_video),
-                csv_df=csv_df,
-                trim_start=trim_start,
-                trim_end=trim_end,
-            )
-        except ValueError as e:
-            raise click.ClickException(str(e)) from None
-
-        try:
-            validate_video_metadata_match(actual_cropped_video)
-        except VideoMetadataError as e:
-            raise click.ClickException(
-                f"Frame count alignment failed after cropping: {e}"
-            ) from None
-        click.echo(f"✅ [crop] Frame count alignment verified: {actual_cropped_video}")
-
-    click.echo("Denoising video...")
-
-    csv_df = None
-    try:
-        csv_df = validate_video_metadata_match(str(actual_cropped_video))
-    except VideoMetadataError as e:
-        if e.csv_df is None:
-            raise click.ClickException(f"{e}. Cannot proceed without CSV.") from None
-        if not click.confirm(
-            f"{e}. This may indicate a mismatch between the video and CSV. "
-            "Do you want to continue anyway?",
-            default=False,
-        ):
-            raise click.ClickException(f"{e}. Cannot proceed.") from None
-        csv_df = e.csv_df
+    trimmed = Recording.from_video(trimmed_video)
+    if trimmed.metadata is None:
+        raise FileNotFoundError(f"No metadata csv found for video {trimmed_video}")
 
     denoise_config_parsed = DenoiseConfig.from_any(denoise_config)
-
-    denoised_dir = output_dir / "denoised"
-    denoised_dir.mkdir(parents=True, exist_ok=True)
-    denoise_config_parsed.output_dir = str(denoised_dir)
-
-    debug_dir = denoised_dir / "debug"
-
-    final_video = denoise_run(
-        str(actual_cropped_video),
+    final_video = run_denoise(
+        trimmed_video,
         denoise_config_parsed,
-        csv_df=csv_df,
-        debug_dir=debug_dir,
+        csv_df=trimmed.metadata,
+        debug_dir=output_dir / "debug",
+        progress=True,
+        force=force,
     )
-
-    try:
-        validate_video_metadata_match(final_video)
-    except VideoMetadataError as e:
-        raise click.ClickException(f"Frame count alignment failed after denoising: {e}") from None
-    click.echo(f"✅ [denoise] Frame count alignment verified: {final_video}")
+    click.echo(f"Processed video written to {final_video}")

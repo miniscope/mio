@@ -2,8 +2,8 @@
 This module contains functions for pre-processing video data.
 """
 
+from collections.abc import Collection
 from pathlib import Path
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -12,6 +12,7 @@ from tqdm import tqdm
 
 from mio import init_logger
 from mio.io import VideoReader, VideoWriter
+from mio.models.dataset import Recording
 from mio.models.frames import NamedFrame, NamedVideo
 from mio.models.process import (
     DenoiseConfig,
@@ -41,7 +42,7 @@ class BaseVideoProcessor:
     named_frame (NamedFrame): A NamedFrame object.
     """
 
-    def __init__(self, name: str, output_dir: Path):
+    def __init__(self, name: str, output_dir: Path, force: bool = False):
         """
         Initialize the BaseVideoProcessor object.
 
@@ -58,6 +59,7 @@ class BaseVideoProcessor:
         self.output_dir: Path = output_dir
         self.output_video: list[np.ndarray] = []
         self.output_enable: bool = True
+        self.force = force
 
     @property
     def output_named_video(self) -> NamedVideo:
@@ -88,14 +90,12 @@ class BaseVideoProcessor:
         if self.output_enable:
             logger.debug(f"Exporting {self.name} video to {self.output_dir}")
             self.output_named_video.export(
-                output_path=self.output_dir / self.name,
-                fps=20,
-                suffix=False,
+                output_path=self.output_dir / self.name, fps=20, suffix=False, force=self.force
             )
         else:
             logger.info(f"{self.name} output disabled.")
 
-    def process_frame(self) -> None:
+    def process_frame(self, input_frame: np.ndarray, index: int) -> None:
         """
         Process a single frame. This method should be implemented in the subclass.
 
@@ -117,10 +117,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
     """
 
     def __init__(
-        self,
-        name: str,
-        noise_patch_config: NoisePatchConfig,
-        output_dir: Path,
+        self, name: str, noise_patch_config: NoisePatchConfig, output_dir: Path, force: bool = False
     ) -> None:
         """
         Initialize the NoisePatchProcessor object.
@@ -129,7 +126,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
         name (str): The name of the video processor.
         noise_patch_config (NoisePatchConfig): The noise patch configuration.
         """
-        super().__init__(name, output_dir)
+        super().__init__(name, output_dir, force)
         self.noise_patch_config: NoisePatchConfig = noise_patch_config
         self.noise_detect_helper = InvalidFrameDetector(noise_patch_config=noise_patch_config)
         self.noise_patchs: list[np.ndarray] = []
@@ -144,9 +141,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
                 "The mean_error method is unstable and not fully tested yet." " Use with caution."
             )
 
-    def process_frame(
-        self, input_frame: np.ndarray, original_frame_index: int
-    ) -> Optional[np.ndarray]:
+    def process_frame(self, input_frame: np.ndarray, index: int) -> np.ndarray | None:
         """
         Process a single frame.
 
@@ -154,8 +149,8 @@ class NoisePatchProcessor(BaseVideoProcessor):
         ----------
         input_frame : np.ndarray
             The frame to process.
-        original_frame_index : int
-            The original frame index from the video reader.
+        index : int
+            The frame number within the video.
 
         Returns
         -------
@@ -172,13 +167,12 @@ class NoisePatchProcessor(BaseVideoProcessor):
                 self.append_output_frame(input_frame)
                 return input_frame
             else:
-                msg = f"Dropping frame {original_frame_index} of original video due to noise."
-                tqdm.write(msg)
+                msg = f"Dropping frame {index} of original video due to noise."
                 logger.debug(msg)
-                logger.debug(f"Adding noise patch for frame {original_frame_index}.")
+                logger.debug(f"Adding noise patch for frame {index}.")
                 self.noise_patchs.append((noisy_area * np.iinfo(np.uint8).max).astype(np.uint8))
                 self.noisy_frames.append(input_frame)
-                self.dropped_frame_indices.append(original_frame_index)
+                self.dropped_frame_indices.append(index)
             return None
 
         self.append_output_frame(input_frame)
@@ -218,9 +212,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
         if self.noise_patch_config.output_noise_patch:
             logger.debug(f"Exporting {self.name} noise patch to {self.output_dir}")
             self.noise_patch_named_video.export(
-                output_path=self.output_dir / f"{self.name}",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )
         else:
             logger.info(f"{self.name} noise patch output disabled.")
@@ -232,9 +224,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
         if self.noise_patch_config.output_diff:
             logger.info(f"Exporting {self.name} difference frames to {self.output_dir}")
             self.diff_frames_named_video.export(
-                output_path=self.output_dir / f"{self.name}",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )
         else:
             logger.info(f"{self.name} difference frames output disabled.")
@@ -246,9 +236,7 @@ class NoisePatchProcessor(BaseVideoProcessor):
         if self.noise_patch_config.output_noisy_frames:
             logger.debug(f"Exporting {self.name} noisy frames to {self.output_dir}")
             self.noisy_frames_named_video.export(
-                output_path=self.output_dir / f"{self.name}",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )
             with open(self.output_dir / f"{self.name}_dropped_frames.txt", "w") as f:
                 for index in self.dropped_frame_indices:
@@ -278,6 +266,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         width: int,
         height: int,
         output_dir: Path,
+        force: bool = False,
     ) -> None:
         """
         Initialize the FreqencyMaskProcessor object.
@@ -286,7 +275,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         name (str): The name of the video processor.
         freq_mask_config (FrequencyMaskingConfig): The frequency masking configuration.
         """
-        super().__init__(name, output_dir)
+        super().__init__(name, output_dir, force)
         self.freq_mask_config: FrequencyMaskingConfig = freq_mask_config
         self.freq_mask_helper = FrequencyMaskHelper(
             height=height, width=width, freq_mask_config=freq_mask_config
@@ -317,7 +306,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         """
         return NamedVideo(name="freq_domain", video=self.freq_domain_frames)
 
-    def process_frame(self, input_frame: np.ndarray) -> Optional[np.ndarray]:
+    def process_frame(self, input_frame: np.ndarray, index: int) -> np.ndarray | None:
         """
         Process a single frame.
 
@@ -346,9 +335,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         if self.freq_mask_config.output_freq_domain:
             logger.debug(f"Exporting {self.name} frequency domain to {self.output_dir}")
             self.freq_domain_named_video.export(
-                output_path=self.output_dir / f"{self.name}",
-                fps=20,
-                suffix=True,
+                output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )
         else:
             logger.info(f"{self.name} frequency domain output disabled.")
@@ -380,7 +367,7 @@ class PassThroughProcessor(BaseVideoProcessor):
     A class to pass through a video.
     """
 
-    def __init__(self, name: str, output_dir: Path):
+    def __init__(self, name: str, output_dir: Path, force: bool = False):
         """
         Initialize the PassThroughProcessor object.
 
@@ -391,7 +378,7 @@ class PassThroughProcessor(BaseVideoProcessor):
         Returns:
         PassThroughProcessor: A PassThroughProcessor object.
         """
-        super().__init__(name, output_dir)
+        super().__init__(name, output_dir, force)
 
     @property
     def pass_through_named_video(self) -> NamedVideo:
@@ -400,7 +387,7 @@ class PassThroughProcessor(BaseVideoProcessor):
         """
         return NamedVideo(name=self.name, video=self.output_video)
 
-    def process_frame(self, input_frame: np.ndarray) -> np.ndarray:
+    def process_frame(self, input_frame: np.ndarray, index: int) -> np.ndarray:
         """
         Process a single frame.
 
@@ -433,6 +420,7 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
         minimum_projection_config: MinimumProjectionConfig,
         output_dir: Path,
         video_frames: list[np.ndarray],
+        force: bool = False,
     ):
         """
         Initialize the MinimumProjectionProcessor object.
@@ -444,7 +432,7 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
         Returns:
         MinimumProjectionProcessor: A MinimumProjectionProcessor object.
         """
-        super().__init__(name, output_dir)
+        super().__init__(name, output_dir, force)
 
         if not video_frames:
             logger.warning("No frames provided for minimum projection. Skipping processing.")
@@ -478,24 +466,20 @@ class MinProjSubtractProcessor(BaseVideoProcessor):
 
         self.output_frames = ZStackHelper.normalize_video_stack(self.output_frames)
 
-    def export_minimum_projection(self) -> None:
-        """
-        Export the minimum projection to a file.
-        """
-
     def batch_export_videos(self) -> None:
         """
         Batch export the videos to a file. Whether to export or not is controlled in each method.
         """
         self.export_output_video()
-        self.export_minimum_projection()
 
 
-def denoise_run(
-    video_path: str,
+def denoise(
+    video_path: Path,
     config: DenoiseConfig,
-    csv_df: Optional[pd.DataFrame] = None,
-    debug_dir: Optional[Path] = None,
+    csv_df: pd.DataFrame | None = None,
+    debug_dir: Path | None = None,
+    progress: bool = False,
+    force: bool = False,
 ) -> Path:
     """
     Preprocess a video file and display the results.
@@ -514,6 +498,10 @@ def denoise_run(
         If provided, intermediate files (noisy frames, patches, frequency masks, etc.)
         will be saved here instead of the main output_dir. Main output files
         (output video and CSV) will still be saved to output_dir.
+    progress : bool
+        Display a progress bar
+    force : bool
+        Overwrite any existing files
 
     Returns
     -------
@@ -526,272 +514,135 @@ def denoise_run(
             "install it manually or install miniscope-io with `pip install miniscope-io[plot]`"
         )
 
-    reader = VideoReader(video_path)
+    reader = VideoReader(str(video_path))
     pathstem = Path(video_path).stem
-    output_video_path: Optional[Path] = None
 
-    output_dir = Path.cwd() / config.output_dir
-    if not output_dir.exists():
-        output_dir.mkdir(parents=True)
-
-    intermediate_dir = debug_dir if debug_dir is not None else output_dir
-    if debug_dir is not None:
-        intermediate_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = video_path.parent / config.output_dir
+    debug_dir = debug_dir if debug_dir is not None else output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    debug_dir.mkdir(parents=True, exist_ok=True)
 
     raw_frame_processor = PassThroughProcessor(
-        name=pathstem + "_raw",
-        output_dir=intermediate_dir,
+        name=pathstem + "_raw", output_dir=debug_dir, force=force
     )
 
     output_frame_processor = PassThroughProcessor(
-        name=pathstem + "_output",
-        output_dir=output_dir,
+        name=pathstem + "_output", output_dir=output_dir, force=force
     )
 
     noise_patch_processor = NoisePatchProcessor(
         output_dir=output_dir,
         name=pathstem + "_patch",
         noise_patch_config=config.noise_patch,
+        force=force,
     )
 
     freq_mask_processor = FreqencyMaskProcessor(
-        output_dir=intermediate_dir,
+        output_dir=debug_dir,
         name=pathstem + "_freq_mask",
         freq_mask_config=config.frequency_masking,
         width=reader.width,
         height=reader.height,
+        force=force,
     )
 
     if config.interactive_display.display_freq_mask:
         freq_mask_processor.freq_mask_named_frame.display()
 
-    total_frames = int(reader.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if progress:
+        iterator = tqdm(reader.read_frames(), total=reader.frame_count, desc="Processing frames")
+    else:
+        iterator = reader.read_frames()
 
     try:
-        frame_iter = tqdm(reader.read_frames(), total=total_frames, desc="Processing frames")
-        for index, frame in frame_iter:
+        for index, frame in iterator:
             if config.end_frame and index > config.end_frame and config.end_frame != -1:
                 break
 
             if len(frame.shape) != 2:
                 raise ValueError(f"Frame {index} has shape {frame.shape}, expected 2D grayscale.")
             raw_frame = frame
-            input_frame = raw_frame_processor.process_frame(raw_frame)
-            patched_frame = noise_patch_processor.process_frame(
-                input_frame, original_frame_index=index
-            )
-            freq_masked_frame = freq_mask_processor.process_frame(patched_frame)
-            _ = output_frame_processor.process_frame(freq_masked_frame)
+            input_frame = raw_frame_processor.process_frame(raw_frame, index)
+            patched_frame = noise_patch_processor.process_frame(input_frame, index)
+            freq_masked_frame = freq_mask_processor.process_frame(patched_frame, index)
+            _ = output_frame_processor.process_frame(freq_masked_frame, index)
 
     finally:
         reader.release()
 
-        output_frames = output_frame_processor.output_video
-        minimum_projection_processor = MinProjSubtractProcessor(
-            name=pathstem + "min_proj",
-            output_dir=intermediate_dir,
-            video_frames=output_frames,
-            minimum_projection_config=config.minimum_projection,
+    output_frames = output_frame_processor.output_video
+    minimum_projection_processor = MinProjSubtractProcessor(
+        name=pathstem + "min_proj",
+        output_dir=debug_dir,
+        video_frames=output_frames,
+        minimum_projection_config=config.minimum_projection,
+    )
+    minimum_projection_processor.normalize_stack()
+
+    noise_patch_processor.export_output_video()
+
+    noise_patch_processor.output_dir = debug_dir
+    noise_patch_processor.export_noise_patch()
+    noise_patch_processor.export_diff_frames()
+    noise_patch_processor.export_noisy_video()
+
+    freq_mask_processor.batch_export_videos()
+    minimum_projection_processor.batch_export_videos()
+
+    dropped_frames = noise_patch_processor.dropped_frame_indices
+    if dropped_frames:
+        logger.info(
+            f"Excluded {len(dropped_frames)} frames due to noise: "
+            f"{dropped_frames[:20]}{'...' if len(dropped_frames) > 20 else ''}"
         )
-        minimum_projection_processor.normalize_stack()
+    else:
+        logger.info("No frames were excluded during processing.")
 
-        noise_patch_processor.export_output_video()
+    output_video_name = noise_patch_processor.name
+    output_video_path = output_dir / f"{output_video_name}.avi"
 
-        noise_patch_processor.output_dir = intermediate_dir
-        noise_patch_processor.export_noise_patch()
-        noise_patch_processor.export_diff_frames()
-        noise_patch_processor.export_noisy_video()
+    actual_output_frame_count = len(output_frame_processor.output_video)
+    dropped_count = len(noise_patch_processor.dropped_frame_indices)
+    logger.debug(
+        f"Output video will have {actual_output_frame_count} frames "
+        f"(input had {reader.frame_count}, dropped {dropped_count})"
+    )
 
-        freq_mask_processor.batch_export_videos()
-        minimum_projection_processor.batch_export_videos()
+    csv_df = csv_df if csv_df is not None else pd.read_csv(video_path.with_suffix(".csv"))
 
-        dropped_frames = noise_patch_processor.dropped_frame_indices
-        if dropped_frames:
-            logger.info(
-                f"Excluded {len(dropped_frames)} frames due to noise: "
-                f"{dropped_frames[:20]}{'...' if len(dropped_frames) > 20 else ''}"
-            )
-        else:
-            logger.info("No frames were excluded during processing.")
-
-        output_video_name = noise_patch_processor.name
-        output_video_path = output_dir / f"{output_video_name}.avi"
-
-        actual_output_frame_count = len(output_frame_processor.output_video)
-        dropped_count = len(noise_patch_processor.dropped_frame_indices)
-        logger.debug(
-            f"Output video will have {actual_output_frame_count} frames "
-            f"(input had {total_frames}, dropped {dropped_count})"
+    modified_csv_df = _drop_frames_by_index(csv_df, noise_patch_processor.dropped_frame_indices)
+    modified_csv_df.to_csv(output_video_path.with_suffix(".csv"), index=False)
+    if "buffer_recv_unix_time" in modified_csv_df:
+        timestamp_df = _make_frame_timestamp_csv(modified_csv_df)
+        timestamp_df.to_csv(
+            output_video_path.with_name(output_video_path.stem + "_timestamp.csv"), index=False
         )
 
-        modified_csv_df = _modify_csv_metadata(
-            video_path,
-            output_video_path,
-            noise_patch_processor.dropped_frame_indices,
-            csv_df=csv_df,
+    if config.interactive_display.show_videos:
+        videos = [
+            noise_patch_processor.output_named_video,
+            freq_mask_processor.output_named_video,
+            freq_mask_processor.freq_domain_named_video,
+            minimum_projection_processor.min_proj_named_frame,
+        ]
+        video_plotter = VideoPlotter(
+            videos=videos,
+            start_frame=config.interactive_display.start_frame,
+            end_frame=config.interactive_display.end_frame,
         )
-
-        if modified_csv_df is not None:
-            max_metadata_index = modified_csv_df["reconstructed_frame_index"].max()
-            expected_max_index = actual_output_frame_count - 1
-            if max_metadata_index != expected_max_index:
-                logger.warning(
-                    f"Frame index mismatch: metadata max index is {max_metadata_index}, "
-                    f"but output video has {actual_output_frame_count} frames "
-                    f"(expected max index {expected_max_index}). "
-                    f"This may indicate an off-by-one error in frame indexing."
-                )
-
-        if modified_csv_df is not None:
-            _export_frame_timestamp_csv(output_video_path, modified_csv_df)
-
-        if len(noise_patch_processor.output_named_video.video) == 0:
-            logger.warning("No output video available for display.")
-        elif (
-            len(noise_patch_processor.output_named_video.video)
-            < config.interactive_display.end_frame
-        ):
-            logger.warning(
-                f"Output video has {len(noise_patch_processor.output_named_video.video)} frames."
-                f" End frame for interactive plot is {config.interactive_display.end_frame}."
-                " End frame for interactive plot exceeds the number of frames in the video."
-                " Skipping interactive display."
-            )
-        elif config.interactive_display.show_videos:
-            videos = [
-                noise_patch_processor.output_named_video,
-                freq_mask_processor.output_named_video,
-                freq_mask_processor.freq_domain_named_video,
-                minimum_projection_processor.min_proj_named_frame,
-            ]
-            video_plotter = VideoPlotter(
-                videos=videos,
-                start_frame=config.interactive_display.start_frame,
-                end_frame=config.interactive_display.end_frame,
-            )
-            video_plotter.show()
+        video_plotter.show()
 
     return output_video_path
 
 
-def _modify_csv_metadata(
-    input_video_path: str,
-    output_video_path: Path,
-    dropped_frame_indices: list[int],
-    csv_df: Optional[pd.DataFrame] = None,
-) -> Optional[pd.DataFrame]:
-    """
-    Modify CSV metadata to match the denoised video by removing rows for dropped frames
-    and adjusting reconstructed_frame_index.
-
-    Parameters
-    ----------
-    input_video_path : str
-        Path to the input video file.
-    output_video_path : Path
-        Path to the output video file.
-    dropped_frame_indices : list[int]
-        List of frame indices that were dropped.
-    csv_df : Optional[pd.DataFrame], optional
-        Pre-validated CSV DataFrame. If provided, uses this instead of
-        reading from disk.
-
-    Returns
-    -------
-    Optional[pd.DataFrame]
-        The modified DataFrame, or None if CSV processing was skipped.
-    """
-    input_video_path_obj = Path(input_video_path)
-    input_csv_path = input_video_path_obj.with_suffix(".csv")
-    output_csv_path = output_video_path.with_suffix(".csv")
-
-    df = csv_df if csv_df is not None else pd.read_csv(input_csv_path)
-
-    if not dropped_frame_indices:
-        logger.info(
-            "Modifying CSV metadata at %s from %s (no frames dropped, copying as-is).",
-            output_csv_path,
-            input_csv_path,
-        )
-        df_filtered = df.copy()
-    else:
-        logger.info(
-            f"Modifying CSV metadata at {output_csv_path} "
-            f"from {input_csv_path} (removing {len(dropped_frame_indices)} dropped frames)."
-        )
-
-        dropped_set = set(dropped_frame_indices)
-        df_filtered = df[~df["reconstructed_frame_index"].isin(dropped_set)].copy()
-        logger.info(f"Removed {len(df) - len(df_filtered)} buffers from CSV.")
-
-        def adjust_frame_index(frame_idx: int) -> int:
-            num_dropped_before = sum(1 for dropped_idx in dropped_set if dropped_idx < frame_idx)
-            return frame_idx - num_dropped_before
-
-        df_filtered["reconstructed_frame_index"] = df_filtered["reconstructed_frame_index"].apply(
-            adjust_frame_index
-        )
-
-    try:
-        df_filtered.to_csv(output_csv_path, index=False)
-        logger.info(f"Successfully modified CSV metadata at {output_csv_path}.")
-        return df_filtered
-    except Exception as e:
-        logger.error(f"Failed to write output CSV file {output_csv_path}: {e}")
-        raise
-
-
-def _export_frame_timestamp_csv(output_video_path: Path, csv_df: pd.DataFrame) -> None:
-    """
-    Export a frame-timestamp CSV file mapping reconstructed_frame_index to unix timestamps.
-
-    The CSV includes both the first and last buffer timestamps for each frame.
-
-    Parameters
-    ----------
-    output_video_path : Path
-        Path to the output video file.
-    csv_df : pd.DataFrame
-        The modified CSV DataFrame with reconstructed_frame_index and
-        buffer_recv_unix_time.
-    """
-    if "buffer_recv_unix_time" not in csv_df.columns:
-        logger.warning(
-            "CSV DataFrame does not have 'buffer_recv_unix_time' column. "
-            "Skipping frame-timestamp CSV export."
-        )
-        return
-
-    frame_timestamps = (
-        csv_df.groupby("reconstructed_frame_index")["buffer_recv_unix_time"]
-        .agg(["min", "max"])
-        .reset_index()
-    )
-
-    frame_timestamps.columns = ["frame", "timestamp_first", "timestamp_last"]
-
-    frame_timestamps = frame_timestamps.sort_values("frame")
-
-    output_csv_path = output_video_path.with_name(output_video_path.stem + "_timestamp.csv")
-
-    try:
-        frame_timestamps.to_csv(output_csv_path, index=False)
-        logger.info(
-            "Successfully exported frame-timestamp CSV at %s (%d frames).",
-            output_csv_path,
-            len(frame_timestamps),
-        )
-    except Exception as e:
-        logger.error(f"Failed to write frame-timestamp CSV file {output_csv_path}: {e}")
-        raise
-
-
-def crop_run(
-    video_path: str,
-    output_path: Optional[str] = None,
-    csv_df: Optional[pd.DataFrame] = None,
-    trim_start: int = 0,
-    trim_end: int = 0,
+def trim(
+    video_path: Path,
+    output_path: Path | None = None,
+    csv_df: pd.DataFrame | None = None,
+    start: int = 0,
+    end: int = 0,
+    progress: bool = False,
+    force: bool = False,
 ) -> Path:
     """
     Crop a video file by trimming frames from both ends.
@@ -802,68 +653,70 @@ def crop_run(
         The path to the input video file.
     output_path : Optional[str], optional
         The path to the output video file.
-        If None, defaults to input path with "_cropped" suffix.
+        If None, defaults to input path with "_trimmed" suffix.
     csv_df : Optional[pd.DataFrame], optional
         Pre-validated CSV DataFrame. If provided, uses this instead of
         reading from disk.
-    trim_start : int
+    start : int
         Number of frames to remove from the beginning. Default 0.
-    trim_end : int
+    end : int
         Number of frames to remove from the end. Default 0.
+    progress : bool
+        Display a progress bar
+    force : bool
+        If True, overwrite any existing file.
 
     Returns
     -------
     Path
         Path to the output video file.
     """
-    reader = VideoReader(video_path)
+    reader = VideoReader(str(video_path))
     input_path = Path(video_path)
 
     if output_path is None:
-        output_path_obj = input_path.parent / f"{input_path.stem}_cropped{input_path.suffix}"
+        output_path_obj = input_path.parent / f"{input_path.stem}_trimmed{input_path.suffix}"
+    elif output_path.is_dir() or output_path.suffix == "":
+        output_path_obj = output_path / f"{input_path.stem}_trimmed{input_path.suffix}"
     else:
-        output_path_obj = Path(output_path).expanduser()
-        if output_path_obj.is_dir() or not output_path_obj.suffix:
-            if not output_path_obj.exists():
-                output_path_obj.mkdir(parents=True, exist_ok=True)
-            output_path_obj = output_path_obj / f"{input_path.stem}_cropped{input_path.suffix}"
+        output_path_obj = output_path
 
     output_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
     total_frames = int(reader.cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = reader.cap.get(cv2.CAP_PROP_FPS)
 
-    if trim_start < 0:
-        raise ValueError(f"trim_start must be >= 0, got {trim_start}")
-    if trim_end < 0:
-        raise ValueError(f"trim_end must be >= 0, got {trim_end}")
-    if trim_start + trim_end >= total_frames:
+    if start < 0:
+        raise ValueError(f"start must be >= 0, got {start}")
+    if end < 0:
+        raise ValueError(f"end must be >= 0, got {end}")
+    if start + end >= total_frames:
         raise ValueError(
-            f"trim_start ({trim_start}) + trim_end ({trim_end}) "
-            f"must be < total_frames ({total_frames})"
+            f"start ({start}) + end ({end}) " f"must be < total_frames ({total_frames})"
         )
 
-    start_idx = trim_start
-    end_idx = total_frames - 1 - trim_end
-    expected_output_frames = end_idx - start_idx + 1
+    start_idx = start
+    end_idx = total_frames - end
+    expected_output_frames = end_idx - start_idx
     logger.info(
-        f"Cropping video: keeping frames {start_idx}-{end_idx} "
-        f"({expected_output_frames} frames, removing {trim_start} from start, {trim_end} from end)"
+        f"Trimming video: keeping frames {start_idx}-{end_idx-1} "
+        f"({expected_output_frames} frames, removing {start} from start, {end} from end)"
     )
 
-    writer = VideoWriter(path=output_path_obj, fps=fps)
+    writer = VideoWriter(path=output_path_obj, fps=fps, force=force)
+
+    if progress:
+        iterator = tqdm(reader.read_frames(), total=total_frames, desc="Cropping frames")
+    else:
+        iterator = reader.read_frames()
 
     frames_written = 0
     try:
-        frame_iter = tqdm(reader.read_frames(), total=total_frames, desc="Cropping frames")
-        for index, frame in frame_iter:
+        for index, frame in iterator:
             if index < start_idx:
                 continue
-            if index > end_idx:
+            if index >= end_idx:
                 break
-
-            if len(frame.shape) != 2:
-                raise ValueError(f"Frame {index} has shape {frame.shape}, expected 2D grayscale.")
 
             writer.write_frame(frame)
             frames_written += 1
@@ -880,72 +733,130 @@ def crop_run(
             f"but wrote {frames_written} frames"
         )
 
-    _crop_csv_metadata(
-        video_path,
-        output_path_obj,
-        csv_df=csv_df,
-        start_idx=start_idx,
-        end_idx=end_idx,
-    )
+    if csv_df is None and (input_csv_path := input_path.with_suffix(".csv")).exists():
+        csv_df = pd.read_csv(input_csv_path)
+    if csv_df is not None:
+        trimmed_indices = list(range(start)) + list(range(end_idx, total_frames + 1))
+        trimmed_df = _drop_frames_by_index(csv_df, trimmed_indices)
+        trimmed_df.to_csv(output_path_obj.with_suffix(".csv"), index=False)
+
+    input_scores_path = input_path.parent / (input_path.stem + "_scores.csv")
+    if input_scores_path.exists():
+        scores_df = pd.read_csv(input_scores_path)
+        trimmed_indices = list(range(start)) + list(range(end_idx, total_frames + 1))
+        trimmed_scores = _drop_frames_by_index(scores_df, trimmed_indices, index_column="index")
+        output_scores_path = output_path_obj.parent / (output_path_obj.stem + "_scores.csv")
+        trimmed_scores.to_csv(output_scores_path, index=False)
 
     return output_path_obj
 
 
-def _crop_csv_metadata(
-    input_video_path: str,
-    output_video_path: Path,
-    csv_df: Optional[pd.DataFrame] = None,
-    start_idx: int = 0,
-    end_idx: Optional[int] = None,
-) -> Optional[pd.DataFrame]:
+def remove_frames(
+    recording: Recording | Path,
+    remove_indices: list[int],
+    output_path: Path,
+    force: bool = False,
+    progress: bool = False,
+) -> Recording:
     """
-    Crop CSV metadata to match the cropped video by filtering to the kept
-    frame range and renumbering reconstructed_frame_index from 0.
+    Remove specific frames by index from a video.
 
     Parameters
     ----------
-    input_video_path : str
-        Path to the input video file.
-    output_video_path : Path
+    recording : Recording | Path
+        Recording object, or path to video.
+    remove_indices : list[int]
+        0-based frame indices to remove.
+    output_path : Optional[str], optional
         Path to the output video file.
-    csv_df : Optional[pd.DataFrame], optional
-        Pre-validated CSV DataFrame. If provided, uses this instead of
-        reading from disk.
-    start_idx : int
-        First frame index to keep (inclusive). Default 0.
-    end_idx : Optional[int]
-        Last frame index to keep (inclusive).
-        If None, uses the max index from the CSV.
+        If None, defaults to input path with "_removed" suffix.
+    force : bool
+        If True, overwrite any existing file. Default False.
+    progress : bool
+        If True, show a progress bar. Default False.
 
     Returns
     -------
-    Optional[pd.DataFrame]
-        The modified DataFrame, or None if CSV processing was skipped.
+    Recording
+        The video and generated metadata
     """
-    input_video_path_obj = Path(input_video_path)
-    input_csv_path = input_video_path_obj.with_suffix(".csv")
-    output_csv_path = output_video_path.with_suffix(".csv")
+    if not isinstance(recording, Recording):
+        recording = Recording.from_video(recording)
 
-    df = csv_df if csv_df is not None else pd.read_csv(input_csv_path)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    end_idx_val = df["reconstructed_frame_index"].max() if end_idx is None else end_idx
+    total_frames = int(recording.video.shape[0])
 
-    df_filtered = df[
-        (df["reconstructed_frame_index"] >= start_idx)
-        & (df["reconstructed_frame_index"] <= end_idx_val)
-    ].copy()
-    df_filtered["reconstructed_frame_index"] = df_filtered["reconstructed_frame_index"] - start_idx
+    removal_set = set(remove_indices)
 
-    logger.info(
-        f"Trimmed CSV to frames {start_idx}-{end_idx_val} "
-        f"and renumbered to start from 0 "
-        f"({len(df_filtered)} rows)."
+    invalid = [i for i in removal_set if i < 0 or i >= total_frames]
+    if invalid:
+        raise ValueError(f"Frame indices out of range [0, {total_frames - 1}]: {sorted(invalid)}")
+    if len(removal_set) >= total_frames:
+        raise ValueError(f"Cannot remove all {total_frames} frames")
+
+    writer = VideoWriter(
+        path=output_path, fps=int(recording.video.video.get(cv2.CAP_PROP_FPS)), force=force
     )
 
+    iterator = (i for i in range(total_frames) if i not in removal_set)
+    if progress:
+        iterator = tqdm(iterator, total=total_frames, desc="Removing frames")
+
     try:
-        df_filtered.to_csv(output_csv_path, index=False)
-        logger.info(f"Successfully modified CSV metadata at {output_csv_path}.")
-        return df_filtered
-    except Exception as e:
-        logger.error(f"Failed to write output CSV file {output_csv_path}: {e}")
-        raise
+        for idx in iterator:
+            frame = recording.video[idx]
+            writer.write_frame(frame)
+    finally:
+        writer.close()
+        if progress:
+            iterator.close()
+
+    if recording.metadata is not None:
+        filtered = _drop_frames_by_index(recording.metadata, removal_set)
+        filtered.to_csv(output_path.with_suffix(".csv"), index=False)
+
+    return Recording.from_video(output_path)
+
+
+def _drop_frames_by_index(
+    df: pd.DataFrame,
+    dropped_frame_indices: Collection[int],
+    index_column: str = "reconstructed_frame_index",
+) -> pd.DataFrame:
+    """
+    Drop rows whose ``index_column`` value is in the dropped frame indices,
+    and then recreate ``index_column`` monotonically increasing from 0.
+    """
+    filtered = df[~df[index_column].isin(dropped_frame_indices)].copy()
+    filtered[index_column] = filtered.groupby(index_column).ngroup()
+    return filtered
+
+
+def _make_frame_timestamp_csv(csv_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Export a frame-timestamp CSV file mapping reconstructed_frame_index to unix timestamps.
+
+    The CSV includes both the first and last buffer timestamps for each frame.
+
+    .. todo::
+
+        Find a better place for this! the metadata csv operations deserve their own place!
+
+    Parameters
+    ----------
+    csv_df : pd.DataFrame
+        The modified CSV DataFrame with reconstructed_frame_index and
+        buffer_recv_unix_time.
+    """
+    frame_timestamps = (
+        csv_df.groupby("reconstructed_frame_index")["buffer_recv_unix_time"]
+        .agg(["min", "max"])
+        .reset_index()
+    )
+
+    frame_timestamps.columns = ["frame", "timestamp_first", "timestamp_last"]
+
+    frame_timestamps = frame_timestamps.sort_values("frame")
+    return frame_timestamps
