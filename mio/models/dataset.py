@@ -63,8 +63,10 @@ from typing import Annotated as A
 from typing import Any, Literal, TypeAlias
 
 import pandas as pd
+from models.process import NoisePatchConfig
 from numpydantic import NDArraySchema
 from numpydantic.interface.video import VideoProxy
+from process.video import score_noise
 from pydantic import (
     ConfigDict,
     Discriminator,
@@ -107,6 +109,8 @@ class RecordingPaths(TypedDict):
     """{stem}.csv"""
     timestamps: Path
     """{stem}_timestamps.csv"""
+    noise: Path
+    """{stem}_noise.csv"""
     binary: Path
     """{stem}.bin"""
 
@@ -117,6 +121,7 @@ def paths_from_video(video: Path) -> RecordingPaths:
         video=video,
         metadata=video.with_suffix(".csv"),
         timestamps=video.with_name(video.stem + "_timestamps.csv"),
+        noise=video.with_name(video.stem + "_noise.csv"),
         binary=video.with_suffix(".bin"),
     )
 
@@ -138,6 +143,10 @@ class Recording(MiniscopeIOModel):
     When instantiating a recording, if a metadata file exists but timestamps do not,
     they are automatically generated. 
     """
+    noise: pd.DataFrame | None = None
+    """
+    Framewise noise measurements (created with :meth:`score_noise` ).
+    """
     binary: Path | None = None
     """Path to any raw binary version of the data in the video"""
     derived_from: RecordingDerivation | None = None
@@ -158,6 +167,24 @@ class Recording(MiniscopeIOModel):
             return StitchedRecording.from_video(path)
         else:
             return RawVideoRecording(name=path.stem, video=path)
+
+    def score_noise(
+        self, config: NoisePatchConfig, progress: bool = False, force: bool = False
+    ) -> pd.DataFrame:
+        """
+        Score the noise level in each frame with :func:`.score_noise`,
+        saving as a csv with `{name}_noise.csv`
+        """
+        if not force:
+            if self.noise is not None:
+                return self.noise
+            elif self.paths["noise"].exists():
+                self.noise = pd.read_csv(self.paths["noise"])
+                return self.noise
+
+        self.noise = score_noise(self, config, progress=progress)
+        self.noise.to_csv(self.paths["noise"], index=False)
+        return self.noise
 
     @model_validator(mode="before")
     @classmethod

@@ -10,8 +10,8 @@ import click
 from mio.logging import init_logger
 from mio.models.dataset import Recording
 from mio.models.process import DenoiseConfig
-from mio.process.stitch import stitch as run_stitch
 from mio.process.stitch import concat_recordings
+from mio.process.stitch import stitch as run_stitch
 from mio.process.video import denoise as run_denoise
 from mio.process.video import remove_frames as run_remove_frames
 from mio.process.video import trim as run_trim
@@ -212,10 +212,10 @@ def remove_frames(input: str, output: str | None, frames: str, force: bool = Fal
 @click.option(
     "-o",
     "--output",
-    type=click.Path(),
+    type=click.Path(dir_okay=False),
     default=None,
     help="Path to the output concatenated video file or directory. "
-    f"If not specified, saves to {DEFAULT_PROCESS_DIR}/ with '_combined' suffix.",
+    "If not specified, saves next to video with '_combined' suffix.",
 )
 @click.option(
     "--fps",
@@ -225,7 +225,7 @@ def remove_frames(input: str, output: str | None, frames: str, force: bool = Fal
 )
 def concat(
     directory: str,
-    output: Optional[str],
+    output: str | None,
     fps: int,
 ) -> None:
     """
@@ -243,8 +243,7 @@ def concat(
     def _natural_sort_key(path: Path) -> list:
         """Sort by splitting name into text and numeric parts for natural ordering."""
         return [
-            int(part) if part.isdigit() else part.lower()
-            for part in re.split(r"(\d+)", path.name)
+            int(part) if part.isdigit() else part.lower() for part in re.split(r"(\d+)", path.name)
         ]
 
     avi_files = sorted(dir_path.glob("*.avi"), key=_natural_sort_key)
@@ -285,9 +284,7 @@ def concat(
     for avi, csv in valid_pairs:
         click.echo(f"  {avi.name} -> {csv.name}")
 
-    recordings = [
-        RecordingData(video_path=avi, csv_path=csv) for avi, csv in valid_pairs
-    ]
+    recordings = [RecordingData(video_path=avi, csv_path=csv) for avi, csv in valid_pairs]
 
     first_input_path = valid_pairs[0][0]
     output_arg = output if output is not None else DEFAULT_PROCESS_DIR

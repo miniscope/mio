@@ -8,7 +8,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 from mio import init_logger
 from mio.io import VideoReader, VideoWriter
@@ -21,7 +21,11 @@ from mio.models.process import (
     NoisePatchConfig,
 )
 from mio.plots.video import VideoPlotter
-from mio.process.frame_helper import FrequencyMaskHelper, InvalidFrameDetector
+from mio.process.frame_helper import (
+    FrequencyMaskHelper,
+    InvalidFrameDetector,
+    make_detectors,
+)
 from mio.process.zstack_helper import ZStackHelper
 
 logger = init_logger("video")
@@ -604,6 +608,40 @@ def denoise(
         video_plotter.show()
 
     return output_video_path
+
+
+def score_noise(
+    recording: Recording, config: NoisePatchConfig, progress: bool = False
+) -> pd.DataFrame:
+    """
+    Score framewise noise from a recording,
+    yielding a dataframe with columns for each kind of noise
+
+    - reconstructed_frame_index: the index of the frame in the video
+    - gradient: the number of pixels that are part of noise patches,
+      as determined by the second row-wise derivative being above the configured threshold
+    - black_area: the number of pixels in contiguous black regions (and thus missing)
+    """
+
+    records = []
+    detectors = make_detectors(config)
+    n_frames = recording.video.n_frames
+    iterator = trange(n_frames) if progress else range(n_frames)
+
+    try:
+        for idx in iterator:
+            record = {"reconstructed_frame_index": idx}
+            frame = recording.video[idx]
+            for method, detector in detectors.items():
+                _, noise_mask = detector.find_invalid_area(frame)
+                record[method] = np.count_nonzero(noise_mask)
+            records.append(record)
+
+    finally:
+        if progress:
+            iterator.close()
+
+    return pd.DataFrame(records)
 
 
 def trim(

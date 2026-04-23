@@ -321,8 +321,7 @@ def concat_recordings(
         metadata_parts.append(df)
 
         logger.info(
-            f"Segment {i}: {rec.video.path.name} — "
-            f"{seg_frames} frames, rfi_offset={rfi_offset}"
+            f"Segment {i}: {rec.video.path.name} — " f"{seg_frames} frames, rfi_offset={rfi_offset}"
         )
         rfi_offset += max_rfi + 1
         total_frames += seg_frames
@@ -338,9 +337,7 @@ def concat_recordings(
     )
 
 
-def _build_timestamp_matches(
-    recordings, threshold_ms: float = 25.0
-) -> list[dict[int, int]]:
+def _build_timestamp_matches(recordings, threshold_ms: float = 25.0) -> list[dict[int, int]]:
     """
     Match frames across recordings by nearest unix timestamp.
 
