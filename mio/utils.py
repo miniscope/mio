@@ -49,6 +49,8 @@ def hash_video(
     Returns:
         str
     """
+    if not Path(path).exists():
+        raise FileNotFoundError("No such video exists!")
     h = hashlib.new(method)
 
     vid = cv2.VideoCapture(str(path))

@@ -165,4 +165,8 @@ user_data/*
 # The default output directory for the process commands. Not necessary but doesn't hurt to have.
 mio_process/*
 !user_data/.gitkeep
+tests/data/stitch/*_timestamps.csv
+tests/data/stitch/*_noise.csv
+tests/data/stitch/*_scores.csv
+tests/data/stitch/*_stitched*
 

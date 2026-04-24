@@ -6,12 +6,6 @@ noise_patch:
   method:
   - gradient
   - black_area
-  mean_error_config:
-    threshold: 40
-    device_config_id: wireless-200px
-    buffer_split: 8
-    comparison_unit: 1000
-    diff_multiply: 1
   gradient_config:
     threshold: 20
   black_area_config:
@@ -19,7 +13,6 @@ noise_patch:
     value_threshold: 0
   output_result: true
   output_noise_patch: true
-  output_diff: false
   output_noisy_frames: true
 frequency_masking:
   id: frequency_masking_example

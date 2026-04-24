@@ -9,10 +9,12 @@ import click
 from mio.logging import init_logger
 from mio.models.dataset import Recording
 from mio.models.process import DenoiseConfig
+from mio.process.stitch import concat_recordings
 from mio.process.stitch import stitch as run_stitch
 from mio.process.video import denoise as run_denoise
 from mio.process.video import remove_frames as run_remove_frames
 from mio.process.video import trim as run_trim
+from mio.types import ConfigSource
 
 logger = init_logger("mio.cli.process")
 
@@ -210,9 +212,52 @@ def remove_frames(input: str, output: str | None, frames: str, force: bool = Fal
 @click.option(
     "-o",
     "--output",
+    type=click.Path(dir_okay=False),
+    required=True,
+    help="Path to the output concatenated video file or directory. "
+    "If not specified, saves next to video with '_combined' suffix.",
+)
+def concat(
+    inputs: list[Path],
+    output: Path,
+) -> None:
+    """
+    Concatenate sequential recording segments from one DAQ into a single video.
+
+    Use this to combine multiple segment files (e.g. long-2.avi, long-3.avi, ...)
+    from the same DAQ before stitching across DAQs.
+    """
+    if len(inputs) < 2:
+        raise click.ClickException("Need at least 2 .avi files to concat")
+    recordings = [Recording.from_video(Path(p)) for p in inputs]
+    output = Path(output)
+
+    click.echo(f"Concatenating {len(recordings)} segments...")
+    concat_recordings(recordings=recordings, output_video_path=output, progress=True)
+
+
+@process.command()
+@click.option(
+    "-i",
+    "--inputs",
+    required=True,
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Paths to video files. Each requires a .csv with the same stem name.",
+)
+@click.option(
+    "-o",
+    "--output",
     type=click.Path(file_okay=False),
     default=None,
     help="Directory for output videos and metadata. If none provided, same as the inputs.",
+)
+@click.option(
+    "-c",
+    "--config",
+    default=None,
+    help="A config id or path for a DenoiseConfig used to score frames if no noise score exists."
+    "If not provided, default config is used.",
 )
 @click.option(
     "--debug-video",
@@ -228,7 +273,11 @@ def remove_frames(input: str, output: str | None, frames: str, force: bool = Fal
     help="Overwrite any existing files",
 )
 def stitch(
-    inputs: tuple, output: Path | None = None, debug_video: bool = False, force: bool = False
+    inputs: tuple,
+    output: Path | None = None,
+    config: ConfigSource | None = None,
+    debug_video: bool = False,
+    force: bool = False,
 ) -> None:
     """
     Stitch multiple video recordings into one by selecting the best frame
@@ -239,9 +288,20 @@ def stitch(
     if len(inputs) < 2:
         raise click.ClickException("At least 2 input videos are required for stitching.")
 
+    if config is not None:
+        denoise_config: DenoiseConfig = DenoiseConfig.from_any(config)
+        patch_config = denoise_config.noise_patch
+    else:
+        patch_config = None
+
     recordings = [Recording.from_video(Path(p)) for p in inputs]
     stitched = run_stitch(
-        recordings, debug_video=debug_video, output_dir=output, progress=True, force=force
+        recordings,
+        debug_video=debug_video,
+        noise_config=patch_config,
+        output_dir=output,
+        progress=True,
+        force=force,
     )
     click.echo(f"Stitched videos to {stitched.video.path}")
 
@@ -309,13 +369,21 @@ def workflow(
         output_dir = Path(output).expanduser()
         output_dir.mkdir(parents=True, exist_ok=True)
 
+    denoise_config_parsed = DenoiseConfig.from_any(denoise_config)
+
     if len(inputs) == 1:
         click.echo("Only one input video provided, skipping stitching")
         stitched_video = inputs[0]
     else:
         click.echo("Stitching videos...")
         recordings = [Recording.from_video(p) for p in inputs]
-        stitched = run_stitch(recordings, output_dir=output_dir, progress=True, force=force)
+        stitched = run_stitch(
+            recordings,
+            output_dir=output_dir,
+            noise_config=denoise_config_parsed,
+            progress=True,
+            force=force,
+        )
         stitched_video = stitched.video.path
 
     if trim_start == 0 and trim_end == 0:
@@ -331,7 +399,6 @@ def workflow(
     if trimmed.metadata is None:
         raise FileNotFoundError(f"No metadata csv found for video {trimmed_video}")
 
-    denoise_config_parsed = DenoiseConfig.from_any(denoise_config)
     final_video = run_denoise(
         trimmed_video,
         denoise_config_parsed,

@@ -2,6 +2,9 @@
 This module contains a helper class for frame operations.
 """
 
+from __future__ import annotations
+
+import sys
 from abc import abstractmethod
 
 import cv2
@@ -12,11 +15,35 @@ from mio.models.process import (
     BlackAreaDetectorConfig,
     FrequencyMaskingConfig,
     GradientDetectorConfig,
-    MSEDetectorConfig,
     NoisePatchConfig,
 )
 
+if sys.version_info < (3, 11):
+    from typing_extensions import TypedDict
+else:
+    from typing import TypedDict
+
 logger = init_logger("frame_helper")
+
+
+class Detectors(TypedDict, total=False):
+    """Map between shortnames and detector class instances"""
+
+    black_area: BlackAreaDetector
+    gradient: GradientNoiseDetector
+
+
+def make_detectors(config: NoisePatchConfig) -> Detectors:
+    """Make detector classes from a config"""
+    detectors = {}
+    for method in config.method:
+        if method == "gradient":
+            detectors[method] = GradientNoiseDetector(config.gradient_config)
+        elif method == "black_area":
+            detectors[method] = BlackAreaDetector(config.black_area_config)
+        else:
+            raise ValueError(f"Unknown method {method}")
+    return detectors
 
 
 class BaseSingleFrameHelper:
@@ -78,19 +105,7 @@ class InvalidFrameDetector(BaseSingleFrameHelper):
         if noise_patch_config.method is None:
             raise ValueError("No noise detection methods provided")
         self.methods = noise_patch_config.method
-
-        if "mean_error" in self.methods:
-            if noise_patch_config.mean_error_config is None:
-                raise ValueError("Mean error config must be provided for mean error detection")
-            self.mse_detector = MSENoiseDetector(noise_patch_config.mean_error_config)
-        if "gradient" in self.methods:
-            if noise_patch_config.gradient_config is None:
-                raise ValueError("Gradient config must be provided for gradient detection")
-            self.gradient_detector = GradientNoiseDetector(noise_patch_config.gradient_config)
-        if "black_area" in self.methods:
-            if noise_patch_config.black_area_config is None:
-                raise ValueError("Black area config must be provided for black area detection")
-            self.black_detector = BlackAreaDetector(noise_patch_config.black_area_config)
+        self.detectors = make_detectors(noise_patch_config)
 
     def find_invalid_area(self, frame: np.ndarray) -> tuple[bool, np.ndarray]:
         """
@@ -104,19 +119,8 @@ class InvalidFrameDetector(BaseSingleFrameHelper):
         """
         noisy_flag = False
         combined_noisy_area = np.zeros_like(frame, dtype=np.uint8)
-
-        if "mean_error" in self.methods:
-            noisy, noisy_area = self.mse_detector.find_invalid_area(frame)
-            combined_noisy_area = np.maximum(combined_noisy_area, noisy_area)
-            noisy_flag = noisy_flag or noisy
-
-        if "gradient" in self.methods:
-            noisy, noisy_area = self.gradient_detector.find_invalid_area(frame)
-            combined_noisy_area = np.maximum(combined_noisy_area, noisy_area)
-            noisy_flag = noisy_flag or noisy
-
-        if "black_area" in self.methods:
-            noisy, noisy_area = self.black_detector.find_invalid_area(frame)
+        for detector in self.detectors.values():
+            noisy, noisy_area = detector.find_invalid_area(frame)
             combined_noisy_area = np.maximum(combined_noisy_area, noisy_area)
             noisy_flag = noisy_flag or noisy
 
@@ -214,130 +218,36 @@ class BlackAreaDetector(BaseSingleFrameHelper):
         current_frame: np.ndarray,
     ) -> tuple[bool, np.ndarray]:
         """
-        Detect black-out noise by checking for black pixels (value 0) over rows of pixels.
+        Detect black-out noise by checking for consecutive black pixels per row.
+
+        Uses vectorized numpy (cumulative sum sliding window) instead of
+        pixel-by-pixel Python loops for ~100x speedup.
 
         Returns:
             Tuple[bool, np.ndarray]: A boolean indicating if the frame is corrupted and noise mask.
         """
-        height, width = current_frame.shape
+        consecutive_threshold = self.config.consecutive_threshold
+        black_pixel_value_threshold = self.config.value_threshold
+
+        # Boolean mask of "black" pixels, then cumsum-based sliding window
+        black_mask = (current_frame <= black_pixel_value_threshold).astype(np.float32)
+        cs = np.cumsum(black_mask, axis=1)
+
+        if current_frame.shape[1] >= consecutive_threshold:
+            # Sliding window: sum of `consecutive_threshold` consecutive pixels
+            run_sum = cs[:, consecutive_threshold:] - cs[:, :-consecutive_threshold]
+            # A row has a run if any window sums to exactly consecutive_threshold
+            # (meaning all pixels in that window were black)
+            row_has_run = np.any(run_sum >= consecutive_threshold, axis=1)
+        else:
+            row_has_run = np.zeros(current_frame.shape[0], dtype=bool)
+
         noisy_mask = np.zeros_like(current_frame, dtype=np.uint8)
+        noisy_mask[row_has_run, :] = 1
 
-        # Read values from YAML config
-        consecutive_threshold = (
-            self.config.consecutive_threshold
-        )  # How many consecutive pixels must be black
-        black_pixel_value_threshold = (
-            self.config.value_threshold
-        )  # Max pixel value considered "black"
-
-        logger.debug(f"Using black pixel threshold: <= {black_pixel_value_threshold}")
-        logger.debug(f"Consecutive black pixel threshold: {consecutive_threshold}")
-
-        frame_is_noisy = False  # Track if frame should be discarded
-
-        for y in range(height):
-            row = current_frame[y, :]  # Extract row
-            consecutive_count = 0  # Counter for consecutive black pixels
-
-            for x in range(width):
-                if row[x] <= black_pixel_value_threshold:  # Check if pixel is "black"
-                    consecutive_count += 1
-                else:
-                    consecutive_count = 0  # Reset if a non-black pixel is found
-
-                # If we exceed the allowed threshold of consecutive black pixels, discard the frame
-                if consecutive_count >= consecutive_threshold:
-                    logger.debug(
-                        f"Frame noisy due to {consecutive_count} consecutive black pixels "
-                        f"in row {y}."
-                    )
-                    noisy_mask[y, :] = 1  # Mark row as noisy
-                    frame_is_noisy = True
-                    break  # No need to check further in this row
-
+        noisy_row_count = int(np.sum(row_has_run))
+        frame_is_noisy = noisy_row_count >= self.config.min_rows
         return frame_is_noisy, noisy_mask
-
-
-class MSENoiseDetector(BaseSingleFrameHelper):
-    """
-    Helper class for mean squared error noise detection.
-    """
-
-    def __init__(self, config: MSEDetectorConfig):
-        """
-        Initialize the MeanErrorNoiseDetectionHelper object.
-
-        Parameters:
-            threshold (float): The threshold for noise detection.
-
-        Returns:
-            MeanErrorNoiseDetectionHelper: A MeanErrorNoiseDetectionHelper object.
-        """
-        self.config = config
-        self.previous_frame = None
-
-    def register_previous_frame(self, previous_frame: np.ndarray) -> None:
-        """
-        Register the previous frame for mean error calculation.
-
-        Parameters:
-            previous_frame (np.ndarray): The previous frame to compare against.
-        """
-        self.previous_frame = previous_frame
-
-    def find_invalid_area(self, frame: np.ndarray) -> tuple[bool, np.ndarray]:
-        """
-        Process a single frame and verify if it is valid.
-
-        Parameters:
-            frame (np.ndarray): The frame to process.
-
-        Returns:
-            Tuple[bool, np.ndarray]: A boolean indicating if the frame is valid
-            and the processed frame.
-        """
-        if self.previous_frame is None:
-            self.previous_frame = frame
-            return False, np.zeros_like(frame, dtype=np.uint8)
-        noisy, mask = self._detect_with_mean_error(frame)
-        return noisy, mask
-
-    def _detect_with_mean_error(self, current_frame: np.ndarray) -> tuple[bool, np.ndarray]:
-        """
-        Detect noise using mean error between current and previous frames.
-
-        Returns:
-            Tuple[bool, np.ndarray]: A boolean indicating if the frame is noisy and the noise mask.
-        """
-        if self.previous_frame is None:
-            return False, np.zeros_like(current_frame, dtype=np.uint8)
-
-        current_flat = current_frame.astype(np.int16).flatten()
-        previous_flat = self.previous_frame.astype(np.int16).flatten()
-
-        buffer_indices = FrameSplitter.get_buffer_shape(
-            current_frame.shape[1], current_frame.shape[0], self.config.device_config.px_per_buffer
-        ) + [
-            current_frame.size
-        ]  # Ensure final boundary is included
-
-        noisy_mask = np.ones_like(current_flat, dtype=np.uint8)
-        has_noise = False
-
-        for start_idx, end_idx in zip(buffer_indices[:-1], buffer_indices[1:]):
-            for sub_start in range(
-                end_idx - self.config.buffer_split, start_idx, -self.config.buffer_split
-            ):
-                mean_error = np.mean(
-                    np.abs(current_flat[sub_start:end_idx] - previous_flat[sub_start:end_idx])
-                )
-
-                if mean_error > self.config.threshold:
-                    noisy_mask[sub_start:end_idx] = 0
-                    has_noise = True
-                    break
-
-        return has_noise, noisy_mask.reshape(current_frame.shape)
 
 
 class FrequencyMaskHelper(BaseSingleFrameHelper):

@@ -1,8 +1,8 @@
 # Changelog
 
-## Upcoming
+## 0.10
 
-### *.*
+### 0.10.0
 
 #### CLI
 
@@ -12,10 +12,31 @@
   - `mio config open` to open the config in default text editor
 - [`#154`](https://github.com/miniscope/mio/pull/154) - add cli command for removing frames from video:
   - `mio process remove_frames` to remove frames by explicitly specified index from videos and metadata
+- [`#155`](https://github.com/miniscope/mio/pull/155) - `mio process concat` - concatenate videos and metadata
 
 #### CI/CD
 
 - [`#157`](https://github.com/miniscope/mio/pull/157) - Add continuous deployment to PyPI 
+
+#### New features
+
+- [`#133`](https://github.com/miniscope/mio/pull/133) - {class}`~mio.models.dataset.Dataset` 
+  organization - group recordings with their metadata, and group multiple recordings collected at the same time.
+- [`#133`](https://github.com/miniscope/mio/pull/133), [`#155`](https://github.com/miniscope/mio/pull/155)
+  Noise-aware stitching: Given two recordings of the same data stream,
+  create a stitched version that picks the best frames from each of them
+- [`#133`](https://github.com/miniscope/mio/pull/133), [`#155`](https://github.com/miniscope/mio/pull/155)
+  Alignment Maps - within a dataset, create an alignment map to align frames between recordings,
+  either by `frame_num` or by timestamps.
+- preserve noise scoring metadata in `_scores.csv` and use to pick frames during stitching
+  
+#### Perf
+
+- [`#155`](https://github.com/miniscope/mio/pull/155) - Vectorized black area detection
+
+#### Removed
+
+- [`#155`](https://github.com/miniscope/mio/pull/155) - Inter-frame mean squared error noise detection, unused.
 
 ## 0.9
 
