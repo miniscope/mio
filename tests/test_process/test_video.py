@@ -45,6 +45,7 @@ def test_noise_patch_processor(video_frame, tmp_path):
     assert processor.name == "denoise_example"
     assert processor.output_enable
 
+
 def test_noise_patch_processor_no_methods(random_8bit_video_frame, tmp_path):
     denoise_config = DenoiseConfig.from_id("denoise_example")
     denoise_config.noise_patch.enable = True
