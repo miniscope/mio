@@ -376,7 +376,9 @@ def test_stitch_with_timestamps(stitch_result, tmp_path):
     )
 
     result = stitch(list(recordings.values()), debug_video=True, output_dir=tmp_path)
-    assert (result.scores["selected_video"] == stitch_result.scores["selected_video"]).all()
+    # we should have an inner join on the frames - so only those without a comparison frame
+    expected = stitch_result.scores[~stitch_result.scores["compare_video"].isna()]
+    assert np.array_equal(result.scores["selected_video"], expected["selected_video"])
 
 
 @pytest.mark.parametrize(
@@ -405,3 +407,8 @@ def test_has_discontinuous_runs(series, expected):
     """
     series = pd.Series(series)
     assert _has_discontinuous_runs(series) == expected
+
+
+def test_test_data_is_considered_continuous(recordings):
+    """Just testing the assumptions of the tests ios all"""
+    assert not any(_has_discontinuous_runs(r.metadata["frame_num"]) for r in recordings.values())

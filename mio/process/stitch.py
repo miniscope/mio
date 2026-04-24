@@ -469,15 +469,18 @@ def _has_discontinuous_runs(series: pd.Series) -> bool:
     """
     # we need the initial NaN for alignment below, so don't drop it yet -
     # filtering NaNs is presumably cheaper than diffing
-    diff = series.diff()
+    diff = series.diff().fillna(0)
     # fast "no" if the whole series is continuous
-    if (diff.dropna() <= 1).all() and (diff.dropna() >= 0).all():
+    if (diff <= 1).all() and (diff >= 0).all():
         return False
 
     # filter to ignore singleton blips
     # e.g. frame_num breaks in one buffer,
     # find numbers that don't return to the prior number or number + 1 in the subsequent rows
-    blips = np.logical_or(diff == diff.shift(-1) * -1, diff == (diff.shift(-1) - 1) * -1)
+    blips = np.logical_and(
+        ~diff.between(0, 1),
+        np.logical_or(diff == diff.shift(-1) * -1, diff == (diff.shift(-1) - 1) * -1),
+    )
 
     # now check if there are any longer lasting discontinuities
     diff = series[~blips].diff().dropna()
