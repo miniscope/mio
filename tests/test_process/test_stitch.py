@@ -26,7 +26,7 @@ from mio.utils import hash_video
 
 STITCH_DATA_DIR = Path(__file__).parent.parent / "data" / "stitch"
 
-EXPECTED_STITCHED_VIDEO_HASH = "c8cdf3149f812ae25e6f3f1a876249e4ce118e9a53aa1805e48b995b01f07a91"
+EXPECTED_STITCHED_VIDEO_HASH = "df937c8651cf142b4d8e2a75140729dcacdc1151ebc3767b48d0ca71578007ff"
 EXPECTED_DEBUG_VIDEO_HASH = (
     "856e6e5c538532bd0fcfb942616686a5cd262aadb51dd8796adf5de69215c94b",
     "a69b6cadf4ab1dd8a1097d2c1be298397206db235fd4c5f68febd1700f15a4b6",
@@ -120,8 +120,10 @@ def test_score_csv_edge_scoring_tiebreaker(stitch_result: StitchedRecording):
     df = stitch_result.scores
     # filter frames where only one video or the other had them
     df = df[~df["compare_video"].isna()]
-    # there should be four frames that could be decided on metadata alone
-    assert len(df[df["selected_edge_score"].isna()]) == 4
+    # there should be 7 frames that could be decided on metadata alone
+    # - 4x on buffer count
+    # - 3x on black pixels
+    assert len(df[df["selected_edge_score"].isna()]) == 7
     # for all those that had to use edge scores, the selected should be greater or equal
     edges_scored = df[~df["selected_edge_score"].isna()]
     for _, row in edges_scored.iterrows():

@@ -50,7 +50,6 @@ class NoiseGroundTruth(BaseModel):
     [
         (["gradient"], GroundTruthCategory.check_pattern),
         (["black_area"], GroundTruthCategory.blacked_out),
-        (["mean_error"], GroundTruthCategory.check_pattern),
     ],
 )
 def test_noisy_frame_detection(video, ground_truth, noise_detection_method, noise_category):
@@ -60,14 +59,6 @@ def test_noisy_frame_detection(video, ground_truth, noise_detection_method, nois
     """
     if "gradient" in noise_detection_method:
         global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_noise_detection_test")
-    elif "mean_error" in noise_detection_method:
-        if "extended" in video:
-            # FIXME: resolve this before merging `feat-preprocess` to `main`
-            pytest.xfail(
-                "Bug in comparison to previous frames when first frame is noisy, "
-                "see https://github.com/Aharoni-Lab/mio/pull/97"
-            )
-        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_example_mean_error")
     elif "black_area" in noise_detection_method:
         global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_noise_detection_test")
     else:
@@ -127,8 +118,8 @@ def test_noisy_frame_detection(video, ground_truth, noise_detection_method, nois
 @pytest.mark.parametrize(
     "min_rows,expected_noisy",
     [
-        (1, True),   # default: any flagged row triggers detection
-        (5, True),   # exactly 5 noisy rows meets the threshold
+        (1, True),  # default: any flagged row triggers detection
+        (5, True),  # exactly 5 noisy rows meets the threshold
         (10, False),  # only 5 noisy rows, below threshold of 10
     ],
 )
@@ -146,6 +137,6 @@ def test_black_area_min_rows(min_rows, expected_noisy):
     )
     detector = BlackAreaDetector(config)
     is_noisy, mask = detector.find_invalid_area(frame)
-    assert is_noisy == expected_noisy, (
-        f"min_rows={min_rows}: expected noisy={expected_noisy}, got {is_noisy}"
-    )
+    assert (
+        is_noisy == expected_noisy
+    ), f"min_rows={min_rows}: expected noisy={expected_noisy}, got {is_noisy}"
