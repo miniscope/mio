@@ -31,24 +31,43 @@ def align(recordings: list[Recording]) -> pd.DataFrame:
     """
     Create an alignment map by frame index.
 
-    Note that this **does not** align by timestamp!
-    it assumes that there is some ``frame_num`` in the metadata col for each of the recordings
-    that comes from some common device.
+    Note that this **is not** a general alignment method yet -
+    this is specialized to the case of stitching two recordings of the same underlying data source,
+    as is done when we record multiple FPGA sensors in the miniscope zero.
+    Please raise an issue if you need a general frame alignment mechanisms.
+
+    We have two kinds of alignment, depending on the structure of the metadata:
+
+    * If all the recordings have continuously incrementing `frame_num`s,
+      we align by the ``frame_num``.
+      The `frame_num` is given by the device, and is the same across recordings,
+      even if they start at different times (and capture different ranges of frame nums).
+      This is an **outer join**, keeping all frames
+    * If the recordings have *discontinuous* ``frame_num`` s,
+      e.g. if the device was restarted during acquisition, we align by the acquisition timestamp.
+      This assumes that the system times are closely matching
+      (specifically, more closely than the interval between successive frames in the recording).
+      This is an **inner join**, where we only keep frames where we can align timestamps.
     """
-    metadatas: dict[str, pd.DataFrame] = {r.name: r.metadata for r in recordings}
-    if not all(isinstance(m, pd.DataFrame) for m in metadatas.values()):
+    if not all(isinstance(r.metadata, pd.DataFrame) for r in recordings):
         raise ValueError("All recordings must have metadata csvs to align them")
     if not all(
-        "frame_num" in m.columns and "reconstructed_frame_index" in m.columns
-        for m in metadatas.values()
+        "frame_num" in r.metadata.columns and "reconstructed_frame_index" in r.metadata.columns
+        for r in recordings
     ):
         raise ValueError("All recordings must have frame_num and reconstructed_frame_index columns")
 
-    # find the full set of frames in all the recordings
-    frame_set = set()
-    for m in metadatas.values():
-        frame_set |= set(m["frame_num"])
+    if not any(_has_discontinuous_runs(r.metadata["frame_num"]) for r in recordings):
+        logger.debug("Using frame-num based alignment")
+        return _align_by_frame(recordings)
+    else:
+        logger.debug("Using time-based alignment")
+        return _align_by_time(recordings)
 
+
+def _align_by_frame(recordings: list[Recording]) -> pd.DataFrame:
+    """Align metadata by the frame_num column"""
+    metadatas: dict[str, pd.DataFrame] = {r.name: r.metadata for r in recordings}
     # aggregate mappings from frame nums to the reconstructed frame index
     frame_maps = {
         name: df[["frame_num", "reconstructed_frame_index"]]
@@ -71,6 +90,59 @@ def align(recordings: list[Recording]) -> pd.DataFrame:
     aligned = aligned.astype("Int64")
     # popping the index twice first makes `frame_num` into a column, then an `index` column
     aligned = aligned.reset_index().reset_index()
+    return aligned
+
+
+def _align_by_time(recordings: list[Recording]) -> pd.DataFrame:
+    """
+    Align by the nearest unix timestamp.
+
+    Use the mean of the timestamps from the buffers to get frames that have the most overlap.
+
+    This could be made an outer join by just keeping the leading and trailing rows,
+    and filtering rows with NaNs in the interior regions of buffer_recv_unix_time_x and y
+    but leaving as inner for now to match existing timestamp match fn.
+
+    the inner join functions like "when both frames mutually pick each other as their closest frame"
+    which filters blippy frames that are very short.
+
+    I **think** but have not tested that doing this triple merge method is faster
+    than nested iteration, esp for longer recordings, since these are all vector ops.
+    """
+    metadatas: dict[str, pd.DataFrame] = {r.name: r.metadata for r in recordings}
+    time_maps = {
+        name: df.groupby("reconstructed_frame_index")["buffer_recv_unix_time"].mean().reset_index()
+        for name, df in metadatas.items()
+    }
+
+    # inner join on closest mean timestamp value
+    names = sorted(time_maps.keys())
+    last_name = names.pop(0)
+    aligned = time_maps[last_name].copy().rename(columns={"reconstructed_frame_index": last_name})
+    for name in names:
+        # merge left and right, then take the inner match
+        left = pd.merge_asof(
+            aligned, time_maps[name], on="buffer_recv_unix_time", direction="nearest"
+        )
+        right = pd.merge_asof(
+            time_maps[name], aligned, on="buffer_recv_unix_time", direction="nearest"
+        )
+        left.rename(columns={"reconstructed_frame_index": name}, inplace=True)
+        right.rename(columns={"reconstructed_frame_index": name}, inplace=True)
+
+        # merge on the frame indexes from the left and right -
+        # align when both sides agree they are the closest,
+        # dropping extras from glitches/sampling rate differences
+        aligned = pd.merge(left, right, "inner", on=[last_name, name])
+
+        # keep the left's times, keeping them anchored rather than wandering in each recording
+        aligned = aligned[[c for c in aligned.columns if c != "buffer_recv_unix_time_y"]]
+        aligned.rename(columns={"buffer_recv_unix_time_x": "buffer_recv_unix_time"}, inplace=True)
+        last_name = name
+
+    aligned = aligned.astype({k: "Int64" for k in metadatas})
+    # popping the index gives us the 'index' column
+    aligned = aligned.reset_index()
     return aligned
 
 
@@ -171,7 +243,7 @@ def stitch(
                         metadata_rows=buffer_rows,
                     )
                 )
-            result = _select_best_candidate(candidates, row["index"], row["frame_num"])
+            result = _select_best_candidate(candidates, row["index"], row.get("frame_num"))
             selected = [c for c in candidates if c.recording.name == result.selected_video][0]
             if debug_video_writer is not None:
                 debug_frame = np.zeros_like(frames[0], dtype=np.uint8)
@@ -240,7 +312,7 @@ class StitchRecord(BaseModel):
     """
 
     index: int
-    frame_num: int
+    frame_num: int | None = None
     selected_video: str
     compare_video: str | None = None
     selected_num_buffers: int
@@ -261,7 +333,7 @@ class StitchRecord(BaseModel):
 
 
 def _select_best_candidate(
-    candidates: list[CandidateFrame], index: int, frame_num: int
+    candidates: list[CandidateFrame], index: int, frame_num: int | None = None
 ) -> StitchRecord:
     """
     Pick the best candidate using metadata scoring with edge-score tiebreak.
@@ -388,54 +460,25 @@ def concat_recordings(
     return Recording.from_video(output_video_path)
 
 
-def _build_timestamp_matches(
-    recordings: list[Recording], threshold_ms: float = 25.0
-) -> list[dict[int, int]]:
+def _has_discontinuous_runs(series: pd.Series) -> bool:
     """
-    Match frames across recordings by nearest unix timestamp.
+    Check if a metadata series has multiple discontinuous series of values:
+    e.g. when acquiring frames and the counter is reset.
 
-    For each recording, compute per-frame timestamp as the max
-    buffer_recv_unix_time for each reconstructed_frame_index.
-
-    Uses recording[0] as the reference. For each frame in ref,
-    find nearest frame in each other recording within threshold.
-
-    Returns list of dicts: [{rec_idx: reconstructed_frame_index, ...}, ...]
-    One entry per matched frame set, ordered by ref recording's frame order.
+    Ignores single-row discontinuities like e.g. from a single buffer having an incorrect frame_num
     """
-    threshold_s = threshold_ms / 1000.0
+    # we need the initial NaN for alignment below, so don't drop it yet -
+    # filtering NaNs is presumably cheaper than diffing
+    diff = series.diff()
+    # fast "no" if the whole series is continuous
+    if (diff.dropna() <= 1).all() and (diff.dropna() >= 0).all():
+        return False
 
-    # Build per-frame timestamp arrays for each recording
-    per_rec_timestamps: list[tuple[np.ndarray, np.ndarray]] = []
-    for rec in recordings:
-        df = rec.metadata
-        grouped = df.groupby("reconstructed_frame_index")["buffer_recv_unix_time"].max()
-        frame_indices = grouped.index.values
-        timestamps = grouped.values
-        sort_order = np.argsort(timestamps)
-        per_rec_timestamps.append((frame_indices[sort_order], timestamps[sort_order]))
+    # filter to ignore singleton blips
+    # e.g. frame_num breaks in one buffer,
+    # find numbers that don't return to the prior number or number + 1 in the subsequent rows
+    blips = np.logical_or(diff == diff.shift(-1) * -1, diff == (diff.shift(-1) - 1) * -1)
 
-    ref_indices, ref_timestamps = per_rec_timestamps[0]
-    matches: list[dict[int, int]] = []
-
-    for ref_idx, ref_ts in zip(ref_indices, ref_timestamps):
-        match: dict[int, int] = {0: int(ref_idx)}
-        for rec_num in range(1, len(recordings)):
-            other_indices, other_timestamps = per_rec_timestamps[rec_num]
-            pos = np.searchsorted(other_timestamps, ref_ts)
-
-            best_dist = float("inf")
-            best_idx = -1
-            for candidate_pos in [pos - 1, pos]:
-                if 0 <= candidate_pos < len(other_timestamps):
-                    dist = abs(other_timestamps[candidate_pos] - ref_ts)
-                    if dist < best_dist:
-                        best_dist = dist
-                        best_idx = int(other_indices[candidate_pos])
-
-            if best_dist <= threshold_s:
-                match[rec_num] = best_idx
-
-        if len(match) > 1:
-            matches.append(match)
-    return matches
+    # now check if there are any longer lasting discontinuities
+    diff = series[~blips].diff().dropna()
+    return bool((~diff.between(0, 1)).any())
