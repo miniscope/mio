@@ -9,16 +9,16 @@ from pathlib import Path
 import click
 
 from mio.cli.common import ConfigIDOrPath
+from mio.devices.stream import StreamDevice
 from mio.models.process import FrequencyMaskingConfig
 from mio.models.stream import StreamDevConfig
 from mio.ntp import prompt_ntp_sync
-from mio.stream_daq import StreamDaq
 
 
 @click.group()
 def stream() -> None:
     """
-    Command group for StreamDaq
+    Command group for StreamDevice
     """
     pass
 
@@ -51,7 +51,7 @@ def _capture_options(fn: Callable) -> Callable:
         "-ok",
         "--output-kwarg",
         "okwarg",
-        help="Output kwargs (passed to StreamDaq.init_video). \n"
+        help="Output kwargs (passed to StreamDevice.init_video). \n"
         "passed as (potentially multiple) calls like\n\n"
         "mio stream capture -ok key1 val1 -ok key2 val2",
         multiple=True,
@@ -91,7 +91,7 @@ def capture(
     **kwargs: dict,
 ) -> None:
     """
-    Capture video from a StreamDaq device, optionally saving as an encoded video or as raw binary
+    Capture video from a StreamDevice device, optionally saving as an encoded video or as raw binary
     """
 
     # Rather don't like getting config here, but I want to do ntp check in the CLI so it's here.
@@ -101,7 +101,7 @@ def capture(
             config.runtime.ntp_server, max_offset_seconds=config.runtime.ntp_max_offset_seconds
         )
 
-    daq_inst = StreamDaq(device_config=device_config)
+    daq_inst = StreamDevice(device_config=device_config)
     okwargs = dict(okwarg)
 
     if output:
@@ -148,7 +148,7 @@ def capture(
 @click.pass_context
 def test(ctx: click.Context, source: Path, profile: bool, **kwargs: dict) -> None:
     """
-    Run StreamDaq in testing mode, using the okDevMock rather than the actual device
+    Run StreamDevice in testing mode, using the okDevMock rather than the actual device
     """
     if profile:
         raise NotImplementedError("Profiling mode is not implemented")

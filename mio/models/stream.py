@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import Field, computed_field, field_validator
 
-from mio.const import DEVICE_DIR
+from mio.const import INTERFACES_DIR
 from mio.models import MiniscopeConfig
 from mio.models.buffer import BufferHeader, BufferHeaderFormat
 from mio.models.mixins import ConfigYAMLMixin
@@ -106,7 +106,7 @@ class RuntimeMetadata(MiniscopeConfig):
 class StreamBufferHeaderFormat(BufferHeaderFormat):
     """
     Refinements of :class:`~mio.models.buffer.BufferHeaderFormat` for
-    :class:`~mio.stream_daq.StreamDaq`
+    :class:`~mio.devices.stream.StreamDevice`
 
     Parameters
     ----------
@@ -128,7 +128,7 @@ class StreamBufferHeaderFormat(BufferHeaderFormat):
 class StreamBufferHeader(BufferHeader):
     """
     Refinements of :class:`.BufferHeader` for
-    :class:`~mio.stream_daq.StreamDaq`
+    :class:`~mio.devices.stream.StreamDevice`
     """
 
     pixel_count: int
@@ -242,7 +242,7 @@ class StreamBufferHeader(BufferHeader):
 
 class StreamDevRuntime(MiniscopeConfig):
     """
-    Runtime configuration for :class:`.StreamDaq`
+    Runtime configuration for :class:`.StreamDevice`
 
     Included within :class:`.StreamDevConfig` to separate config that is not
     unique to the device, but how that device is controlled at runtime.
@@ -419,7 +419,7 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
         the device path
         """
         if not value.is_absolute():
-            value = DEVICE_DIR / value
+            value = INTERFACES_DIR / value
         return value
 
     @field_validator("bitstream", mode="after")

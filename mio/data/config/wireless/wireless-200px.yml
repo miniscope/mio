@@ -15,7 +15,7 @@ baudrate: null
 # Preamble for each data buffer.
 preamble: 0x12345678
 
-# Image format. StreamDaq will calculate buffer size, etc. based on these parameters
+# Image format. StreamDevice will calculate buffer size, etc. based on these parameters
 frame_width: 200
 frame_height: 200
 pix_depth: 8

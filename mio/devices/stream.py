@@ -18,8 +18,9 @@ from bitstring import BitArray, Bits
 
 from mio import init_logger
 from mio.bit_operation import BufferFormatter
-from mio.devices.mocks import okDevMock
+from mio.devices.base import Device
 from mio.exceptions import EndOfRecordingException, StreamReadError
+from mio.interfaces.mocks import okDevMock
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.models.process import FrequencyMaskingConfig
 from mio.models.stream import (
@@ -38,7 +39,7 @@ BIT_PER_WORD = 32
 okDev = None  # Set if OpalKelly driver is available
 
 try:
-    from mio.devices.opalkelly import okDev
+    from mio.interfaces.opalkelly import okDev
 
     HAVE_OK = True
 except (ImportError, ModuleNotFoundError):
@@ -58,7 +59,7 @@ def exact_iter(f: Callable, sentinel: Any) -> Generator[Any, None, None]:
             yield val
 
 
-class StreamDaq:
+class StreamDevice(Device):
     """
     A combined class for configuring and reading frames from a UART and FPGA source.
     Supported devices and required inputs are described in StreamDevConfig model documentation.
@@ -70,7 +71,7 @@ class StreamDaq:
     --------
     $ mio stream capture -c path/to/config.yml -o output_filename.avi
     Connected to XEM7310-A75
-    Succesfully uploaded /mio/mio/devices/selected_bitfile.bit
+    Succesfully uploaded /mio/mio/interfaces/selected_bitfile.bit
     FrontPanel is supported
 
     .. todo::
@@ -244,13 +245,13 @@ class StreamDaq:
         if read_length is None:
             read_length = int(max(self.buffer_npix) * self.config.pix_depth / 8 / 16) * 16
 
-        # set up fpga devices
+        # set up fpga interfaces
         BIT_FILE = self.config.bitstream
         if not BIT_FILE.exists():
             serial_buffer_queue.put(None)
             raise RuntimeError(f"Configured to use bitfile at {BIT_FILE} but no such file exists")
 
-        # set up fpga devices
+        # set up fpga interfaces
         dev = self._init_okdev(BIT_FILE, read_length)
 
         # read loop
@@ -805,7 +806,7 @@ if __name__ == "__main__":
     import warnings
 
     warnings.warn(
-        "Calling the stream_daq.py module directly is deprecated - use the `mio` cli. "
+        "Calling the stream.py module directly is deprecated - use the `mio` cli. "
         "try:\n\n  mio stream capture --help",
         stacklevel=1,
     )

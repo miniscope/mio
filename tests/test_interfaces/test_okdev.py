@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from mio.devices.mocks import okDevMock
+from mio.interfaces.mocks import okDevMock
 
 
 @pytest.fixture
