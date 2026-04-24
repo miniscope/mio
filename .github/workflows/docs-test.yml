@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install pdm
-          pdm install
+          pdm install --with docs
 
       - name: Build docs
         run: pdm run docs-prod
