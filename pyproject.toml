@@ -100,7 +100,7 @@ format.composite = [
     "black mio",
     "ruff check --fix",
 ]
-docs-prod = "sphinx-build -M html ./docs ./docs/_build -W -E -a --keep-going"
+docs-prod = "python -m sphinx -M html ./docs ./docs/_build -W -E -a --keep-going"
 
 [tool.pdm.build]
 includes = ["mio"]
