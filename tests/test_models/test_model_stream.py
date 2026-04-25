@@ -1,7 +1,8 @@
 import pytest
 
 from mio.const import INTERFACES_DIR
-from mio.models.stream import ADCScaling, StreamDevConfig, StreamBufferHeader
+from mio.devices.stream.config import StreamDevConfig
+from mio.devices.stream.headers import ADCScaling, StreamBufferHeader
 
 from ..conftest import CONFIG_DIR
 

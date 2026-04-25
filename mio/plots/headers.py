@@ -1,5 +1,5 @@
 """
-Plot headers from :class:`.SDCard`
+Plot headers from :class:`.SDCardDevice`
 """
 
 from collections import deque
@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from mio.models.stream import StreamBufferHeader
+from mio.devices.stream.headers import StreamBufferHeader
 
 try:
     import matplotlib.pyplot as plt

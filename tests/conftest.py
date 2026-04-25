@@ -13,10 +13,10 @@ MOCK_DIR = Path(__file__).parent / "mock"
 def mock_okdev(monkeypatch):
     from mio.interfaces.mocks import okDevMock
     from mio.interfaces import opalkelly
-    from mio.devices import stream
+    from mio.devices.stream import device
 
     monkeypatch.setattr(opalkelly, "okDev", okDevMock)
-    monkeypatch.setattr(stream, "okDev", okDevMock)
+    monkeypatch.setattr(device, "okDev", okDevMock)
 
 
 @pytest.fixture(scope="session", autouse=True)

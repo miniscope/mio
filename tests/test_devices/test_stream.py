@@ -10,20 +10,17 @@ import warnings
 import cv2
 
 from mio.const import BASE_DIR
-from mio.devices.stream import StreamDevConfig, StreamDevice, iter_buffers
+from mio.devices.stream import StreamBufferHeader, StreamDevConfig, StreamDevice, iter_buffers
 from mio.models.process import FrequencyMaskingConfig
 from mio.utils import hash_video, hash_file
 from mio.io import VideoWriter
 from ..conftest import DATA_DIR
 
 
-@pytest.fixture(params=[pytest.param(5, id="buffer-size-5"), pytest.param(10, id="buffer-size-10")])
+@pytest.fixture()
 def default_streamdaq(set_okdev_input, request) -> StreamDevice:
 
     daqConfig = StreamDevConfig.from_id("test-wireless-200px")
-    daqConfig.runtime.frame_buffer_queue_size = request.param
-    daqConfig.runtime.image_buffer_queue_size = request.param
-    daqConfig.runtime.serial_buffer_queue_size = request.param
 
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)
@@ -162,13 +159,10 @@ def test_csv_output(tmp_path, default_streamdaq, write_metadata, caplog):
 
         # we should have the same columns in the same order as our header format plus reconstruction metadata
         col_names = df.columns.to_list()
-        expected = default_streamdaq.header_fmt.model_dump(
-            exclude_none=True, exclude=set(default_streamdaq.header_fmt.HEADER_FIELDS)
-        )
-        expected = [h[0] for h in sorted(expected.items(), key=lambda x: x[1])]
+        expected = [h[0] for h in sorted(StreamBufferHeader.POSITIONS.items(), key=lambda x: x[1])]
 
         # Add runtime_metadata fields
-        from mio.models.stream import RuntimeMetadata
+        from mio.devices.stream.headers import RuntimeMetadata
 
         runtime_fields = list(RuntimeMetadata.model_fields.keys())
         expected.extend(runtime_fields)

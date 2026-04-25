@@ -10,8 +10,8 @@ import click
 
 from mio.cli.common import ConfigIDOrPath
 from mio.devices.stream import StreamDevice
+from mio.devices.stream.config import StreamDevConfig
 from mio.models.process import FrequencyMaskingConfig
-from mio.models.stream import StreamDevConfig
 from mio.ntp import prompt_ntp_sync
 
 

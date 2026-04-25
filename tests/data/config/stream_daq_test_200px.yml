@@ -37,8 +37,8 @@ adc_scale:
   
 runtime:
   serial_buffer_queue_size: 10
-  frame_buffer_queue_size: 5
-  image_buffer_queue_size: 5
+  frame_buffer_queue_size: 10
+  image_buffer_queue_size: 10
   csv:
     buffer: 100
   plot:

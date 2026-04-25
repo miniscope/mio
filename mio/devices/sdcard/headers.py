@@ -4,8 +4,10 @@ specific values. This allows for the model to be reused across different minisco
 for consuming code to use a consistent, introspectable API
 """
 
+from typing import ClassVar
+
+from mio.devices.base.headers import BufferHeader
 from mio.models import MiniscopeConfig
-from mio.models.buffer import BufferHeader, BufferHeaderFormat
 from mio.models.mixins import ConfigYAMLMixin
 
 
@@ -85,31 +87,11 @@ class SDHeaderPositions(MiniscopeConfig):
     battery_cutoff: int | None = None
 
 
-class SDBufferHeaderFormat(BufferHeaderFormat):
-    """
-    Positions in the header for each frame
-    """
-
-    id: str = "sd-buffer-header"
-
-    length: int = 0
-    linked_list: int = 1
-    frame_num: int = 2
-    buffer_count: int = 3
-    frame_buffer_count: int = 4
-    write_buffer_count: int = 5
-    dropped_buffer_count: int = 6
-    timestamp: int = 7
-    data_length: int = 8
-    write_timestamp: int | None = None
-    battery_voltage: int | None = None
-
-
 class SDLayout(MiniscopeConfig, ConfigYAMLMixin):
     """
     Data layout of an SD Card.
 
-    Used by the :class:`.io.SDCard` class to tell it how data on the SD card is laid out.
+    Used by the :class:`.io.SDCardDevice` class to tell it how data on the SD card is laid out.
     """
 
     sectors: SectorConfig
@@ -130,7 +112,6 @@ class SDLayout(MiniscopeConfig, ConfigYAMLMixin):
 
     header: SDHeaderPositions = SDHeaderPositions()
     config: ConfigPositions = ConfigPositions()
-    buffer: SDBufferHeaderFormat = SDBufferHeaderFormat()
 
 
 class SDConfig(MiniscopeConfig):
@@ -153,6 +134,18 @@ class SDBufferHeader(BufferHeader):
     """
     Header data at the start of each frame
     """
+
+    POSITIONS: ClassVar[dict[str, int]] = {
+        "length": 0,
+        "linked_list": 1,
+        "frame_num": 2,
+        "buffer_count": 3,
+        "frame_buffer_count": 4,
+        "write_buffer_count": 5,
+        "dropped_buffer_count": 6,
+        "timestamp": 7,
+        "data_length": 8,
+    }
 
     length: int
     write_buffer_count: int
