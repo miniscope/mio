@@ -1,6 +1,6 @@
 import pytest
 
-from mio.models.sdcard import SectorConfig
+from mio.devices.sdcard.headers import SectorConfig
 import numpy as np
 
 

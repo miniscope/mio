@@ -19,16 +19,12 @@ from bitstring import BitArray, Bits
 from mio import init_logger
 from mio.bit_operation import BufferFormatter
 from mio.devices.base import Device
+from mio.devices.stream.config import StreamDevConfig
+from mio.devices.stream.headers import RuntimeMetadata, StreamBufferHeader
 from mio.exceptions import EndOfRecordingException, StreamReadError
 from mio.interfaces.mocks import okDevMock
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.models.process import FrequencyMaskingConfig
-from mio.models.stream import (
-    RuntimeMetadata,
-    StreamBufferHeader,
-    StreamBufferHeaderFormat,
-    StreamDevConfig,
-)
 from mio.plots.headers import StreamPlotter
 from mio.process.frame_helper import FrequencyMaskHelper
 from mio.types import ConfigSource
@@ -83,7 +79,6 @@ class StreamDevice(Device):
     def __init__(
         self,
         device_config: StreamDevConfig | ConfigSource,
-        header_fmt: StreamBufferHeaderFormat | ConfigSource = "stream-buffer-header",
     ) -> None:
         """
         Constructer for the class.
@@ -96,22 +91,10 @@ class StreamDevice(Device):
             Examples and required properties can be found in /mio/config/example.yml
 
             Passed either as the instantiated config object or a path to on-disk yaml configuration
-        header_fmt : MetadataHeaderFormat, optional
-            Header format used to parse information from buffer header,
-            by default `MetadataHeaderFormat()`.
         """
 
         self.logger = init_logger("streamDaq")
         self.config = StreamDevConfig.from_any(device_config)
-        self.header_fmt = StreamBufferHeaderFormat.from_any(header_fmt)
-        if isinstance(header_fmt, str):
-            self.header_fmt = StreamBufferHeaderFormat.from_id(header_fmt)
-        elif isinstance(header_fmt, StreamBufferHeaderFormat):
-            self.header_fmt = header_fmt
-        else:
-            raise TypeError(
-                "header_fmt should be an instance of StreamBufferHeaderFormat or a config ID."
-            )
         self.preamble = self.config.preamble
         self.terminate: multiprocessing.Event = multiprocessing.Event()
 
@@ -311,8 +294,8 @@ class StreamDevice(Device):
             buffer_recv_index=-1,  # will be set later in _buffer_to_frame for processed buffers
             buffer_recv_unix_time=time.time(),
         )
-        header_data = StreamBufferHeader.from_format(
-            header.astype(int), self.header_fmt, runtime_metadata=runtime_metadata
+        header_data = StreamBufferHeader.from_sequence(
+            header.astype(int), runtime_metadata=runtime_metadata
         )
         header_data.adc_scaling = self.config.adc_scale
 
@@ -640,7 +623,7 @@ class StreamDevice(Device):
             )
 
         if metadata:
-            header_cols = StreamBufferHeader.csv_header_cols(self.header_fmt)
+            header_cols = StreamBufferHeader.csv_header_cols()
             self._buffered_writer = BufferedCSVWriter(
                 metadata, header=header_cols, buffer_size=self.config.runtime.csvwriter.buffer
             )
@@ -806,7 +789,7 @@ if __name__ == "__main__":
     import warnings
 
     warnings.warn(
-        "Calling the stream.py module directly is deprecated - use the `mio` cli. "
+        "Calling the device.py module directly is deprecated - use the `mio` cli. "
         "try:\n\n  mio stream capture --help",
         stacklevel=1,
     )

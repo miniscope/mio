@@ -13,8 +13,8 @@ import pandas as pd
 from numpydantic import NDArray, NDArraySchema
 from pydantic import BaseModel, Field, field_validator
 
+from mio.devices.sdcard.headers import SDBufferHeader
 from mio.logging import init_logger
-from mio.models.sdcard import SDBufferHeader
 
 logger = init_logger("model.frames")
 
@@ -152,7 +152,7 @@ class SDCardFrame(BaseModel):
     """
     An individual frame from a miniscope recording
 
-    Typically returned from :meth:`.SDCard.read`
+    Typically returned from :meth:`.SDCardDevice.read`
     """
 
     frame: NDArray

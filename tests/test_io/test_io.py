@@ -5,15 +5,12 @@ import os
 import csv
 
 import numpy as np
-import warnings
 
-from mio.models.sdcard import SDBufferHeader
-from mio.io import BufferedCSVWriter, SDCard
+from mio.devices.sdcard.headers import SDBufferHeader
+from mio.io import BufferedCSVWriter, SDCardDevice
 from mio.exceptions import EndOfRecordingException
 from mio.models.frames import SDCardFrame
 from mio.utils import hash_file, hash_video
-
-from ..fixtures import wirefree, wirefree_battery
 
 
 @pytest.fixture
@@ -199,7 +196,7 @@ def test_relative_path():
     rel_path = abs_child.relative_to(abs_cwd)
 
     assert not rel_path.is_absolute()
-    sdcard = SDCard(drive=rel_path, layout="wirefree-sd-layout")
+    sdcard = SDCardDevice(drive=rel_path, layout="wirefree-sd-layout")
 
     # check we can do something basic like read config
     assert sdcard.config is not None
@@ -210,7 +207,7 @@ def test_relative_path():
     # now try with an absolute path
     abs_path = rel_path.resolve()
     assert abs_path.is_absolute()
-    sdcard_abs = SDCard(drive=abs_path, layout="wirefree-sd-layout")
+    sdcard_abs = SDCardDevice(drive=abs_path, layout="wirefree-sd-layout")
     assert sdcard_abs.config is not None
     assert sdcard_abs.drive.is_absolute()
 
@@ -242,7 +239,7 @@ def test_to_img(wirefree_battery, n_frames, hash, tmp_path):
 
     assert out_hash == hash
 
-    sd = SDCard(out_file, "wirefree-sd-layout-battery")
+    sd = SDCardDevice(out_file, "wirefree-sd-layout-battery")
 
     # we should be able to read all the frames!
     frames = []

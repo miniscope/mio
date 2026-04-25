@@ -7,27 +7,27 @@ import tomli_w
 from _pytest.monkeypatch import MonkeyPatch
 
 from mio import Config
-from mio.io.sdcard import SDCard
+from mio.devices.sdcard.device import SDCardDevice
 from mio.models.config import _global_config_path, set_user_dir
 from mio.models.frames import SDCardVideo
 from mio.models.mixins import ConfigYAMLMixin, YamlDumper
 
 
 @pytest.fixture
-def wirefree() -> SDCard:
+def wirefree() -> SDCardDevice:
     """
-    SDCard with wirefree layout pointing to the sample data file
+    SDCardDevice with wirefree layout pointing to the sample data file
 
     """
     sd_path = Path(__file__).parent.parent / "data" / "wirefree_example.img"
-    sdcard = SDCard(drive=sd_path, layout="wirefree-sd-layout")
+    sdcard = SDCardDevice(drive=sd_path, layout="wirefree-sd-layout")
     return sdcard
 
 
 @pytest.fixture
-def wirefree_battery() -> SDCard:
+def wirefree_battery() -> SDCardDevice:
     sd_path = Path(__file__).parent.parent / "data" / "wirefree_battery_sample.img"
-    sdcard = SDCard(drive=sd_path, layout="wirefree-sd-layout-battery")
+    sdcard = SDCardDevice(drive=sd_path, layout="wirefree-sd-layout-battery")
     return sdcard
 
 

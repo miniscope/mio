@@ -1,9 +1,6 @@
-import pdb
-
 import pytest
-from .fixtures import wirefree_frames, wirefree
 import pandas as pd
-from mio.models.sdcard import SDBufferHeader
+from mio.devices.sdcard.headers import SDBufferHeader
 
 
 @pytest.mark.filterwarnings("ignore:Pydantic serializer warnings")

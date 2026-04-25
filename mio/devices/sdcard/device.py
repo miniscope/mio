@@ -1,5 +1,5 @@
 """
-I/O for data on an SDCard
+I/O for data on an SDCardDevice
 """
 
 import contextlib
@@ -10,16 +10,16 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
+from mio.devices.sdcard.headers import SDBufferHeader, SDConfig, SDLayout
 from mio.exceptions import EndOfRecordingException, ReadHeaderException
 from mio.logging import init_logger
 from mio.models.frames import SDCardFrame
-from mio.models.sdcard import SDBufferHeader, SDConfig, SDLayout
 from mio.types import ConfigSource
 
 
-class SDCard:
+class SDCardDevice:
     """
-    I/O for data on an SDCard
+    I/O for data on an SDCardDevice
 
     an instance of :class:`.sdcard.SDLayout` (typically in :mod:`.formats` )
     configures how the data is laid out on the SD card. This class makes the i/o
@@ -34,7 +34,7 @@ class SDCard:
     def __init__(self, drive: str | Path, layout: SDLayout | ConfigSource = "wirefree-sd-layout"):
         self.drive = drive
         self.layout = SDLayout.from_any(layout)
-        self.logger = init_logger("SDCard")
+        self.logger = init_logger("SDCardDevice")
 
         # Private attributes used when the file reading context is entered
         self._config = None  # type: Optional[SDConfig]
@@ -181,7 +181,7 @@ class SDCard:
     # Context Manager methods
     # --------------------------------------------------
 
-    def __enter__(self) -> "SDCard":
+    def __enter__(self) -> "SDCardDevice":
         if self._f is not None:
             raise RuntimeError("Cant enter context, and open the file twice!")
 
@@ -222,7 +222,9 @@ class SDCard:
         dataHeader = np.append(
             dataHeader,
             np.frombuffer(
-                sd.read((dataHeader[self.layout.buffer.length] - 1) * self.layout.word_size),
+                sd.read(
+                    (dataHeader[SDBufferHeader.POSITIONS["length"]] - 1) * self.layout.word_size
+                ),
                 dtype=np.uint32,
             ),
         )
@@ -230,11 +232,11 @@ class SDCard:
         # use construct because we're already sure these are ints from the numpy casting
         # https://docs.pydantic.dev/latest/usage/models/#creating-models-without-validation
         try:
-            header = SDBufferHeader.from_format(dataHeader, self.layout.buffer, construct=True)
+            header = SDBufferHeader.from_sequence(dataHeader, construct=True)
         except IndexError as e:
             raise ReadHeaderException(
                 "Could not read header, expected header to have "
-                f"{len(self.layout.buffer.model_dump().keys())} fields, "
+                f"{len(SDBufferHeader.POSITIONS)} fields, "
                 f"got {len(dataHeader)}. Likely mismatch between specified "
                 "and actual SD Card layout or reached end of data.\n"
                 f"Header Data: {dataHeader}"
