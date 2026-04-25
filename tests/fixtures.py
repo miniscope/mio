@@ -9,7 +9,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from mio import Config
 from mio.devices.sdcard.device import SDCardDevice
 from mio.models.config import _global_config_path, set_user_dir
-from mio.models.frames import SDCardVideo
+from mio.devices.sdcard.data import SDCardVideo
 from mio.models.mixins import ConfigYAMLMixin, YamlDumper
 
 

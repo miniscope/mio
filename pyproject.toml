@@ -27,6 +27,7 @@ dependencies = [
     "scikit-video>=1.1.11",
     "scipy>=1.13.0",
     "numpydantic>=1.8.1",
+    "pandera>=0.31.1",
 ]
 
 readme = "README.md"

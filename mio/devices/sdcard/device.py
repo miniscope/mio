@@ -10,10 +10,10 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
+from mio.devices.sdcard.data import SDCardFrame
 from mio.devices.sdcard.headers import SDBufferHeader, SDConfig, SDLayout
 from mio.exceptions import EndOfRecordingException, ReadHeaderException
 from mio.logging import init_logger
-from mio.models.frames import SDCardFrame
 from mio.types import ConfigSource
 
 

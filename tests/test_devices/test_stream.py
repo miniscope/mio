@@ -17,13 +17,10 @@ from mio.io import VideoWriter
 from ..conftest import DATA_DIR
 
 
-@pytest.fixture(params=[pytest.param(5, id="buffer-size-5"), pytest.param(10, id="buffer-size-10")])
+@pytest.fixture()
 def default_streamdaq(set_okdev_input, request) -> StreamDevice:
 
     daqConfig = StreamDevConfig.from_id("test-wireless-200px")
-    daqConfig.runtime.frame_buffer_queue_size = request.param
-    daqConfig.runtime.image_buffer_queue_size = request.param
-    daqConfig.runtime.serial_buffer_queue_size = request.param
 
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)

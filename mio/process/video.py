@@ -92,7 +92,10 @@ class BaseVideoProcessor:
         Export the video to a file.
         """
         if self.output_enable:
-            logger.debug(f"Exporting {self.name} video to {self.output_dir}")
+            if not self.output_named_video.video:
+                logger.debug("No frames in video for %s, not exporting", self.name)
+                return
+            logger.debug("Exporting %s video to %s", self.name, self.output_dir)
             self.output_named_video.export(
                 output_path=self.output_dir / self.name, fps=20, suffix=False, force=self.force
             )
@@ -211,7 +214,10 @@ class NoisePatchProcessor(BaseVideoProcessor):
         Export the noisy frames to a file.
         """
         if self.noise_patch_config.output_noisy_frames:
-            logger.debug(f"Exporting {self.name} noisy frames to {self.output_dir}")
+            if not self.noisy_frames_named_video.video:
+                logger.debug("No noisy frames, not exporting %s", self.name)
+                return
+            logger.debug("Exporting %s noisy frames to %s", self.name, self.output_dir)
             self.noisy_frames_named_video.export(
                 output_path=self.output_dir / f"{self.name}", fps=20, suffix=True, force=self.force
             )

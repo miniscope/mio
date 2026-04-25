@@ -1,7 +1,7 @@
-# buffer
+# SDCard
 
 ```{eval-rst}
-.. automodule:: mio.models.buffer
+.. automodule:: mio.devices.sdcard
     :members:
     :undoc-members:
 ```
