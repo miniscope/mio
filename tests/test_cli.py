@@ -1,9 +1,12 @@
 import sys
 
 import pytest
+import yaml
 from click.testing import CliRunner
+from pydantic import BaseModel
+from pathlib import Path
 
-from mio.cli.config import config, _list
+from mio.cli.config import config, _list, create, config_path
 from mio.cli.stream import capture
 from mio import Config
 from mio.utils import hash_video
@@ -171,3 +174,77 @@ def test_cli_capture(
     assert result.exit_code == 0
     output_hash = hash_video(path_stem.with_suffix(".avi"))
     assert output_hash == video_hash
+
+
+def test_cli_config_create_list():
+    """
+    mio config create --list displays a list of available models
+    """
+    runner = CliRunner()
+    result = runner.invoke(create, ["--list"], color=False)
+    assert result.exit_code == 0
+    # simple test for presence, we assume that rich handles the table formatting properly
+
+    stdout = result.stdout
+    from mio.models.mixins import ConfigYAMLMixin
+
+    for model_name, model in ConfigYAMLMixin.config_models().items():
+        assert model_name in stdout
+        assert f"{model.__module__}.{model.__name__}" in stdout
+
+
+def test_cli_config_create(tmp_config_dir):
+    """
+    Create a config using the cli by passing kwargs, which should be evaluated as python literals
+    """
+    from mio.models.mixins import ConfigYAMLMixin
+
+    class SubModel(BaseModel):
+        a: str
+        b: int
+
+    class MyConfigModel(ConfigYAMLMixin):
+        a_string: str
+        a_int: int
+        a_dict: SubModel
+
+    runner = CliRunner()
+    result = runner.invoke(
+        create,
+        [
+            "MyConfigModel",
+            "my-cool-config",
+            "-v",
+            "a_string=hey",
+            "-v",
+            "a_int=2",
+            "-v",
+            "a_dict={'a': 'a', 'b': 5}",
+        ],
+        color=False,
+    )
+    assert result.exit_code == 0
+    expected_path = tmp_config_dir / "my-cool-config.yaml"
+    assert expected_path.exists()
+
+    # get raw from file, and asset matches that loaded from the id
+    with open(expected_path, "r") as f:
+        data = yaml.safe_load(f)
+    assert data["id"] == "my-cool-config"
+    loaded = MyConfigModel(**data)
+    from_id = MyConfigModel.from_id("my-cool-config")
+    assert loaded == from_id
+
+
+def test_cli_config_path(tmp_config_dir):
+    """
+    A config's path is printed from its ID
+    """
+    cfg_path = tmp_config_dir / "my-custom-config.yaml"
+    with open(cfg_path, "w") as f:
+        yaml.safe_dump({"id": "my-custom-config", "mio_model": "mio.testing.FakeModel"}, f)
+
+    runner = CliRunner()
+    result = runner.invoke(config_path, ["my-custom-config"])
+    assert result.exit_code == 0
+    assert Path(result.stdout.strip()) == cfg_path

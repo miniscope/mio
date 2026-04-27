@@ -2,8 +2,6 @@
 Plotting functions for video streams and frames.
 """
 
-from typing import List, Union
-
 import numpy as np
 
 from mio import init_logger
@@ -42,7 +40,7 @@ class VideoPlotter:
 
     def __init__(
         self,
-        videos: List[Union[NamedFrame, NamedVideo]],
+        videos: list[NamedFrame | NamedVideo],
         start_frame: int,
         end_frame: int,
         fps: int = 20,
@@ -59,7 +57,7 @@ class VideoPlotter:
         self.frame_displays = self._init_video_displays()
         self.slider, self.button = self._init_controls()
 
-    def _init_video_frames(self) -> List[List]:
+    def _init_video_frames(self) -> list[list]:
         video_frames = [None] * len(self.videos)
         for i, video in enumerate(self.videos):
             if isinstance(video, NamedFrame):
@@ -69,7 +67,7 @@ class VideoPlotter:
         return video_frames
 
     @property
-    def titles(self) -> List[str]:
+    def titles(self) -> list[str]:
         """
         Get the titles of the videos from the NamedFrame or NamedVideo instances.
 
@@ -82,7 +80,7 @@ class VideoPlotter:
             self._titles = [video.name for video in self.videos]
         return self._titles
 
-    def _init_video_displays(self) -> List:
+    def _init_video_displays(self) -> list:
         """
         Initialize the video displays.
         """

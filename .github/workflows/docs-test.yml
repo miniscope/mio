@@ -22,10 +22,9 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: pip install -e .[docs] pytest-md
+        run: |
+          pip install pdm
+          pdm install --with docs
 
       - name: Build docs
-        working-directory: docs
-        env:
-          SPHINXOPTS: "-W --keep-going"
-        run: make html
+        run: pdm run docs-prod

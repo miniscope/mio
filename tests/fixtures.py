@@ -7,32 +7,32 @@ import tomli_w
 from _pytest.monkeypatch import MonkeyPatch
 
 from mio import Config
-from mio.io import SDCard
+from mio.devices.sdcard.device import SDCardDevice
 from mio.models.config import _global_config_path, set_user_dir
-from mio.models.data import Frames
+from mio.devices.sdcard.data import SDCardVideo
 from mio.models.mixins import ConfigYAMLMixin, YamlDumper
 
 
 @pytest.fixture
-def wirefree() -> SDCard:
+def wirefree() -> SDCardDevice:
     """
-    SDCard with wirefree layout pointing to the sample data file
+    SDCardDevice with wirefree layout pointing to the sample data file
 
     """
     sd_path = Path(__file__).parent.parent / "data" / "wirefree_example.img"
-    sdcard = SDCard(drive=sd_path, layout="wirefree-sd-layout")
+    sdcard = SDCardDevice(drive=sd_path, layout="wirefree-sd-layout")
     return sdcard
 
 
 @pytest.fixture
-def wirefree_battery() -> SDCard:
+def wirefree_battery() -> SDCardDevice:
     sd_path = Path(__file__).parent.parent / "data" / "wirefree_battery_sample.img"
-    sdcard = SDCard(drive=sd_path, layout="wirefree-sd-layout-battery")
+    sdcard = SDCardDevice(drive=sd_path, layout="wirefree-sd-layout-battery")
     return sdcard
 
 
 @pytest.fixture()
-def wirefree_frames(wirefree) -> Frames:
+def wirefree_frames(wirefree) -> SDCardVideo:
     frames = []
     with wirefree:
         while True:
@@ -41,7 +41,7 @@ def wirefree_frames(wirefree) -> Frames:
                 frames.append(frame_object)
             except StopIteration:
                 break
-    return Frames(frames=frames)
+    return SDCardVideo(frames=frames)
 
 
 @pytest.fixture()
@@ -60,6 +60,21 @@ def tmp_config_source(tmp_path, monkeypatch) -> Path:
 
     monkeypatch.setattr(ConfigYAMLMixin, "config_sources", classmethod(_config_sources))
     return path
+
+
+@pytest.fixture()
+def tmp_config_dir(tmp_path, monkeypatch, set_env) -> Path:
+    """
+    Monkeypatch the `config_dir` parameter to a temporary path that doesn't include any of the
+    builtin configs
+    """
+
+    def _config_sources(cls: type[ConfigYAMLMixin]) -> list[Path]:
+        return [tmp_path]
+
+    set_env({"config_dir": tmp_path})
+    monkeypatch.setattr(ConfigYAMLMixin, "config_sources", classmethod(_config_sources))
+    return tmp_path
 
 
 @pytest.fixture()

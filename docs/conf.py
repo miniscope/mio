@@ -81,6 +81,8 @@ graphviz_output_format = "svg"
 # Mock imports for packages we don't have yet - this one is
 # for opal kelley stuff we need to figure out the licensing for
 autodoc_mock_imports = ["routine"]
+autodoc_pydantic_model_show_json = False
+autodoc_pydantic_model_show_json_error_strategy = "coerce"
 
 # todo
 todo_include_todos = True

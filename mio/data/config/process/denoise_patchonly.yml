@@ -1,0 +1,40 @@
+id: denoise_patch
+mio_model: mio.models.process.DenoiseConfig
+mio_version: 0.8.2.dev54+gd5d835d7.d20251205
+noise_patch:
+  enable: true
+  method:
+  - gradient
+  - black_area
+  gradient_config:
+    threshold: 20
+  black_area_config:
+    consecutive_threshold: 200
+    value_threshold: 0
+  output_result: true
+  output_noise_patch: true
+  output_noisy_frames: true
+frequency_masking:
+  id: frequency_masking_example
+  mio_model: mio.models.process.FrequencyMaskingConfig
+  mio_version: 0.6.1
+  enable: false
+  cast_float32: true
+  spatial_LPF_cutoff_radius: 15
+  vertical_BEF_cutoff: 2
+  horizontal_BEF_cutoff: 0
+  output_mask: false
+  output_result: false
+  output_freq_domain: false
+minimum_projection:
+  enable: false
+  normalize: true
+  output_result: false
+  output_min_proj: false
+interactive_display:
+  show_videos: false
+  start_frame: 40
+  end_frame: 140
+  display_freq_mask: false
+end_frame: -1
+output_result: false

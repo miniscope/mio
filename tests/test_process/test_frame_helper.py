@@ -7,8 +7,8 @@ from enum import Enum
 from pprint import pformat
 from pydantic import BaseModel
 
-from mio.models.process import DenoiseConfig, NoisePatchConfig
-from mio.process.frame_helper import InvalidFrameDetector
+from mio.models.process import BlackAreaDetectorConfig, DenoiseConfig, NoisePatchConfig
+from mio.process.frame_helper import BlackAreaDetector, InvalidFrameDetector
 
 from ..conftest import DATA_DIR
 
@@ -50,7 +50,6 @@ class NoiseGroundTruth(BaseModel):
     [
         (["gradient"], GroundTruthCategory.check_pattern),
         (["black_area"], GroundTruthCategory.blacked_out),
-        (["mean_error"], GroundTruthCategory.check_pattern),
     ],
 )
 def test_noisy_frame_detection(video, ground_truth, noise_detection_method, noise_category):
@@ -59,17 +58,9 @@ def test_noisy_frame_detection(video, ground_truth, noise_detection_method, nois
     by speckled noise
     """
     if "gradient" in noise_detection_method:
-        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_example")
-    elif "mean_error" in noise_detection_method:
-        if "extended" in video:
-            # FIXME: resolve this before merging `feat-preprocess` to `main`
-            pytest.xfail(
-                "Bug in comparison to previous frames when first frame is noisy, "
-                "see https://github.com/Aharoni-Lab/mio/pull/97"
-            )
-        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_example_mean_error")
+        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_noise_detection_test")
     elif "black_area" in noise_detection_method:
-        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_example")
+        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_noise_detection_test")
     else:
         raise ValueError("Invalid noise detection method")
 
@@ -122,3 +113,30 @@ def test_noisy_frame_detection(video, ground_truth, noise_detection_method, nois
     )
     extra_frames = set(detected_frame_indices) - all_expected
     assert extra_frames == set(), f"Detected extra, non-noise frames as noisy: {extra_frames}"
+
+
+@pytest.mark.parametrize(
+    "min_rows,expected_noisy",
+    [
+        (1, True),  # default: any flagged row triggers detection
+        (5, True),  # exactly 5 noisy rows meets the threshold
+        (10, False),  # only 5 noisy rows, below threshold of 10
+    ],
+)
+def test_black_area_min_rows(min_rows, expected_noisy):
+    """min_rows controls how many flagged rows are needed to mark a frame as invalid."""
+    # Create a 50x50 frame with 5 rows of consecutive zeros (noisy) and the rest bright
+    frame = np.ones((50, 50), dtype=np.uint8) * 128
+    for row in range(5):
+        frame[row, :30] = 0  # 30 consecutive black pixels in rows 0-4
+
+    config = BlackAreaDetectorConfig(
+        consecutive_threshold=10,
+        value_threshold=0,
+        min_rows=min_rows,
+    )
+    detector = BlackAreaDetector(config)
+    is_noisy, mask = detector.find_invalid_area(frame)
+    assert (
+        is_noisy == expected_noisy
+    ), f"min_rows={min_rows}: expected noisy={expected_noisy}, got {is_noisy}"

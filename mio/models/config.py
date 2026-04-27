@@ -3,7 +3,7 @@ Module-global configuration models
 """
 
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 import yaml
 from platformdirs import PlatformDirs
@@ -34,11 +34,11 @@ class LogConfig(MiniscopeIOModel):
     """
     Severity of log messages to process.
     """
-    level_file: Optional[LOG_LEVELS] = None
+    level_file: LOG_LEVELS | None = None
     """
     Severity for file-based logging. If unset, use ``level``
     """
-    level_stdout: Optional[LOG_LEVELS] = None
+    level_stdout: LOG_LEVELS | None = None
     """
     Severity for stream-based logging. If unset, use ``level``
     """
@@ -53,7 +53,7 @@ class LogConfig(MiniscopeIOModel):
 
     @field_validator("level", "level_file", "level_stdout", mode="before")
     @classmethod
-    def uppercase_levels(cls, value: Optional[str] = None) -> Optional[str]:
+    def uppercase_levels(cls, value: str | None = None) -> str | None:
         """
         Ensure log level strings are uppercased
         """
@@ -130,18 +130,16 @@ class Config(BaseSettings, YAMLMixin):
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         """
-        Read config settings from, in order of priority from high to low, where
-        high priorities override lower priorities:
-        * in the arguments passed to the class constructor (not user configurable)
-        * in environment variables like ``export MIO_LOG_DIR=~/``
-        * in a ``.env`` file in the working directory
-        * in a ``mio_config.yaml`` file in the working directory
-        * in the ``tool.mio.config`` table in a ``pyproject.toml`` file
-          in the working directory
-        * in a user ``mio_config.yaml`` file, configured by `user_dir` in any of the other sources
-        * in the global ``mio_config.yaml`` file in the platform-specific data directory
-          (use ``mio config get global_config`` to find its location)
-        * the default values in the :class:`.GlobalConfig` model
+        Read config settings in order of priority (high to low).
+
+        - Arguments passed to the class constructor (not user configurable)
+        - Environment variables like ``export MIO_LOG_DIR=~/``
+        - ``.env`` file in the working directory
+        - ``mio_config.yaml`` file in the working directory
+        - ``tool.mio.config`` table in ``pyproject.toml`` in the working directory
+        - User ``mio_config.yaml`` file, configured by ``user_dir``
+        - Global ``mio_config.yaml`` (use ``mio config get global_config`` to find location)
+        - Default values in the :class:`.GlobalConfig` model
         """
         _create_default_global_config()
 
@@ -189,14 +187,14 @@ class _UserYamlConfigSource(YamlConfigSettingsSource):
         super().__init__(*args, **kwargs)
 
     @property
-    def user_config_path(self) -> Optional[Path]:
+    def user_config_path(self) -> Path | None:
         """
         Location of the user-level ``mio_config.yaml`` file,
         given the current state of prior config sources,
         including the global config file
         """
         config_file = None
-        user_dir: Optional[str] = self.current_state.get("user_dir", None)
+        user_dir: str | None = self.current_state.get("user_dir", None)
         if user_dir is None:
             # try and get from global config
             if _global_config_path.exists():

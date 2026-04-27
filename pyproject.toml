@@ -8,14 +8,15 @@ authors = [
 license = {text = "AGPL-3.0"}
 dynamic = ["version"]
 
-requires-python = "<4.0,>=3.9"
+requires-python = "<4.0,>=3.10"
 dependencies = [
-    "opencv-python>=4.7.0.72",
-    "numpy>=1.25.0",
+    "opencv-python>=4.7.0.72; platform_system!='Darwin'",
+    "opencv-python>=4.7.0.72,<4.13.0.90; platform_system=='Darwin'", # latest versions not built with ffmpeg support
+    "numpy>=1.25.0,<2.3.0", # skvideo: numpy tostring removed in 2.3
     "pandas>=2.1.0",
     "pydantic>=2.3.0",
     "pyserial>=3.5",
-    "tqdm>=4.66.1",
+    "tqdm>=4.67.1",
     "bitstring>=4.2.3",
     "pydantic-settings>=2.0.3",
     "rich>=13.6.0",
@@ -25,6 +26,8 @@ dependencies = [
     'typing-extensions>=4.10.0; python_version<"3.13"',
     "scikit-video>=1.1.11",
     "scipy>=1.13.0",
+    "numpydantic>=1.8.1",
+    "pandera>=0.31.1",
 ]
 
 readme = "README.md"
@@ -58,6 +61,7 @@ repository = "https://github.com/Aharoni-Lab/mio"
 documentation = "https://miniscope-io.readthedocs.io/"
 
 [project.optional-dependencies]
+ntp = ["ntplib>=0.4.0"]
 plot = ["matplotlib>=3.9.2"]
 tests = [
     "pytest>=8.2.2",
@@ -81,7 +85,7 @@ dev = [
     "pre-commit>=3.7.1",
 ]
 all = [
-    "mio[tests,docs,dev]"
+    "mio[tests,docs,dev,ntp]"
 ]
 
 [project.scripts]
@@ -97,6 +101,7 @@ format.composite = [
     "black mio",
     "ruff check --fix",
 ]
+docs-prod = "python -m sphinx -M html ./docs ./docs/_build -W -E -a --keep-going"
 
 [tool.pdm.build]
 includes = ["mio"]
@@ -124,7 +129,7 @@ filterwarnings = [
 testpaths = [
     "tests"
 ]
-timeout = 60
+timeout = 120
 
 [tool.coverage.run]
 patch = ["subprocess"]
@@ -134,7 +139,7 @@ omit = [
 ]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 include = ["mio/**/*.py", "pyproject.toml"]
 exclude = ["docs", "tests", "mio/vendor", "noxfile.py"]
 line-length = 100
@@ -171,13 +176,12 @@ select = [
     "N802"
 ]
 ignore = [
-    "ANN101", "ANN102", "ANN401", "ANN204",
+    #"special" methods like `__init__` don't need to be annotated
+    "ANN204",
+    # any types are semantically valid actually sometimes
+    "ANN401",
     # explicit strict arg for zip
     "B905",
-    # builtin type annotations
-    "UP006", "UP035",
-    # | for Union types (only supported >=3.10
-    "UP007", "UP038",
     # docstrings for __init__
     "D107",
 ]
@@ -198,7 +202,7 @@ follow_imports = "silent"
 warn_unreachable = true
 
 [tool.black]
-target-version = ['py38', 'py39', 'py310', 'py311']
+target-version = ['py310', 'py311', 'py312', 'py313']
 include = "mio/.*\\.py$"
 extend-exclude = 'mio/vendor/.*'
 line-length = 100

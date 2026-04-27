@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.10
+
+### 0.10.0
+
+#### CLI
+
+- [`#141`](https://github.com/miniscope/mio/pull/141) - add cli commands for manipulating configs:
+  - `mio config create` to create a new config from a config model (use --list) to show available models
+  - `mio config path` to show the path to a config
+  - `mio config open` to open the config in default text editor
+- [`#154`](https://github.com/miniscope/mio/pull/154) - add cli command for removing frames from video:
+  - `mio process remove_frames` to remove frames by explicitly specified index from videos and metadata
+- [`#155`](https://github.com/miniscope/mio/pull/155) - `mio process concat` - concatenate videos and metadata
+
+#### CI/CD
+
+- [`#157`](https://github.com/miniscope/mio/pull/157) - Add continuous deployment to PyPI 
+
+#### New features
+
+- [`#133`](https://github.com/miniscope/mio/pull/133) - {class}`~mio.models.dataset.Dataset` 
+  organization - group recordings with their metadata, and group multiple recordings collected at the same time.
+- [`#133`](https://github.com/miniscope/mio/pull/133), [`#155`](https://github.com/miniscope/mio/pull/155)
+  Noise-aware stitching: Given two recordings of the same data stream,
+  create a stitched version that picks the best frames from each of them
+- [`#133`](https://github.com/miniscope/mio/pull/133), [`#155`](https://github.com/miniscope/mio/pull/155)
+  Alignment Maps - within a dataset, create an alignment map to align frames between recordings,
+  either by `frame_num` or by timestamps.
+- preserve noise scoring metadata in `_scores.csv` and use to pick frames during stitching
+  
+#### Perf
+
+- [`#155`](https://github.com/miniscope/mio/pull/155) - Vectorized black area detection
+
+#### Removed
+
+- [`#155`](https://github.com/miniscope/mio/pull/155) - Inter-frame mean squared error noise detection, unused.
+
+## 0.9
+
+### 0.9.0 - 2026-01-27 - Batch device update, NTP sync, driver import fix
+
+#### New features
+- [`#140`](https://github.com/miniscope/mio/pull/140) - Batch upload device parameters via CLI (`mio update -b`)
+- [`#142`](https://github.com/miniscope/mio/pull/142) - Add NTP time synchronization. Optional dependency - install with `pip install mio[ntp]`
+- [`#147`](https://github.com/miniscope/mio/pull/147) - `buffer_npix` is now a property on `StreamDevConfig`
+
+#### Bugfixes
+- [`#137`](https://github.com/miniscope/mio/pull/137) - Fix reconstructed frame index error in `mio stream`
+- [`#148`](https://github.com/miniscope/mio/pull/148) - Make OpalKelly driver import optional so CLI works without device drivers
+
+#### Maintenance
+- [`#149`](https://github.com/miniscope/mio/pull/149) - Pin numpy <2.0 and remove deprecated ruff rules
+- Exclude Python 3.13 on Windows from test matrix, fix docs build errors
+
 ## 0.8
 
 ### 0.8.1 - 2025-09-25 - Bugfix for frame reconstruction, CLI updates, more metadata for `stream`

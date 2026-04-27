@@ -16,11 +16,9 @@ keep what is common common, and what is unique unique.
 ```
 
 ```{toctree}
-buffer
 config
 data
+dataset
 mixins
 models
-sdcard
-stream
 ```

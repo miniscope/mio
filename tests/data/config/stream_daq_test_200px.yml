@@ -11,7 +11,7 @@ bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit"
 # Preamble for each data buffer.
 preamble: 0x12345678
 
-# Image format. StreamDaq will calculate buffer size, etc. based on these parameters
+# Image format. StreamDevice will calculate buffer size, etc. based on these parameters
 frame_width: 200
 frame_height: 200
 pix_depth: 8
@@ -37,8 +37,8 @@ adc_scale:
   
 runtime:
   serial_buffer_queue_size: 10
-  frame_buffer_queue_size: 5
-  image_buffer_queue_size: 5
+  frame_buffer_queue_size: 10
+  image_buffer_queue_size: 10
   csv:
     buffer: 100
   plot:

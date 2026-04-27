@@ -3,20 +3,22 @@ CLI commands for running streamDaq
 """
 
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 import click
 
 from mio.cli.common import ConfigIDOrPath
-from mio.models.process import FreqencyMaskingConfig
-from mio.stream_daq import StreamDaq
+from mio.devices.stream import StreamDevice
+from mio.devices.stream.config import StreamDevConfig
+from mio.models.process import FrequencyMaskingConfig
+from mio.ntp import prompt_ntp_sync
 
 
 @click.group()
 def stream() -> None:
     """
-    Command group for StreamDaq
+    Command group for StreamDevice
     """
     pass
 
@@ -49,7 +51,7 @@ def _capture_options(fn: Callable) -> Callable:
         "-ok",
         "--output-kwarg",
         "okwarg",
-        help="Output kwargs (passed to StreamDaq.init_video). \n"
+        help="Output kwargs (passed to StreamDevice.init_video). \n"
         "passed as (potentially multiple) calls like\n\n"
         "mio stream capture -ok key1 val1 -ok key2 val2",
         multiple=True,
@@ -92,20 +94,28 @@ def _capture_options(fn: Callable) -> Callable:
 @_capture_options
 def capture(
     device_config: Path,
-    freq_mask_config: Optional[Path],
-    output: Optional[Path],
-    okwarg: Optional[dict],
-    no_display: Optional[bool],
-    binary_export: Optional[bool],
-    metadata_display: Optional[bool],
-    ber: Optional[bool],
-    ber_n_buffers: Optional[int],
+    freq_mask_config: Path | None,
+    output: Path | None,
+    okwarg: dict | None,
+    no_display: bool | None,
+    binary_export: bool | None,
+    metadata_display: bool | None,
+    ber: bool | None,
+    ber_n_buffers: int | None,
     **kwargs: dict,
 ) -> None:
     """
-    Capture video from a StreamDaq device, optionally saving as an encoded video or as raw binary
+    Capture video from a StreamDevice device, optionally saving as an encoded video or as raw binary
     """
-    daq_inst = StreamDaq(device_config=device_config)
+
+    # Rather don't like getting config here, but I want to do ntp check in the CLI so it's here.
+    config = StreamDevConfig.from_any(device_config)
+    if config.runtime.ntp_server is not None:
+        prompt_ntp_sync(
+            config.runtime.ntp_server, max_offset_seconds=config.runtime.ntp_max_offset_seconds
+        )
+
+    daq_inst = StreamDevice(device_config=device_config)
     okwargs = dict(okwarg)
 
     unique_stem_path = get_unique_stempath(Path(output)) if output else None
@@ -119,7 +129,7 @@ def capture(
     binary_output = unique_stem_path.with_suffix(".bin") if output and binary_export else None
 
     if freq_mask_config and not ber:
-        freq_mask_config = FreqencyMaskingConfig.from_any(freq_mask_config)
+        freq_mask_config = FrequencyMaskingConfig.from_any(freq_mask_config)
     else:
         freq_mask_config = None
 
@@ -157,7 +167,7 @@ def capture(
 @click.pass_context
 def test(ctx: click.Context, source: Path, profile: bool, **kwargs: dict) -> None:
     """
-    Run StreamDaq in testing mode, using the okDevMock rather than the actual device
+    Run StreamDevice in testing mode, using the okDevMock rather than the actual device
     """
     if profile:
         raise NotImplementedError("Profiling mode is not implemented")

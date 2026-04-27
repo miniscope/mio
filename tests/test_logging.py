@@ -143,10 +143,13 @@ def test_multiprocess_logging(capfd, tmp_path):
     """
     We should be able to handle logging from multiple processes
     """
+    # 3.14 changes default to forkserver,
+    # use `spawn` explicitly until we update the logging to match noob's new version
+    ctx = mp.get_context("spawn")
 
-    proc_1 = mp.Process(target=_mp_function, args=("proc_1", tmp_path))
-    proc_2 = mp.Process(target=_mp_function, args=("proc_2", tmp_path))
-    proc_3 = mp.Process(target=_mp_function, args=("proc_1.proc_3", tmp_path))
+    proc_1 = ctx.Process(target=_mp_function, args=("proc_1", tmp_path))
+    proc_2 = ctx.Process(target=_mp_function, args=("proc_2", tmp_path))
+    proc_3 = ctx.Process(target=_mp_function, args=("proc_1.proc_3", tmp_path))
 
     proc_1.start()
     proc_2.start()

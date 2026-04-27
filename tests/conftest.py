@@ -1,12 +1,6 @@
 import os
-from pathlib import Path
-from typing import Union, Callable
+from typing import Union
 from datetime import datetime
-
-import pytest
-import yaml
-
-from mio.models.mixins import ConfigYAMLMixin
 
 from .fixtures import *
 
@@ -17,12 +11,12 @@ MOCK_DIR = Path(__file__).parent / "mock"
 
 @pytest.fixture(autouse=True)
 def mock_okdev(monkeypatch):
-    from mio.devices.mocks import okDevMock
-    from mio.devices import opalkelly
-    from mio import stream_daq
+    from mio.interfaces.mocks import okDevMock
+    from mio.interfaces import opalkelly
+    from mio.devices.stream import device
 
     monkeypatch.setattr(opalkelly, "okDev", okDevMock)
-    monkeypatch.setattr(stream_daq, "okDev", okDevMock)
+    monkeypatch.setattr(device, "okDev", okDevMock)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -50,12 +44,12 @@ def set_matplotlib_backend():
 @pytest.fixture()
 def set_okdev_input(monkeypatch):
     """
-    closure fixture to set the environment variable used by StreamDaq to set the
+    closure fixture to set the environment variable used by StreamDevice to set the
     okDev data source
     """
 
     def _set_okdev_input(file: Union[str, Path]):
-        from mio.devices.mocks import okDevMock
+        from mio.interfaces.mocks import okDevMock
 
         monkeypatch.setattr(okDevMock, "DATA_FILE", file)
         os.environ["PYTEST_OKDEV_DATA_FILE"] = str(file)

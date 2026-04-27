@@ -4,24 +4,17 @@ mio_version: 0.6.1
 noise_patch:
   enable: true
   method: [gradient, black_area]
-  mean_error_config:
-    threshold: 40
-    device_config_id: wireless-200px
-    buffer_split: 8
-    comparison_unit: 1000
-    diff_multiply: 1
   gradient_config:
     threshold: 20
   black_area_config:
     consecutive_threshold: 5
-    value_threshold: 16
+    value_threshold: 0
   output_result: true
   output_noise_patch: true
-  output_diff: true
   output_noisy_frames: true
 frequency_masking:
   id: frequency_masking_example
-  mio_model: mio.models.process.FreqencyMaskingConfig
+  mio_model: mio.models.process.FrequencyMaskingConfig
   mio_version: 0.6.1
   enable: true
   cast_float32: true
@@ -36,11 +29,11 @@ minimum_projection:
   normalize: true
   output_result: true
   output_min_proj: true
-interactive_display:
-  show_videos: true
+interactive_display: # Mostly for debugging purposes
+  show_videos: false
   start_frame: 40
   end_frame: 140
-  display_freq_mask: true
+  display_freq_mask: false
 end_frame: -1 #-1 means all frames
 output_result: true
 output_dir: user_data/output
