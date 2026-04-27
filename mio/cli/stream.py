@@ -80,12 +80,6 @@ def _capture_options(fn: Callable) -> Callable:
         default=False,
         help="Run BER measurement mode. No video/metadata output.",
     )(fn)
-    fn = click.option(
-        "--ber-n-buffers",
-        type=int,
-        default=None,
-        help="Override number of buffers to consume during BER measurement mode",
-    )(fn)
     return fn
 
 
@@ -101,7 +95,6 @@ def capture(
     binary_export: bool | None,
     metadata_display: bool | None,
     ber: bool | None,
-    ber_n_buffers: int | None,
     **kwargs: dict,
 ) -> None:
     """
@@ -133,9 +126,6 @@ def capture(
         freq_mask_config = FrequencyMaskingConfig.from_any(freq_mask_config)
     else:
         freq_mask_config = None
-
-    if ber and ber_n_buffers is not None:
-        daq_inst.config.runtime.ber_test_n_buffers = int(ber_n_buffers)
 
     daq_inst.capture(
         source="fpga",
