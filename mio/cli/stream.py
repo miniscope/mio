@@ -5,6 +5,7 @@ CLI commands for running streamDaq
 import os
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 import click
 
@@ -76,11 +77,12 @@ def _capture_options(fn: Callable) -> Callable:
     )(fn)
     fn = click.option(
         "--mode",
-        type=click.Choice(["image", "ber"]),
-        default="image",
+        type=click.Choice(["capture", "ber"]),
+        default="capture",
         show_default=True,
-        help="Capture mode. 'image' produces video/metadata; 'ber' runs a "
-        "PRBS bit-error-rate test and produces no video/metadata output.",
+        help="Capture mode. \n"
+        "- 'capture' (default) capture video/metadata;\n"
+        "- 'ber' runs a PRBS bit-error-rate test and produces no video/metadata output.",
     )(fn)
     return fn
 
@@ -96,7 +98,7 @@ def capture(
     no_display: bool | None,
     binary_export: bool | None,
     metadata_display: bool | None,
-    mode: str,
+    mode: Literal["capture", "ber"],
     **kwargs: dict,
 ) -> None:
     """

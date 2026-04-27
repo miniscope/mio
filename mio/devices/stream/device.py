@@ -674,7 +674,7 @@ class StreamDevice(Device):
         show_video: bool | None = True,
         show_metadata: bool | None = False,
         freq_mask_config: FrequencyMaskingConfig | None = None,
-        mode: Literal["image", "ber"] = "image",
+        mode: Literal["capture", "ber"] = "capture",
         ber_output: Path | None = None,
     ) -> None:
         """
@@ -700,9 +700,10 @@ class StreamDevice(Device):
             If True, display the video in real-time.
         show_metadata: bool, optional
             If True, show metadata information during capture.
-        mode: Literal["image", "ber"], optional
-            Capture mode. ``"image"`` (default) reconstructs frames; ``"ber"`` runs
-            a PRBS bit-error-rate test on the incoming data stream.
+        mode: Literal["capture", "ber"], optional
+            Capture mode. ``"capture"`` (default) is the main capture routine
+            that outputs videos and metadata;
+            ``"ber"`` runs a PRBS bit-error-rate test on the incoming data stream.
         ber_output: Path, optional
             When ``mode == "ber"``, JSON file to write the BER summary to.
 
@@ -712,6 +713,8 @@ class StreamDevice(Device):
             If `source` is not in `("uart", "fpga")`.
         """
         self.terminate.clear()
+        if mode not in ("capture", "ber"):
+            raise ValueError(f"Mode must be either 'capture' or 'ber', got {mode}")
 
         shared_resource_manager = multiprocessing.Manager()
         serial_buffer_queue = shared_resource_manager.Queue(
@@ -722,6 +725,7 @@ class StreamDevice(Device):
         )
         imagearray = shared_resource_manager.Queue(self.config.runtime.image_buffer_queue_size)
 
+        procs = []
         if source == "uart":
             self.logger.debug("Starting uart capture process")
             p_recv = multiprocessing.Process(
@@ -742,6 +746,8 @@ class StreamDevice(Device):
         else:
             raise ValueError(f"source can be one of uart or fpga. Got {source}")
 
+        procs.append(p_recv)
+
         if freq_mask_config:
             freq_mask_helper = FrequencyMaskHelper(
                 height=self.config.frame_height,
@@ -758,7 +764,7 @@ class StreamDevice(Device):
                 fps=self.config.fs,
             )
 
-        if mode == "image":
+        if mode == "capture":
             p_buffer_to_frame = multiprocessing.Process(
                 target=self._buffer_to_frame,
                 args=(
@@ -775,11 +781,11 @@ class StreamDevice(Device):
                 ),
                 name="_format_frame",
             )
+            procs.append(p_buffer_to_frame)
+            procs.append(p_format_frame)
 
-        p_recv.start()
-        if mode == "image":
-            p_buffer_to_frame.start()
-            p_format_frame.start()
+        for p in procs:
+            p.start()
 
         if show_metadata:
             self._header_plotter = StreamPlotter(
@@ -843,9 +849,6 @@ class StreamDevice(Device):
             # Join child processes with a timeout
             # Should never happen except during a force quit, as we wait for all
             # queues to drain, and if they don't do so on their own, it's a bug.
-            procs = [p_recv]
-            if mode == "image":
-                procs.extend([p_buffer_to_frame, p_format_frame])
             for p in procs:
                 p.join(timeout=5)
                 if p.is_alive():
