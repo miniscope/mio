@@ -310,8 +310,8 @@ class StreamDevice(Device):
         """
 
         def prbs15_bytes(n: int) -> bytes:
-            # PRBS-15: x^15 + x^14 + 1, pack bits MSB-first into bytes
-            s = 1  # treat 0 as 1
+            # PRBS-15: x^15 + x^14 + 1, MSB-first
+            s = 1
             out = bytearray(n)
             for i in range(n):
                 b = 0
@@ -329,27 +329,13 @@ class StreamDevice(Device):
         got = 0
 
         for buf in exact_iter(serial_buffer_queue.get, None):
-            # Parse header + payload (payload is np.uint8 array)
-            header_data, payload_u8 = self._parse_header(buf)
+            _, payload_u8 = self._parse_header(buf)
             if payload_u8.size == 0:
                 continue
 
-            # Trim/pad to expected buffer size for this buffer index, ignoring dummy/extra data
-            try:
-                payload_u8 = self._trim(
-                    payload_u8,
-                    self.buffer_npix,
-                    header_data,
-                    self.logger,
-                )
-            except IndexError:
-                # If buffer index is invalid relative to expected, skip this buffer
-                continue
-
-            # Expected PRBS-15 for exactly this payload length (reset seed per buffer)
+            # PRBS resyncs per buffer; no trim/pad (padding would inflate errors).
             exp = np.frombuffer(prbs15_bytes(int(payload_u8.size)), dtype=np.uint8)
 
-            # XOR and count differing bits
             diff = np.bitwise_xor(payload_u8, exp)
             errors = int(np.unpackbits(diff).sum())
             bits = int(payload_u8.size * 8)
