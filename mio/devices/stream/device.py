@@ -444,8 +444,7 @@ class StreamDevice(Device):
         )
         if ber_output:
             summary = {
-                "prbs": "PRBS-15 (x^15+x^14+1, MSB-first), "
-                "seed=(buffer_count & 0x7FFF) or 1",
+                "prbs": "PRBS-15 (x^15+x^14+1, MSB-first), " "seed=(buffer_count & 0x7FFF) or 1",
                 "target_buffers": target_buffers,
                 "buffers_received": result["buffers"],
                 "buffer_count_start": result["buffer_count_start"],
