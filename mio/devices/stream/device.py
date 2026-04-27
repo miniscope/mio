@@ -305,9 +305,24 @@ class StreamDevice(Device):
         self, serial_buffer_queue: multiprocessing.Queue, n_buffers: int = 100
     ) -> dict[str, float | int]:
         """
-        Consume up to n_buffers from serial_buffer_queue, compare payload to PRBS-15
-        seeded per-buffer with the device's ``buffer_count`` (mod 2^15, zero remapped
-        to 1), and return {'buffers','bits','errors','ber'}.
+        Measure bit-error-rate (BER) on the communication link using PRBS-15
+        (pseudo-random binary sequence; standard pattern for link tests).
+
+        Unlike typical continuous-stream BER tests, this preserves the buffer framing of
+        normal image capture and substitutes PRBS-15 for the pixel payload, so the
+        same data path that delivers images is what's being measured.
+
+        Each buffer's payload is seeded with the device's buffer_count (mod 2^15,
+        zero remapped to 1). The host regenerates the matching sequence and XORs
+        it against the first ``pixel_count`` bytes of payload; trailing bytes
+        (dummies, merged-buffer tails) are excluded so they don't inflate the count.
+        Errors and bits accumulate across up to ``n_buffers`` buffers.
+
+        Returns
+        -------
+        dict
+            Run summary: ``buffers`` received, ``bits`` and ``errors`` compared,
+            cumulative ``ber``, ``buffer_count`` range, and per-window snapshots.
         """
 
         def prbs15_bytes(n: int, seed: int) -> bytes:
