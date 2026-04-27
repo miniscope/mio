@@ -587,7 +587,7 @@ class StreamDevice(Device):
         ----------
         source : Literal[uart, fpga]
             Device source.
-        read_length : int | None, optional
+        read_length : Optional[int], optional
             Passed to :func:`~mio.stream_daq.stream_daq._fpga_recv` when
             `source == "fpga"`, by default None.
         video: Path, optional
@@ -603,9 +603,6 @@ class StreamDevice(Device):
             If True, display the video in real-time.
         show_metadata: bool, optional
             If True, show metadata information during capture.
-        freq_mask_config: FrequencyMaskingConfig, optional
-            Configuration for frequency masking processing.
-            If present, frequency masking is applied to each frame before display.
         ber: bool, optional
             If True, perform a BER test on the incoming data stream.
 
@@ -660,7 +657,7 @@ class StreamDevice(Device):
                 path=video,
                 fps=self.config.fs,
             )
-        
+
         if not ber:
             p_buffer_to_frame = multiprocessing.Process(
                 target=self._buffer_to_frame,
@@ -762,9 +759,7 @@ class StreamDevice(Device):
             for p in procs:
                 p.join(timeout=5)
                 if p.is_alive():
-                    self.logger.warning(
-                        f"Termination timeout: force terminating process {p.name}."
-                    )
+                    self.logger.warning(f"Termination timeout: force terminating process {p.name}.")
                     p.terminate()
                     p.join()
             self.logger.info("Child processes joined. End capture.")
