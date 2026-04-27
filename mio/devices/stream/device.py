@@ -324,30 +324,89 @@ class StreamDevice(Device):
 
         total_bits = 0
         total_errors = 0
+        window_bits = 0
+        window_errors = 0
         got = 0
+        log_every = 100
+        windows: list[dict[str, float | int]] = []
+        first_buffer_count: int | None = None
+        last_buffer_count: int | None = None
+        window_first_buffer_count: int | None = None
+
+        self.logger.info("BER capture starting, target=%d buffers", n_buffers)
 
         for buf in exact_iter(serial_buffer_queue.get, None):
             header_data, payload_u8 = self._parse_header(buf)
             if payload_u8.size == 0:
                 continue
 
-            # PRBS phase derived from device buffer_count: walks distinct LFSR phases
-            # across buffers, and host/firmware mismatch surfaces as ~50% BER.
-            seed = (header_data.buffer_count & 0x7FFF) or 1
-            exp = np.frombuffer(prbs15_bytes(int(payload_u8.size), seed), dtype=np.uint8)
+            # Trim to pixel_count; bytes beyond are dummies or random artifacts, not PRBS.
+            n_prbs = header_data.pixel_count
+            if n_prbs <= 0 or n_prbs > payload_u8.size:
+                continue
+            payload_u8 = payload_u8[:n_prbs]
+
+            # buffer_count seeds the PRBS.
+            buffer_count = header_data.buffer_count
+            seed = (buffer_count & 0x7FFF) or 1
+            exp = np.frombuffer(prbs15_bytes(payload_u8.size, seed), dtype=np.uint8)
 
             diff = np.bitwise_xor(payload_u8, exp)
             errors = int(np.unpackbits(diff).sum())
-            bits = int(payload_u8.size * 8)
+            bits = payload_u8.size * 8
 
             total_errors += errors
             total_bits += bits
+            window_errors += errors
+            window_bits += bits
             got += 1
+            if first_buffer_count is None:
+                first_buffer_count = buffer_count
+            if window_first_buffer_count is None:
+                window_first_buffer_count = buffer_count
+            last_buffer_count = buffer_count
+
+            if got % log_every == 0:
+                running = total_errors / total_bits if total_bits else float("nan")
+                window_ber = window_errors / window_bits if window_bits else float("nan")
+                self.logger.info(
+                    "BER progress: %d/%d buffers, bits=%d errors=%d "
+                    "cumulative_ber=%.6g window_ber=%.6g",
+                    got,
+                    n_buffers,
+                    total_bits,
+                    total_errors,
+                    running,
+                    window_ber,
+                )
+                windows.append(
+                    {
+                        "buffer_index_end": got,
+                        "buffer_count_start": window_first_buffer_count,
+                        "buffer_count_end": buffer_count,
+                        "bits": window_bits,
+                        "errors": window_errors,
+                        "window_ber": window_ber,
+                        "cumulative_ber": running,
+                    }
+                )
+                window_errors = 0
+                window_bits = 0
+                window_first_buffer_count = None
+
             if got >= n_buffers:
                 break
 
         ber = (total_errors / total_bits) if total_bits else float("nan")
-        return {"buffers": got, "bits": total_bits, "errors": total_errors, "ber": ber}
+        return {
+            "buffers": got,
+            "bits": total_bits,
+            "errors": total_errors,
+            "ber": ber,
+            "buffer_count_start": first_buffer_count,
+            "buffer_count_end": last_buffer_count,
+            "windows": windows,
+        }
 
     def _buffer_to_frame(
         self,
@@ -566,6 +625,7 @@ class StreamDevice(Device):
         show_metadata: bool | None = False,
         freq_mask_config: FrequencyMaskingConfig | None = None,
         ber: bool = False,
+        ber_output: Path | None = None,
     ) -> None:
         """
         Entry point to start frame capture.
@@ -683,10 +743,8 @@ class StreamDevice(Device):
 
         try:
             if ber:
-                # Run BER in the main process to capture and log results
-                result = self.prbs15_ber(
-                    serial_buffer_queue, self.config.runtime.ber_test_n_buffers
-                )
+                target_buffers = self.config.runtime.ber_test_n_buffers
+                result = self.prbs15_ber(serial_buffer_queue, target_buffers)
                 self.logger.info(
                     "BER test complete: buffers=%d bits=%d errors=%d ber=%.6g",
                     result["buffers"],
@@ -694,6 +752,23 @@ class StreamDevice(Device):
                     result["errors"],
                     result["ber"],
                 )
+                if ber_output:
+                    summary = {
+                        "prbs": "PRBS-15 (x^15+x^14+1, MSB-first), "
+                        "seed=(buffer_count & 0x7FFF) or 1",
+                        "target_buffers": target_buffers,
+                        "buffers_received": result["buffers"],
+                        "buffer_count_start": result["buffer_count_start"],
+                        "buffer_count_end": result["buffer_count_end"],
+                        "bits": result["bits"],
+                        "errors": result["errors"],
+                        "ber": result["ber"],
+                        "windows": result["windows"],
+                    }
+                    import json
+                    with open(ber_output, "w") as f:
+                        json.dump(summary, f, indent=2, default=float)
+                    self.logger.info("BER results written to %s", ber_output)
                 return
             for image, header_list in exact_iter(imagearray.get, None):
                 self._handle_frame(

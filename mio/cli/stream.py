@@ -117,10 +117,12 @@ def capture(
         metadata_output = None if ber else unique_stem_path.with_suffix(".csv")
 
         binary_output = unique_stem_path.with_suffix(".bin") if binary_export else None
+        ber_output = unique_stem_path.with_suffix(".json") if ber else None
     else:
         video_output = None
         metadata_output = None
         binary_output = None
+        ber_output = None
 
     if freq_mask_config:
         freq_mask_config = FrequencyMaskingConfig.from_any(freq_mask_config)
@@ -137,6 +139,7 @@ def capture(
         show_metadata=metadata_display and not ber,
         freq_mask_config=freq_mask_config,
         ber=bool(ber),
+        ber_output=ber_output,
     )
 
 

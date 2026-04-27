@@ -273,6 +273,7 @@ class StreamDevRuntime(MiniscopeConfig):
         "for NTP synchronization check (default: 0.01 = 10ms).",
     )
     ber_test_n_buffers: int = Field(
-        100,
-        description="Number of buffers to consume when running BER test mode.",
+        32767,
+        description="Number of buffers to consume when running BER test mode. "
+        "Default is 2^15 - 1, one full cycle of the PRBS-15 seed space.",
     )
