@@ -380,7 +380,7 @@ def workflow(
         stitched = run_stitch(
             recordings,
             output_dir=output_dir,
-            noise_config=denoise_config_parsed,
+            noise_config=denoise_config_parsed.noise_patch,
             progress=True,
             force=force,
         )
