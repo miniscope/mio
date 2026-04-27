@@ -2,6 +2,7 @@
 DAQ For use with FPGA and Uart streaming video sources.
 """
 
+import json
 import logging
 import multiprocessing
 import os
@@ -423,6 +424,41 @@ class StreamDevice(Device):
             "windows": windows,
         }
 
+    def _ber_mode(
+        self,
+        serial_buffer_queue: multiprocessing.Queue,
+        ber_output: Path | None,
+    ) -> None:
+        """
+        BER-mode dispatch from :meth:`.capture`. Runs :meth:`.prbs15_ber`, logs the
+        summary, and (optionally) writes the run's results as JSON to ``ber_output``.
+        """
+        target_buffers = self.config.runtime.ber_test_n_buffers
+        result = self.prbs15_ber(serial_buffer_queue, target_buffers)
+        self.logger.info(
+            "BER test complete: buffers=%d bits=%d errors=%d ber=%.6g",
+            result["buffers"],
+            result["bits"],
+            result["errors"],
+            result["ber"],
+        )
+        if ber_output:
+            summary = {
+                "prbs": "PRBS-15 (x^15+x^14+1, MSB-first), "
+                "seed=(buffer_count & 0x7FFF) or 1",
+                "target_buffers": target_buffers,
+                "buffers_received": result["buffers"],
+                "buffer_count_start": result["buffer_count_start"],
+                "buffer_count_end": result["buffer_count_end"],
+                "bits": result["bits"],
+                "errors": result["errors"],
+                "ber": result["ber"],
+                "windows": result["windows"],
+            }
+            with open(ber_output, "w") as f:
+                json.dump(summary, f, indent=2, default=float)
+            self.logger.info("BER results written to %s", ber_output)
+
     def _buffer_to_frame(
         self,
         serial_buffer_queue: multiprocessing.Queue,
@@ -761,33 +797,7 @@ class StreamDevice(Device):
 
         try:
             if mode == "ber":
-                target_buffers = self.config.runtime.ber_test_n_buffers
-                result = self.prbs15_ber(serial_buffer_queue, target_buffers)
-                self.logger.info(
-                    "BER test complete: buffers=%d bits=%d errors=%d ber=%.6g",
-                    result["buffers"],
-                    result["bits"],
-                    result["errors"],
-                    result["ber"],
-                )
-                if ber_output:
-                    summary = {
-                        "prbs": "PRBS-15 (x^15+x^14+1, MSB-first), "
-                        "seed=(buffer_count & 0x7FFF) or 1",
-                        "target_buffers": target_buffers,
-                        "buffers_received": result["buffers"],
-                        "buffer_count_start": result["buffer_count_start"],
-                        "buffer_count_end": result["buffer_count_end"],
-                        "bits": result["bits"],
-                        "errors": result["errors"],
-                        "ber": result["ber"],
-                        "windows": result["windows"],
-                    }
-                    import json
-
-                    with open(ber_output, "w") as f:
-                        json.dump(summary, f, indent=2, default=float)
-                    self.logger.info("BER results written to %s", ber_output)
+                self._ber_mode(serial_buffer_queue, ber_output)
                 return
             for image, header_list in exact_iter(imagearray.get, None):
                 self._handle_frame(
