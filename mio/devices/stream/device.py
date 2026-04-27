@@ -308,6 +308,7 @@ class StreamDevice(Device):
         Consume up to n_buffers from serial_buffer_queue, compare payload to PRBS-15
         (seed=1, restarted each buffer), and return {'buffers','bits','errors','ber'}.
         """
+
         def prbs15_bytes(n: int) -> bytes:
             # PRBS-15: x^15 + x^14 + 1, pack bits MSB-first into bytes
             s = 1  # treat 0 as 1
