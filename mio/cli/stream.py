@@ -75,10 +75,12 @@ def _capture_options(fn: Callable) -> Callable:
         type=ConfigIDOrPath(),
     )(fn)
     fn = click.option(
-        "--ber",
-        is_flag=True,
-        default=False,
-        help="Run BER measurement mode. No video/metadata output.",
+        "--mode",
+        type=click.Choice(["image", "ber"]),
+        default="image",
+        show_default=True,
+        help="Capture mode. 'image' produces video/metadata; 'ber' runs a "
+        "PRBS bit-error-rate test and produces no video/metadata output.",
     )(fn)
     return fn
 
@@ -94,7 +96,7 @@ def capture(
     no_display: bool | None,
     binary_export: bool | None,
     metadata_display: bool | None,
-    ber: bool | None,
+    mode: str,
     **kwargs: dict,
 ) -> None:
     """
@@ -113,11 +115,10 @@ def capture(
 
     if output:
         unique_stem_path = get_unique_stempath(Path(output))
-        video_output = None if ber else unique_stem_path.with_suffix(".avi")
-        metadata_output = None if ber else unique_stem_path.with_suffix(".csv")
-
+        video_output = unique_stem_path.with_suffix(".avi") if mode == "image" else None
+        metadata_output = unique_stem_path.with_suffix(".csv") if mode == "image" else None
         binary_output = unique_stem_path.with_suffix(".bin") if binary_export else None
-        ber_output = unique_stem_path.with_suffix(".json") if ber else None
+        ber_output = unique_stem_path.with_suffix(".json") if mode == "ber" else None
     else:
         video_output = None
         metadata_output = None
@@ -135,10 +136,10 @@ def capture(
         video_kwargs=okwargs,
         metadata=metadata_output,
         binary=binary_output,
-        show_video=not no_display and not ber,
-        show_metadata=metadata_display and not ber,
+        show_video=not no_display and mode == "image",
+        show_metadata=metadata_display and mode == "image",
         freq_mask_config=freq_mask_config,
-        ber=bool(ber),
+        mode=mode,
         ber_output=ber_output,
     )
 

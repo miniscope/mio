@@ -333,7 +333,7 @@ def test_ber_measurement(tmp_path, set_okdev_input):
     set_okdev_input(data_file)
 
     daq_inst = StreamDevice(device_config=daqConfig)
-    daq_inst.capture(source="fpga", ber=True, ber_output=output_json, show_video=False)
+    daq_inst.capture(source="fpga", mode="ber", ber_output=output_json, show_video=False)
 
     assert output_json.exists()
     result = json.loads(output_json.read_text())

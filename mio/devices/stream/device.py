@@ -624,7 +624,7 @@ class StreamDevice(Device):
         show_video: bool | None = True,
         show_metadata: bool | None = False,
         freq_mask_config: FrequencyMaskingConfig | None = None,
-        ber: bool = False,
+        mode: Literal["image", "ber"] = "image",
         ber_output: Path | None = None,
     ) -> None:
         """
@@ -650,8 +650,11 @@ class StreamDevice(Device):
             If True, display the video in real-time.
         show_metadata: bool, optional
             If True, show metadata information during capture.
-        ber: bool, optional
-            If True, perform a BER test on the incoming data stream.
+        mode: Literal["image", "ber"], optional
+            Capture mode. ``"image"`` (default) reconstructs frames; ``"ber"`` runs
+            a PRBS bit-error-rate test on the incoming data stream.
+        ber_output: Path, optional
+            When ``mode == "ber"``, JSON file to write the BER summary to.
 
         Raises
         ------
@@ -705,7 +708,7 @@ class StreamDevice(Device):
                 fps=self.config.fs,
             )
 
-        if not ber:
+        if mode == "image":
             p_buffer_to_frame = multiprocessing.Process(
                 target=self._buffer_to_frame,
                 args=(
@@ -724,7 +727,7 @@ class StreamDevice(Device):
             )
 
         p_recv.start()
-        if not ber:
+        if mode == "image":
             p_buffer_to_frame.start()
             p_format_frame.start()
 
@@ -742,7 +745,7 @@ class StreamDevice(Device):
             )
 
         try:
-            if ber:
+            if mode == "ber":
                 target_buffers = self.config.runtime.ber_test_n_buffers
                 result = self.prbs15_ber(serial_buffer_queue, target_buffers)
                 self.logger.info(
@@ -817,7 +820,7 @@ class StreamDevice(Device):
             # Should never happen except during a force quit, as we wait for all
             # queues to drain, and if they don't do so on their own, it's a bug.
             procs = [p_recv]
-            if not ber:
+            if mode == "image":
                 procs.extend([p_buffer_to_frame, p_format_frame])
             for p in procs:
                 p.join(timeout=5)
