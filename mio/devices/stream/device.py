@@ -306,21 +306,19 @@ class StreamDevice(Device):
     ) -> dict[str, float | int]:
         """
         Consume up to n_buffers from serial_buffer_queue, compare payload to PRBS-15
-        (seed=1, restarted each buffer), and return {'buffers','bits','errors','ber'}.
+        seeded per-buffer with the device's ``buffer_count`` (mod 2^15, zero remapped
+        to 1), and return {'buffers','bits','errors','ber'}.
         """
 
-        def prbs15_bytes(n: int) -> bytes:
+        def prbs15_bytes(n: int, seed: int) -> bytes:
             # PRBS-15: x^15 + x^14 + 1, MSB-first
-            s = 1
             out = bytearray(n)
             for i in range(n):
                 b = 0
                 for _ in range(8):
-                    newbit = ((s >> 14) ^ (s >> 13)) & 1
-                    s = ((s << 1) | newbit) & 0x7FFF
-                    if s == 0:
-                        s = 1
-                    b = (b << 1) | (s & 1)
+                    newbit = ((seed >> 14) ^ (seed >> 13)) & 1
+                    seed = ((seed << 1) | newbit) & 0x7FFF
+                    b = (b << 1) | (seed & 1)
                 out[i] = b
             return bytes(out)
 
@@ -329,12 +327,14 @@ class StreamDevice(Device):
         got = 0
 
         for buf in exact_iter(serial_buffer_queue.get, None):
-            _, payload_u8 = self._parse_header(buf)
+            header_data, payload_u8 = self._parse_header(buf)
             if payload_u8.size == 0:
                 continue
 
-            # PRBS resyncs per buffer; no trim/pad (padding would inflate errors).
-            exp = np.frombuffer(prbs15_bytes(int(payload_u8.size)), dtype=np.uint8)
+            # PRBS phase derived from device buffer_count: walks distinct LFSR phases
+            # across buffers, and host/firmware mismatch surfaces as ~50% BER.
+            seed = (header_data.buffer_count & 0x7FFF) or 1
+            exp = np.frombuffer(prbs15_bytes(int(payload_u8.size), seed), dtype=np.uint8)
 
             diff = np.bitwise_xor(payload_u8, exp)
             errors = int(np.unpackbits(diff).sum())
