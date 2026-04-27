@@ -318,6 +318,43 @@ def test_metadata_plotting(tmp_path, default_streamdaq):
     )
 
 
+def test_ber_measurement(tmp_path, set_okdev_input):
+    """
+    BER capture should parse the firmware-supplied PRBS-15 stream, trim each buffer
+    to ``pixel_count``, and report stable error / bit counts. Regression baseline
+    captured against a 2 MB slice of a recorded BER stream.
+    """
+    import json
+
+    output_json = tmp_path / "ber.json"
+    daqConfig = StreamDevConfig.from_id("test-ber-prbs15")
+
+    data_file = DATA_DIR / "ber_prbs15_test.bin"
+    set_okdev_input(data_file)
+
+    daq_inst = StreamDevice(device_config=daqConfig)
+    daq_inst.capture(source="fpga", ber=True, ber_output=output_json, show_video=False)
+
+    assert output_json.exists()
+    result = json.loads(output_json.read_text())
+
+    # Run-level totals
+    assert result["buffers_received"] == 120
+    assert result["bits"] == 120 * 5032 * 8
+    assert result["errors"] == 1418666
+    assert result["ber"] == pytest.approx(0.2936758910, rel=1e-9)
+    assert result["buffer_count_start"] == 207576
+    assert result["buffer_count_end"] == 207695
+
+    # Mid-run window (logged every 100 buffers)
+    assert len(result["windows"]) == 1
+    window = result["windows"][0]
+    assert window["bits"] == 100 * 5032 * 8
+    assert window["errors"] == 1155852
+    assert window["buffer_count_start"] == 207576
+    assert window["buffer_count_end"] == 207675
+
+
 def test_bitfile_names():
     """
     Bitfile names should have no periods or whitespace in the filenames (except for the .bit extension)

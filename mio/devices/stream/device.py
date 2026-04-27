@@ -766,6 +766,7 @@ class StreamDevice(Device):
                         "windows": result["windows"],
                     }
                     import json
+
                     with open(ber_output, "w") as f:
                         json.dump(summary, f, indent=2, default=float)
                     self.logger.info("BER results written to %s", ber_output)
