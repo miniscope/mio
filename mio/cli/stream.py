@@ -117,8 +117,8 @@ def capture(
 
     if output:
         unique_stem_path = get_unique_stempath(Path(output))
-        video_output = unique_stem_path.with_suffix(".avi") if mode == "image" else None
-        metadata_output = unique_stem_path.with_suffix(".csv") if mode == "image" else None
+        video_output = unique_stem_path.with_suffix(".avi") if mode == "capture" else None
+        metadata_output = unique_stem_path.with_suffix(".csv") if mode == "capture" else None
         binary_output = unique_stem_path.with_suffix(".bin") if binary_export else None
         ber_output = unique_stem_path.with_suffix(".json") if mode == "ber" else None
     else:
@@ -138,8 +138,8 @@ def capture(
         video_kwargs=okwargs,
         metadata=metadata_output,
         binary=binary_output,
-        show_video=not no_display and mode == "image",
-        show_metadata=metadata_display and mode == "image",
+        show_video=not no_display and mode == "capture",
+        show_metadata=metadata_display and mode == "capture",
         freq_mask_config=freq_mask_config,
         mode=mode,
         ber_output=ber_output,
