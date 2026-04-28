@@ -128,10 +128,7 @@ def dodge_existing_configs(tmp_path_factory):
     backup_global_config_path = tmp_path / "mio_config.yaml.global.bak"
 
     user_config_path = list(Config().user_dir.glob("mio_config.*"))
-    if len(user_config_path) == 0:
-        user_config_path = None
-    else:
-        user_config_path = user_config_path[0]
+    user_config_path = None if len(user_config_path) == 0 else user_config_path[0]
 
     backup_user_config_path = tmp_path / "mio_config.yaml.user.bak"
 

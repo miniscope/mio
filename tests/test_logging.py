@@ -67,8 +67,8 @@ def test_nested_loggers(capsys, tmp_path):
 
     root_logger = logging.getLogger("mio")
 
-    warnings.warn(f"FILES IN LOG DIR: {list(log_dir.glob('*'))}")
-    warnings.warn(f"ROOT LOGGER HANDLERS: {root_logger.handlers}")
+    warnings.warn(f"FILES IN LOG DIR: {list(log_dir.glob('*'))}", stacklevel=2)
+    warnings.warn(f"ROOT LOGGER HANDLERS: {root_logger.handlers}", stacklevel=2)
 
     assert len(root_logger.handlers) == 2
     assert len(parent.handlers) == 0
@@ -131,7 +131,7 @@ def test_init_logger_from_config(
         assert stream_handler.level == level_name_map.get(level)
 
 
-def _mp_function(name, path):
+def _mp_function(name, path) -> None:
     logger = init_logger(name, log_dir=path, level="DEBUG", file_level="DEBUG")
     for i in range(100):
         sleep(0.001)

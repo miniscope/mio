@@ -219,7 +219,7 @@ def test_processing_speed(tmp_path, default_streamdaq):
 
     if processing_fps < warning_fps:
         warnings.warn(
-            f"Processing speed is {processing_fps} FPS, which is slower than the required {warning_fps} FPS"
+            f"Processing speed is {processing_fps} FPS, which is slower than the required {warning_fps} FPS", stacklevel=2
         )
 
     assert processing_fps > test_fail_fps
@@ -305,7 +305,7 @@ def test_metadata_plotting(tmp_path, default_streamdaq):
     # test that the object was instantiated and that it got the data it should have
     assert default_streamdaq._header_plotter is not None
     assert [
-        k for k in default_streamdaq._header_plotter.data.keys()
+        k for k in default_streamdaq._header_plotter.data
     ] == default_streamdaq.config.runtime.plot.keys
     assert all(
         [

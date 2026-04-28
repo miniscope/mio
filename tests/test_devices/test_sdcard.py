@@ -144,7 +144,7 @@ def test_to_img(wirefree_battery, n_frames, hash, tmp_path):
     # we should be able to read all the frames!
     frames = []
     with sd:
-        for i in range(n_frames):
+        for _i in range(n_frames):
             frames.append(sd.read(return_header=True))
 
     assert not any([f.frame is None for f in frames])

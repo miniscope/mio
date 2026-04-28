@@ -10,7 +10,7 @@ MOCK_DIR = Path(__file__).parent / "mock"
 
 
 @pytest.fixture(autouse=True)
-def mock_okdev(monkeypatch):
+def mock_okdev(monkeypatch) -> None:
     from mio.devices.stream import device
     from mio.interfaces import opalkelly
     from mio.interfaces.mocks import okDevMock
@@ -20,7 +20,7 @@ def mock_okdev(monkeypatch):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def mock_config_source(monkeypatch_session):
+def mock_config_source(monkeypatch_session) -> None:
     """
     Add the `tests/data/config` directory to the config sources for the entire testing session
     """
@@ -34,7 +34,7 @@ def mock_config_source(monkeypatch_session):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def set_matplotlib_backend():
+def set_matplotlib_backend() -> None:
     """Use headless agg backend during tests"""
     import matplotlib
 
@@ -48,7 +48,7 @@ def set_okdev_input(monkeypatch):
     okDev data source
     """
 
-    def _set_okdev_input(file: str | Path):
+    def _set_okdev_input(file: str | Path) -> None:
         from mio.interfaces.mocks import okDevMock
 
         monkeypatch.setattr(okDevMock, "DATA_FILE", file)

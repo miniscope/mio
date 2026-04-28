@@ -48,9 +48,11 @@ def test_invalid_key(mock_serial_ports):
 
 
 def test_invalid_port():
-    with patch("serial.tools.list_ports.comports", return_value=mock_comports()):
-        with pytest.raises(ValidationError):
-            DevUpdateCommand(device_id=1, port="COM3", key="LED", value=50)
+    with (
+        patch("serial.tools.list_ports.comports", return_value=mock_comports()),
+        pytest.raises(ValidationError),
+    ):
+        DevUpdateCommand(device_id=1, port="COM3", key="LED", value=50)
 
 
 def test_device_command(mock_serial_ports):
