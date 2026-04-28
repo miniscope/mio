@@ -140,8 +140,8 @@ omit = [
 
 [tool.ruff]
 target-version = "py310"
-include = ["mio/**/*.py", "pyproject.toml"]
-exclude = ["docs", "tests", "mio/vendor", "noxfile.py"]
+include = ["mio/**/*.py", "tests/**/*.py", "pyproject.toml"]
+exclude = ["docs", "mio/vendor", "noxfile.py"]
 line-length = 100
 
 [tool.ruff.lint]
@@ -188,6 +188,25 @@ ignore = [
 
 fixable = ["ALL"]
 
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**"= [
+    # don't need to document everything in the tests
+    "D100", "D101", "D102", "D103", "D104", "D105", "D106",
+]
+"**/tests/conftest.py" = [
+    # allow unused imports - fixtures
+    "F401",
+    # allow star import of fixtures
+    "F403",
+]
+"**/tests/**/test_*" = [
+
+    # don't require annotating fixture types in test functions
+    "ANN001", "ANN201",
+    # allow unused variables, also normal in tests
+    "F841",
+]
+
 [tool.mypy]
 plugins = [
     "pydantic.mypy"
@@ -203,6 +222,5 @@ warn_unreachable = true
 
 [tool.black]
 target-version = ['py310', 'py311', 'py312', 'py313']
-include = "mio/.*\\.py$"
 extend-exclude = 'mio/vendor/.*'
 line-length = 100
