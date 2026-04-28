@@ -56,7 +56,7 @@ def default_streamdaq(set_okdev_input, request) -> StreamDevice:
     ],
 )
 def test_video_output(
-    device_config,
+    config,
     filter_config,
     data,
     video_hash_list,
@@ -68,7 +68,7 @@ def test_video_output(
     output_video = tmp_path / "output.avi"
     output_csv = tmp_path / "output.csv"
 
-    daqConfig = StreamDevConfig.from_id(device_config)
+    daqConfig = StreamDevConfig.from_id(config)
     daqConfig.runtime.frame_buffer_queue_size = buffer_size
     daqConfig.runtime.image_buffer_queue_size = buffer_size
     daqConfig.runtime.serial_buffer_queue_size = buffer_size
@@ -230,7 +230,7 @@ def test_processing_speed(tmp_path, default_streamdaq):
     assert processing_fps > test_fail_fps
 
 
-def test_csv_no_duplicates(tmp_path, set_okdev_input):
+def test_csv_no_duplicates(tmp_path, set_okdev_input, monkeypatch):
     """
     Regression test for a bug where header rows would be written multiple times when
     buffer_npix was miscalculated and the buffer_list wasn't cleared after being put in the
@@ -239,7 +239,12 @@ def test_csv_no_duplicates(tmp_path, set_okdev_input):
     bad_buffer_npix = [5072, 5072, 5072, 5072]
     output_csv = tmp_path / "output.csv"
 
-    daqConfig = StreamDevConfig.from_id("test-wireless-200px")
+    class PatchedConfig(StreamDevConfig):
+        @property
+        def buffer_npix(self) -> list[int]:
+            return bad_buffer_npix
+
+    daqConfig = PatchedConfig.from_id("test-wireless-200px")
 
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)

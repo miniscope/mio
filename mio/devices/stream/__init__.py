@@ -7,7 +7,8 @@ like the miniscope zero and MSUS
 
 from mio.devices.stream.headers import StreamBufferHeader, StreamDevRuntime, StreamPlotterConfig
 from mio.devices.stream.config import StreamDevConfig
-from mio.devices.stream.device import StreamDevice, iter_buffers
+from mio.devices.stream.device import StreamDevice
+from mio.devices.stream.nodes import iter_buffers
 
 __all__ = [
     "StreamBufferHeader",

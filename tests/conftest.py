@@ -18,12 +18,12 @@ MOCK_DIR = Path(__file__).parent / "mock"
 
 @pytest.fixture(autouse=True)
 def mock_okdev(monkeypatch: MonkeyPatch) -> None:
-    from mio.devices.stream import device
+    from mio.devices.stream import nodes
     from mio.interfaces import opalkelly
     from mio.interfaces.mocks import okDevMock
 
     monkeypatch.setattr(opalkelly, "okDev", okDevMock)
-    monkeypatch.setattr(device, "okDev", okDevMock)
+    monkeypatch.setattr(nodes, "okDev", okDevMock)
 
 
 @pytest.fixture(scope="session", autouse=True)

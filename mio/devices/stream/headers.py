@@ -224,7 +224,7 @@ class StreamBufferHeader(BufferHeader):
         )
 
         runtime_metadata = RuntimeMetadata(
-            buffer_recv_index=-1,  # will be set later in _buffer_to_frame for processed buffers
+            buffer_recv_index=-1,  # will be set later in buffer_to_frame for processed buffers
             buffer_recv_unix_time=time.time(),
         )
         header_data = StreamBufferHeader.from_sequence(
