@@ -169,7 +169,10 @@ def test_complete_header(tmp_config_source, src: str):
 
 @pytest.mark.parametrize("config_file", CONFIG_DIR.rglob("*.y*ml"))
 def test_builtins_unchanged(config_file):
-    """None of the builtin configs should be modified on load - i.e. they should all have correct headers."""
+    """
+    None of the builtin configs should be modified on load -
+    i.e. they should all have correct headers.
+    """
     before = config_file.read_text()
     _ = LoaderModel.from_yaml(config_file)
     after = config_file.read_text()

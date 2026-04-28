@@ -1,6 +1,13 @@
 import os
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+
+import pytest
+import yaml
+from _pytest.monkeypatch import MonkeyPatch
+
+from mio.models.mixins import ConfigYAMLMixin
 
 from .fixtures import *
 
@@ -10,7 +17,7 @@ MOCK_DIR = Path(__file__).parent / "mock"
 
 
 @pytest.fixture(autouse=True)
-def mock_okdev(monkeypatch) -> None:
+def mock_okdev(monkeypatch: MonkeyPatch) -> None:
     from mio.devices.stream import device
     from mio.interfaces import opalkelly
     from mio.interfaces.mocks import okDevMock
@@ -20,7 +27,7 @@ def mock_okdev(monkeypatch) -> None:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def mock_config_source(monkeypatch_session) -> None:
+def mock_config_source(monkeypatch_session: MonkeyPatch) -> None:
     """
     Add the `tests/data/config` directory to the config sources for the entire testing session
     """
@@ -42,7 +49,7 @@ def set_matplotlib_backend() -> None:
 
 
 @pytest.fixture()
-def set_okdev_input(monkeypatch):
+def set_okdev_input(monkeypatch: MonkeyPatch) -> Callable[[str | Path], None]:
     """
     closure fixture to set the environment variable used by StreamDevice to set the
     okDev data source
@@ -58,7 +65,7 @@ def set_okdev_input(monkeypatch):
 
 
 @pytest.fixture()
-def config_override(tmp_path) -> Callable[[Path, dict], Path]:
+def config_override(tmp_path: Path) -> Callable[[Path, dict], Path]:
     """
     Create a config file with some of its properties overridden
     """

@@ -111,7 +111,8 @@ def test_cli_config_list():
     runner = CliRunner()
     result = runner.invoke(_list, color=False)
 
-    # not testing for the literal table structure, but we should have headers and some table characters
+    # not testing for the literal table structure,
+    # but we should have headers and some table characters
     for header_substr in ("id", "mio_model", "path"):
         assert header_substr in result.output
 
@@ -134,7 +135,8 @@ def test_cli_config_list():
         assert "│ .sdcard.SDLayout" in result.output
         assert "│ wirefree/" in result.output
 
-    # verbose should display the full values (though truncated in testing because console width is 80)
+    # verbose should display the full values
+    # (though truncated in testing because console width is 80)
     result = runner.invoke(_list, ["-v"], color=False)
     assert "mio.models." in result.output
     assert str(CONFIG_DIR)[0:5] in result.output

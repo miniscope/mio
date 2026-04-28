@@ -166,12 +166,12 @@ def test_multiprocess_logging(capfd, tmp_path):
     assert "mio.log" in logs
     assert len(logs) == 4
 
-    for logfile, logs in logs.items():
+    for logfile, lines in logs.items():
 
         # main logfile does not receive messages
         if logfile == "mio.log":
-            assert len(logs.split("\n")) == 1
+            assert len(lines.split("\n")) == 1
         else:
-            assert len(logs.split("\n")) == 101
+            assert len(lines.split("\n")) == 101
 
     assert len(re.findall("DEBUG", stdout.out)) == 300
