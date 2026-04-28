@@ -31,15 +31,15 @@ def init_logger(
             and indicate what they are logging for, eg. ``mio.sdcard``
             and don't contain metadata like timestamps, etc. (which are in the logs)
         log_dir (:class:`pathlib.Path`): Directory to store file-based logs in. If ``None``,
-            get from :class:`.Config`. If ``False`` , disable file logging.
+            get from :class:`~.mio.models.config.Config`. If ``False`` , disable file logging.
         level (:class:`.LOG_LEVELS`): Level to use for stdout logging. If ``None`` ,
             get from :class:`.Config`
         file_level (:class:`.LOG_LEVELS`): Level to use for file-based logging.
-             If ``None`` , get from :class:`.Config`
+             If ``None`` , get from :class:`~.mio.models.config.Config`
         log_file_n (int): Number of rotating file logs to use.
-            If ``None`` , get from :class:`.Config`
+            If ``None`` , get from :class:`~.mio.models.config.Config`
         log_file_size (int): Maximum size of logfiles before rotation.
-            If ``None`` , get from :class:`.Config`
+            If ``None`` , get from :class:`~.mio.models.config.Config`
 
     Returns:
         :class:`logging.Logger`
