@@ -79,6 +79,7 @@ class StreamDevice(Device):
 
     config_cls = StreamDevConfig
     header_cls = StreamBufferHeader
+    device_name = "stream"
 
     def __init__(
         self,
@@ -96,9 +97,8 @@ class StreamDevice(Device):
 
             Passed either as the instantiated config object or a path to on-disk yaml configuration
         """
+        super().__init__(config)
 
-        self.logger = init_logger("streamDaq")
-        self.config = StreamDevConfig.from_any(config)
         self.preamble = self.config.preamble
         self.terminate: multiprocessing.Event = multiprocessing.Event()
 
@@ -109,19 +109,12 @@ class StreamDevice(Device):
         self._buffer_recv_index: int = 0
 
     @property
-    def buffer_npix(self) -> list[int]:
-        """List of pixels per buffer for a frame"""
-        if self._buffer_npix is None:
-            self._buffer_npix = self.config.buffer_npix
-        return self._buffer_npix
-
-    @property
     def nbuffer_per_fm(self) -> int:
         """
         Number of buffers per frame, computed from :attr:`.buffer_npix`
         """
         if self._nbuffer_per_fm is None:
-            self._nbuffer_per_fm = len(self.buffer_npix)
+            self._nbuffer_per_fm = len(self.config.buffer_npix)
         return self._nbuffer_per_fm
 
     def _trim(
@@ -192,6 +185,7 @@ class StreamDevice(Device):
     def _fpga_recv(
         self,
         serial_buffer_queue: multiprocessing.Queue,
+        config: StreamDevConfig,
         read_length: int = None,
         pre_first: bool = True,
         capture_binary: Path | None = None,
@@ -230,10 +224,10 @@ class StreamDevice(Device):
             )
         # determine length
         if read_length is None:
-            read_length = int(max(self.buffer_npix) * self.config.pix_depth / 8 / 16) * 16
+            read_length = int(max(config.buffer_npix) * config.pix_depth / 8 / 16) * 16
 
         # set up fpga interfaces
-        BIT_FILE = self.config.bitstream
+        BIT_FILE = config.bitstream
         if not BIT_FILE.exists():
             serial_buffer_queue.put(None)
             raise RuntimeError(f"Configured to use bitfile at {BIT_FILE} but no such file exists")
@@ -243,7 +237,7 @@ class StreamDevice(Device):
 
         # read loop
         pre = Bits(self.preamble)
-        if self.config.reverse_header_bits:
+        if config.reverse_header_bits:
             pre = pre[::-1]
 
         locallogs.debug("Starting capture")
@@ -255,7 +249,7 @@ class StreamDevice(Device):
                     serial_buffer_queue.put(
                         buf,
                         block=True,
-                        timeout=self.config.runtime.queue_put_timeout,
+                        timeout=config.runtime.queue_put_timeout,
                     )
                 except queue.Full:
                     locallogs.warning("Serial buffer queue full, skipping buffer.")
@@ -263,9 +257,7 @@ class StreamDevice(Device):
         finally:
             locallogs.debug("Quitting, putting sentinel in queue")
             try:
-                serial_buffer_queue.put(
-                    None, block=True, timeout=self.config.runtime.queue_put_timeout
-                )
+                serial_buffer_queue.put(None, block=True, timeout=config.runtime.queue_put_timeout)
             except queue.Full:
                 locallogs.error("Serial buffer queue full, Could not put sentinel.")
 
@@ -465,6 +457,7 @@ class StreamDevice(Device):
         self,
         serial_buffer_queue: multiprocessing.Queue,
         frame_buffer_queue: multiprocessing.Queue,
+        config: StreamDevConfig,
     ) -> None:
         """
         Group buffers together to make frames.
@@ -486,7 +479,9 @@ class StreamDevice(Device):
 
         cur_fm_num = -1  # Frame number
 
-        frame_buffer_prealloc = [np.zeros(bufsize, dtype=np.uint8) for bufsize in self.buffer_npix]
+        frame_buffer_prealloc = [
+            np.zeros(bufsize, dtype=np.uint8) for bufsize in config.buffer_npix
+        ]
         frame_buffer = frame_buffer_prealloc.copy()
         header_list = []
 
@@ -505,7 +500,7 @@ class StreamDevice(Device):
                 try:
                     serial_buffer = self._trim(
                         serial_buffer,
-                        self.buffer_npix,
+                        config.buffer_npix,
                         header_data,
                         locallogs,
                     )
@@ -514,7 +509,7 @@ class StreamDevice(Device):
                         f"Frame {header_data.frame_num}; Buffer {header_data.buffer_count} "
                         f"(#{header_data.frame_buffer_count} in frame)\n"
                         f"Frame buffer count {header_data.frame_buffer_count} "
-                        f"exceeds buffer number per frame {len(self.buffer_npix)}\n"
+                        f"exceeds buffer number per frame {len(config.buffer_npix)}\n"
                         f"Discarding buffer.\n"
                         f"-- THERE IS AN ERROR IN YOUR CONFIGURATION CAUSING YOU TO LOSE DATA --\n"
                         f"If you are seeing this emitted on every frame, "
@@ -727,7 +722,7 @@ class StreamDevice(Device):
         self.logger.debug("Starting fpga capture process")
         p_recv = ctx.Process(
             target=self._fpga_recv,
-            args=(serial_buffer_queue, read_length, True, binary),
+            args=(serial_buffer_queue, self.config, read_length, True, binary),
             name="_fpga_recv",
         )
 
@@ -753,10 +748,7 @@ class StreamDevice(Device):
         if mode == "capture":
             p_buffer_to_frame = ctx.Process(
                 target=self._buffer_to_frame,
-                args=(
-                    serial_buffer_queue,
-                    frame_buffer_queue,
-                ),
+                args=(serial_buffer_queue, frame_buffer_queue, self.config),
                 name="_buffer_to_frame",
             )
             p_format_frame = ctx.Process(

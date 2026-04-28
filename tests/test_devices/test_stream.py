@@ -247,9 +247,9 @@ def test_csv_no_duplicates(tmp_path, set_okdev_input):
     daq_inst = StreamDevice(config=daqConfig)
     daq_inst._buffer_npix = bad_buffer_npix
 
-    assert daq_inst.buffer_npix == bad_buffer_npix
+    assert daq_inst.config.buffer_npix == bad_buffer_npix
     daq_inst.capture(metadata=output_csv, show_video=False)
-    assert daq_inst.buffer_npix == bad_buffer_npix
+    assert daq_inst.config.buffer_npix == bad_buffer_npix
     df = pd.read_csv(output_csv)
     vals, counts = np.unique(df.buffer_count, return_counts=True)
     assert all(
