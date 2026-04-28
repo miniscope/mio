@@ -725,10 +725,13 @@ class StreamDevice(Device):
         )
         imagearray = shared_resource_manager.Queue(self.config.runtime.image_buffer_queue_size)
 
+        spawn_mode = "fork" if "fork" in multiprocessing.get_all_start_methods() else "spawn"
+        ctx = multiprocessing.get_context(spawn_mode)
+
         procs = []
         if source == "uart":
             self.logger.debug("Starting uart capture process")
-            p_recv = multiprocessing.Process(
+            p_recv = ctx.Process(
                 target=self._uart_recv,
                 args=(
                     serial_buffer_queue,
@@ -738,7 +741,7 @@ class StreamDevice(Device):
             )
         elif source == "fpga":
             self.logger.debug("Starting fpga capture process")
-            p_recv = multiprocessing.Process(
+            p_recv = ctx.Process(
                 target=self._fpga_recv,
                 args=(serial_buffer_queue, read_length, True, binary),
                 name="_fpga_recv",
@@ -765,7 +768,7 @@ class StreamDevice(Device):
             )
 
         if mode == "capture":
-            p_buffer_to_frame = multiprocessing.Process(
+            p_buffer_to_frame = ctx.Process(
                 target=self._buffer_to_frame,
                 args=(
                     serial_buffer_queue,
@@ -773,7 +776,7 @@ class StreamDevice(Device):
                 ),
                 name="_buffer_to_frame",
             )
-            p_format_frame = multiprocessing.Process(
+            p_format_frame = ctx.Process(
                 target=self._format_frame,
                 args=(
                     frame_buffer_queue,
