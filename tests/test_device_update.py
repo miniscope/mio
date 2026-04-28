@@ -11,9 +11,10 @@ from mio.models.devupdate import UpdateCommandDefinitions, UpdateKey
 @pytest.fixture
 def mock_serial_fixture(request):
     device_list = request.param
-    with patch("serial.Serial") as mock_serial, patch(
-        "serial.tools.list_ports.comports"
-    ) as mock_comports:
+    with (
+        patch("serial.Serial") as mock_serial,
+        patch("serial.tools.list_ports.comports") as mock_comports,
+    ):
         mock_serial_instance = mock_serial.return_value
         mock_comports.return_value = [
             MagicMock(vid=device["vid"], pid=device["pid"], device=device["device"])

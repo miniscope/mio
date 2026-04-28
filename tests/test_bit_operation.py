@@ -8,7 +8,7 @@ from mio.bit_operation import BufferFormatter
     "test_input,header_length_words,preamble_length_words,reverse_header_bits,reverse_header_bytes,reverse_payload_bits,reverse_payload_bytes,expected_header,expected_payload",
     [
         (
-            b"\x12\x34\x56\x78\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xAA\xBB",
+            b"\x12\x34\x56\x78\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xaa\xbb",
             1,
             0,
             False,
@@ -22,7 +22,7 @@ from mio.bit_operation import BufferFormatter
             ),
         ),
         (
-            b"\x12\x34\x56\x78\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xAA\xBB",
+            b"\x12\x34\x56\x78\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xaa\xbb",
             1,
             0,
             True,

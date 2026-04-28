@@ -16,16 +16,16 @@ class TestVideoPlotter(unittest.TestCase):
             NamedVideo(name="Video2", video=[np.random.rand(64, 64) * 255 for _ in range(50)]),
         ]
 
-    @patch('mio.plots.video.plt.show')
-    @patch('mio.plots.video.plt.subplots')
-    @patch('mio.plots.video.Slider')
-    @patch('mio.plots.video.Button')
+    @patch("mio.plots.video.plt.show")
+    @patch("mio.plots.video.plt.subplots")
+    @patch("mio.plots.video.Slider")
+    @patch("mio.plots.video.Button")
     def test_show_video_with_controls(self, MockButton, MockSlider, mock_subplots, mock_show):
         # Create mock axes and figures
         mock_axes = [MagicMock() for _ in range(len(self.named_frames))]
         mock_figure = MagicMock()
         mock_subplots.return_value = (mock_figure, mock_axes)
-        
+
         # Instantiate VideoPlotter and call show method
         video_plotter = VideoPlotter(self.named_frames, 0, 10)
         video_plotter.show()
