@@ -37,15 +37,8 @@ Name format of the bitstream files and directory:
 Below is an example configuration YAML file. More examples can be found in `mio.data.config`.
 
 ```yaml
-# capture device. "OK" (Opal Kelly) or "UART"
-device: "OK"
-
 # bitstream file to upload to Opal Kelly board
 bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit"
-
-# COM port and baud rate is only required for UART mode
-port: null
-baudrate: null
 
 # Preamble for each data buffer.
 preamble: 0x12345678

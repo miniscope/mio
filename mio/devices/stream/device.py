@@ -1,5 +1,5 @@
 """
-DAQ For use with FPGA and Uart streaming video sources.
+DAQ For use with FPGA streaming video sources.
 """
 
 import json
@@ -58,7 +58,7 @@ def exact_iter(f: Callable, sentinel: Any) -> Generator[Any, None, None]:
 
 class StreamDevice(Device):
     """
-    A combined class for configuring and reading frames from a UART and FPGA source.
+    A class for configuring and reading frames from an FPGA source.
     Supported devices and required inputs are described in StreamDevConfig model documentation.
     This function's entry point is the main function, which should be used from the
     stream_image_capture command installed with the package.
@@ -665,7 +665,6 @@ class StreamDevice(Device):
 
     def capture(
         self,
-        source: Literal["uart", "fpga"],
         read_length: int | None = None,
         video: Path | None = None,
         video_kwargs: dict | None = None,
@@ -682,8 +681,6 @@ class StreamDevice(Device):
 
         Parameters
         ----------
-        source : Literal[uart, fpga]
-            Device source.
         read_length : Optional[int], optional
             Passed to :func:`~mio.stream_daq.stream_daq._fpga_recv` when
             `source == "fpga"`, by default None.
@@ -706,11 +703,6 @@ class StreamDevice(Device):
             ``"ber"`` runs a PRBS bit-error-rate test on the incoming data stream.
         ber_output: Path, optional
             When ``mode == "ber"``, JSON file to write the BER summary to.
-
-        Raises
-        ------
-        ValueError
-            If `source` is not in `("uart", "fpga")`.
         """
         self.terminate.clear()
         if mode not in ("capture", "ber"):
@@ -729,25 +721,12 @@ class StreamDevice(Device):
         ctx = multiprocessing.get_context(spawn_mode)
 
         procs = []
-        if source == "uart":
-            self.logger.debug("Starting uart capture process")
-            p_recv = ctx.Process(
-                target=self._uart_recv,
-                args=(
-                    serial_buffer_queue,
-                    self.config["port"],
-                    self.config["baudrate"],
-                ),
-            )
-        elif source == "fpga":
-            self.logger.debug("Starting fpga capture process")
-            p_recv = ctx.Process(
-                target=self._fpga_recv,
-                args=(serial_buffer_queue, read_length, True, binary),
-                name="_fpga_recv",
-            )
-        else:
-            raise ValueError(f"source can be one of uart or fpga. Got {source}")
+        self.logger.debug("Starting fpga capture process")
+        p_recv = ctx.Process(
+            target=self._fpga_recv,
+            args=(serial_buffer_queue, read_length, True, binary),
+            name="_fpga_recv",
+        )
 
         procs.append(p_recv)
 
@@ -765,6 +744,7 @@ class StreamDevice(Device):
             writer = VideoWriter(
                 path=video,
                 fps=self.config.fs,
+                output_dict=video_kwargs,
             )
 
         if mode == "capture":
