@@ -18,10 +18,9 @@ import numpy as np
 from bitstring import BitArray, Bits
 
 from mio import init_logger
-from mio.bit_operation import BufferFormatter
 from mio.devices.base import Device
 from mio.devices.stream.config import StreamDevConfig
-from mio.devices.stream.headers import RuntimeMetadata, StreamBufferHeader
+from mio.devices.stream.headers import StreamBufferHeader
 from mio.exceptions import EndOfRecordingException, StreamReadError
 from mio.interfaces.mocks import okDevMock
 from mio.io import BufferedCSVWriter, VideoWriter
@@ -99,7 +98,6 @@ class StreamDevice(Device):
         """
         super().__init__(config)
 
-        self.preamble = self.config.preamble
         self.terminate: multiprocessing.Event = multiprocessing.Event()
 
         self._buffer_npix: list[int] | None = None
@@ -107,15 +105,6 @@ class StreamDevice(Device):
         self._buffered_writer: BufferedCSVWriter | None = None
         self._header_plotter: StreamPlotter | None = None
         self._buffer_recv_index: int = 0
-
-    @property
-    def nbuffer_per_fm(self) -> int:
-        """
-        Number of buffers per frame, computed from :attr:`.buffer_npix`
-        """
-        if self._nbuffer_per_fm is None:
-            self._nbuffer_per_fm = len(self.config.buffer_npix)
-        return self._nbuffer_per_fm
 
     def _trim(
         self,
@@ -161,144 +150,12 @@ class StreamDevice(Device):
 
         return data
 
-    def _init_okdev(self, BIT_FILE: Path, read_length: int) -> Union["okDev", okDevMock]:
-        # FIXME: when multiprocessing bug resolved, remove this and just mock in tests
-        if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("STREAMDAQ_MOCKRUN"):
-            dev = okDevMock(read_length=read_length)
-        else:
-            if not HAVE_OK:
-                raise ImportError(
-                    "OpalKelly driver not available. Cannot read from FPGA.\n"
-                    "See: https://docs.opalkelly.com/fpsdk/getting-started/"
-                )
-            dev = okDev(read_length=read_length)
-
-        dev.upload_bit(str(BIT_FILE))
-        dev.set_wire(0x00, 0b0010)
-        time.sleep(0.01)
-        dev.set_wire(0x00, 0b0)
-        dev.set_wire(0x00, 0b1000)
-        time.sleep(0.01)
-        dev.set_wire(0x00, 0b0)
-        return dev
-
-    def _fpga_recv(
+    def prbs15_ber(
         self,
         serial_buffer_queue: multiprocessing.Queue,
         config: StreamDevConfig,
-        read_length: int = None,
-        pre_first: bool = True,
-        capture_binary: Path | None = None,
-    ) -> None:
-        """
-        Function to read bitstream from OpalKelly device and store buffer in `serial_buffer_queue`.
-
-        The bits data are read in fixed chunks defined by `read_length`.
-        Then we concatenate the chunks and try to look for `self.preamble` in the data.
-        The data between every pair of `self.preamble` is considered to be a single buffer and
-        stored in `serial_buffer_queue`.
-
-        Parameters
-        ----------
-        serial_buffer_queue : multiprocessing.Queue[bytes]
-            The queue holding the buffer data.
-        read_length : int, optional
-            Length of data to read in chunks (in number of bytes), by default None.
-            If `None`, an optimal length is estimated so that it roughly covers a single buffer
-            and is an integer multiple of 16 bytes (as recommended by OpalKelly).
-        pre_first : bool, optional
-            Whether preamble/header is returned at the beginning of each buffer, by default True.
-        capture_binary: Path, optional
-            save binary directly from the ``okDev`` to the supplied path, if present.
-
-        Raises
-        ------
-        RuntimeError
-            If the OpalKelly device library cannot be found
-        """
-        locallogs = init_logger("streamDaq.fpga_recv")
-        if not HAVE_OK:
-            serial_buffer_queue.put(None)
-            raise RuntimeError(
-                "Couldnt import OpalKelly device. Check the docs for install instructions!"
-            )
-        # determine length
-        if read_length is None:
-            read_length = int(max(config.buffer_npix) * config.pix_depth / 8 / 16) * 16
-
-        # set up fpga interfaces
-        BIT_FILE = config.bitstream
-        if not BIT_FILE.exists():
-            serial_buffer_queue.put(None)
-            raise RuntimeError(f"Configured to use bitfile at {BIT_FILE} but no such file exists")
-
-        # set up fpga interfaces
-        dev = self._init_okdev(BIT_FILE, read_length)
-
-        # read loop
-        pre = Bits(self.preamble)
-        if config.reverse_header_bits:
-            pre = pre[::-1]
-
-        locallogs.debug("Starting capture")
-        try:
-            for buf in iter_buffers(
-                dev, preamble=pre, pre_first=pre_first, capture_binary=capture_binary
-            ):
-                try:
-                    serial_buffer_queue.put(
-                        buf,
-                        block=True,
-                        timeout=config.runtime.queue_put_timeout,
-                    )
-                except queue.Full:
-                    locallogs.warning("Serial buffer queue full, skipping buffer.")
-
-        finally:
-            locallogs.debug("Quitting, putting sentinel in queue")
-            try:
-                serial_buffer_queue.put(None, block=True, timeout=config.runtime.queue_put_timeout)
-            except queue.Full:
-                locallogs.error("Serial buffer queue full, Could not put sentinel.")
-
-    def _parse_header(self, buffer: bytes) -> tuple[StreamBufferHeader, np.ndarray]:
-        """
-        Function to parse header from each buffer.
-
-        Parameters
-        ----------
-        buffer : bytes
-            Input buffer.
-
-        Returns
-        -------
-        Tuple[BufferHeader, ndarray]
-            The returned header data and payload (uint8).
-        """
-
-        header, payload = BufferFormatter.bytebuffer_to_ndarrays(
-            buffer=buffer,
-            header_length_words=int(self.config.header_len / 32),
-            preamble_length_words=int(len(Bits(self.config.preamble)) / 32),
-            reverse_header_bits=self.config.reverse_header_bits,
-            reverse_header_bytes=self.config.reverse_header_bytes,
-            reverse_payload_bits=self.config.reverse_payload_bits,
-            reverse_payload_bytes=self.config.reverse_payload_bytes,
-        )
-
-        runtime_metadata = RuntimeMetadata(
-            buffer_recv_index=-1,  # will be set later in _buffer_to_frame for processed buffers
-            buffer_recv_unix_time=time.time(),
-        )
-        header_data = StreamBufferHeader.from_sequence(
-            header.astype(int), runtime_metadata=runtime_metadata
-        )
-        header_data.adc_scaling = self.config.adc_scale
-
-        return header_data, payload
-
-    def prbs15_ber(
-        self, serial_buffer_queue: multiprocessing.Queue, n_buffers: int = 100
+        n_buffers: int = 100,
+        header_cls: type[StreamBufferHeader] = StreamBufferHeader,
     ) -> dict[str, float | int]:
         """
         Measure bit-error-rate (BER) on the communication link using PRBS-15
@@ -347,7 +204,7 @@ class StreamDevice(Device):
         self.logger.info("BER capture starting, target=%d buffers", n_buffers)
 
         for buf in exact_iter(serial_buffer_queue.get, None):
-            header_data, payload_u8 = self._parse_header(buf)
+            header_data, payload_u8 = header_cls.from_buffer(buf, config)
             if payload_u8.size == 0:
                 continue
 
@@ -429,7 +286,7 @@ class StreamDevice(Device):
         summary, and (optionally) writes the run's results as JSON to ``ber_output``.
         """
         target_buffers = self.config.runtime.ber_test_n_buffers
-        result = self.prbs15_ber(serial_buffer_queue, target_buffers)
+        result = self.prbs15_ber(serial_buffer_queue, self.config, target_buffers, self.header_cls)
         self.logger.info(
             "BER test complete: buffers=%d bits=%d errors=%d ber=%.6g",
             result["buffers"],
@@ -458,6 +315,7 @@ class StreamDevice(Device):
         serial_buffer_queue: multiprocessing.Queue,
         frame_buffer_queue: multiprocessing.Queue,
         config: StreamDevConfig,
+        header_cls: type[StreamBufferHeader],
     ) -> None:
         """
         Group buffers together to make frames.
@@ -487,7 +345,7 @@ class StreamDevice(Device):
 
         try:
             for serial_buffer in exact_iter(serial_buffer_queue.get, None):
-                header_data, serial_buffer = self._parse_header(serial_buffer)
+                header_data, serial_buffer = header_cls.from_buffer(serial_buffer, config)
 
                 if cur_fm_num == -1 and header_data.frame_buffer_count != 0:
                     # discard until we see a buffer 0 to align to the start of a frame
@@ -748,7 +606,7 @@ class StreamDevice(Device):
         if mode == "capture":
             p_buffer_to_frame = ctx.Process(
                 target=self._buffer_to_frame,
-                args=(serial_buffer_queue, frame_buffer_queue, self.config),
+                args=(serial_buffer_queue, frame_buffer_queue, self.config, self.header_cls),
                 name="_buffer_to_frame",
             )
             p_format_frame = ctx.Process(
@@ -935,6 +793,107 @@ def iter_buffers(
 
         if pre_pos:
             cur_buffer = cur_buffer[pre_pos[-1] :]
+
+
+def _init_okdev(BIT_FILE: Path, read_length: int) -> Union["okDev", okDevMock]:
+    # FIXME: when multiprocessing bug resolved, remove this and just mock in tests
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("STREAMDAQ_MOCKRUN"):
+        dev = okDevMock(read_length=read_length)
+    else:
+        if not HAVE_OK:
+            raise ImportError(
+                "OpalKelly driver not available. Cannot read from FPGA.\n"
+                "See: https://docs.opalkelly.com/fpsdk/getting-started/"
+            )
+        dev = okDev(read_length=read_length)
+
+    dev.upload_bit(str(BIT_FILE))
+    dev.set_wire(0x00, 0b0010)
+    time.sleep(0.01)
+    dev.set_wire(0x00, 0b0)
+    dev.set_wire(0x00, 0b1000)
+    time.sleep(0.01)
+    dev.set_wire(0x00, 0b0)
+    return dev
+
+
+def _fpga_recv(
+    serial_buffer_queue: multiprocessing.Queue,
+    config: StreamDevConfig,
+    read_length: int = None,
+    pre_first: bool = True,
+    capture_binary: Path | None = None,
+) -> None:
+    """
+    Function to read bitstream from OpalKelly device and store buffer in `serial_buffer_queue`.
+
+    The bits data are read in fixed chunks defined by `read_length`.
+    Then we concatenate the chunks and try to look for `self.preamble` in the data.
+    The data between every pair of `self.preamble` is considered to be a single buffer and
+    stored in `serial_buffer_queue`.
+
+    Parameters
+    ----------
+    serial_buffer_queue : multiprocessing.Queue[bytes]
+        The queue holding the buffer data.
+    read_length : int, optional
+        Length of data to read in chunks (in number of bytes), by default None.
+        If `None`, an optimal length is estimated so that it roughly covers a single buffer
+        and is an integer multiple of 16 bytes (as recommended by OpalKelly).
+    pre_first : bool, optional
+        Whether preamble/header is returned at the beginning of each buffer, by default True.
+    capture_binary: Path, optional
+        save binary directly from the ``okDev`` to the supplied path, if present.
+
+    Raises
+    ------
+    RuntimeError
+        If the OpalKelly device library cannot be found
+    """
+    locallogs = init_logger("streamDaq.fpga_recv")
+    if not HAVE_OK:
+        serial_buffer_queue.put(None)
+        raise RuntimeError(
+            "Couldnt import OpalKelly device. Check the docs for install instructions!"
+        )
+    # determine length
+    if read_length is None:
+        read_length = int(max(config.buffer_npix) * config.pix_depth / 8 / 16) * 16
+
+    # set up fpga interfaces
+    BIT_FILE = config.bitstream
+    if not BIT_FILE.exists():
+        serial_buffer_queue.put(None)
+        raise RuntimeError(f"Configured to use bitfile at {BIT_FILE} but no such file exists")
+
+    # set up fpga interfaces
+    dev = _init_okdev(BIT_FILE, read_length)
+
+    # read loop
+    pre = Bits(config.preamble)
+    if config.reverse_header_bits:
+        pre = pre[::-1]
+
+    locallogs.debug("Starting capture")
+    try:
+        for buf in iter_buffers(
+            dev, preamble=pre, pre_first=pre_first, capture_binary=capture_binary
+        ):
+            try:
+                serial_buffer_queue.put(
+                    buf,
+                    block=True,
+                    timeout=config.runtime.queue_put_timeout,
+                )
+            except queue.Full:
+                locallogs.warning("Serial buffer queue full, skipping buffer.")
+
+    finally:
+        locallogs.debug("Quitting, putting sentinel in queue")
+        try:
+            serial_buffer_queue.put(None, block=True, timeout=config.runtime.queue_put_timeout)
+        except queue.Full:
+            locallogs.error("Serial buffer queue full, Could not put sentinel.")
 
 
 # DEPRECATION: v0.3.0
