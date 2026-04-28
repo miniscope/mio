@@ -27,7 +27,7 @@ def stream() -> None:
 def _common_options(fn: Callable) -> Callable:
     fn = click.option(
         "-c",
-        "--device_config",
+        "--config",
         required=True,
         help=(
             "Either a config `id` or a path to device config YAML file for streamDaq. "
@@ -91,7 +91,7 @@ def _capture_options(fn: Callable) -> Callable:
 @_common_options
 @_capture_options
 def capture(
-    device_config: Path,
+    config: Path,
     freq_mask_config: Path | None,
     output: Path | None,
     okwarg: dict | None,
@@ -106,13 +106,13 @@ def capture(
     """
 
     # Rather don't like getting config here, but I want to do ntp check in the CLI so it's here.
-    config = StreamDevConfig.from_any(device_config)
+    config = StreamDevConfig.from_any(config)
     if config.runtime.ntp_server is not None:
         prompt_ntp_sync(
             config.runtime.ntp_server, max_offset_seconds=config.runtime.ntp_max_offset_seconds
         )
 
-    daq_inst = StreamDevice(device_config=device_config)
+    daq_inst = StreamDevice(config=config)
     okwargs = dict(okwarg)
 
     if output:

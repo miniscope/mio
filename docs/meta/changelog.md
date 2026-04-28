@@ -1,5 +1,43 @@
 # Changelog
 
+## Upcoming
+
+### *.*
+
+#### Added
+
+- [`#183`](https://github.com/miniscope/mio/pull/183) - Begin standardizing device metadata tables with pandera.
+  Unfortunately this requires a duplication of models, where we specify individual record models AND table models,
+  this is mostly for perf reasons, whomp whomp, but there are some legitimate impedance mismatches between record and table models.
+  This change is only on the tables specified by the {class}`~mio.models.dataset.Dataset` classes so far,
+  but will work towards structuring all metadata tables declaratively.
+- [`#179`](https://github.com/miniscope/mio/pull/179) - Add `ber` (bitwise error mode) as a separate mode in streamdaq
+
+#### Refactor
+
+- [`#186`](https://github.com/miniscope/mio/pull/186) - 
+  Decompose the streamdaq into separable functions:
+  - passing config rather than binding them all to the stream device instance
+  - Move `_parse_header` to take place on the `StreamBufferHeader` class entirely
+  - Rm convenience accessors to the config from the instance (that were used by the methods, coupling them to the instance)
+- Standardize `Device` instantiation and class vars (renames `--device-config` to just `config`)
+- [`#177`](https://github.com/miniscope/mio/pull/177) - Move all headers to `devices` structure
+- [`#166`](https://github.com/miniscope/mio/pull/166) - Create `devices` and move streamdaq to it
+
+#### Removed
+
+- [`#185`](https://github.com/miniscope/mio/pull/185) - remove UART remnants on stream daq
+
+#### DX/Testing
+
+- [`#184`](https://github.com/miniscope/mio/pull/184) - lint the tests lol
+
+#### Deps
+
+- [`#164`](https://github.com/miniscope/mio/pull/164)
+  - Remove numpy version cap (unclear why it was there)
+  - Add opencv cap for mac, where recent versions of python-opencv have not been built with ffmpeg
+
 ## 0.10
 
 ### 0.10.0

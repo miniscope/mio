@@ -1,13 +1,28 @@
 """Headers & metadata for stream devices"""
 
-from typing import ClassVar
+from __future__ import annotations
 
+import sys
+import time
+from typing import TYPE_CHECKING, ClassVar
+
+import numpy as np
 import pandera.pandas as pa
+from bitstring import Bits
 from pydantic import Field, computed_field
 
+from mio.bit_operation import BufferFormatter
 from mio.devices.base.headers import BufferHeader
 from mio.models import MiniscopeConfig
 from mio.models.models import Table
+
+if TYPE_CHECKING:
+    from mio.devices.stream.config import StreamDevConfig
+
+if sys.version_info < (3, 11):
+    from typing_extensions import Self
+else:
+    from typing import Self
 
 
 class ADCScaling(MiniscopeConfig):
@@ -152,6 +167,30 @@ class StreamBufferHeader(BufferHeader):
             return self.input_voltage_raw
         else:
             return self._adc_scaling.scale_input_voltage(self.input_voltage_raw)
+
+    @classmethod
+    def from_buffer(cls, buffer: bytes, config: StreamDevConfig) -> tuple[Self, np.ndarray]:
+        """
+        Parse a header and its payload from the raw buffer from the hardware
+        """
+
+        header, payload = BufferFormatter.bytebuffer_to_ndarrays(
+            buffer=buffer,
+            header_length_words=int(config.header_len / 32),
+            preamble_length_words=int(len(Bits(config.preamble)) / 32),
+            reverse_header_bits=config.reverse_header_bits,
+            reverse_header_bytes=config.reverse_header_bytes,
+            reverse_payload_bits=config.reverse_payload_bits,
+            reverse_payload_bytes=config.reverse_payload_bytes,
+        )
+
+        runtime_metadata = dict(
+            buffer_recv_index=-1,  # will be set later in buffer_to_frame for processed buffers
+            buffer_recv_unix_time=time.time(),
+        )
+        header_data = StreamBufferHeader.from_sequence(header.astype(int), **runtime_metadata)
+        header_data.adc_scaling = config.adc_scale
+        return header_data, payload
 
 
 class StreamBufferTable(Table):

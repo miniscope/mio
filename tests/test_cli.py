@@ -163,7 +163,7 @@ def test_cli_capture(
     path_stem = tmp_path / "data"
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)
-    args = ["--device_config", "test-wireless-200px", "--output", str(path_stem), "--no-display"]
+    args = ["--config", "test-wireless-200px", "--output", str(path_stem), "--no-display"]
 
     # bit of a ghost parameterization -
     # left as placeholder in case we want to test freq mask display

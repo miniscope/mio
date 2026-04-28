@@ -26,14 +26,14 @@ def default_streamdaq(set_okdev_input, request) -> StreamDevice:
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)
 
-    daq_inst = StreamDevice(device_config=daqConfig)
+    daq_inst = StreamDevice(config=daqConfig)
     return daq_inst
 
 
 # Second parameter makes sure the filtering does not affect the video output
 @pytest.mark.parametrize("buffer_size", [5, 50])
 @pytest.mark.parametrize(
-    "device_config,filter_config,data,video_hash_list,show_video",
+    "config,filter_config,data,video_hash_list,show_video",
     [
         (
             "test-wireless-200px",
@@ -56,7 +56,7 @@ def default_streamdaq(set_okdev_input, request) -> StreamDevice:
     ],
 )
 def test_video_output(
-    device_config,
+    config,
     filter_config,
     data,
     video_hash_list,
@@ -68,7 +68,7 @@ def test_video_output(
     output_video = tmp_path / "output.avi"
     output_csv = tmp_path / "output.csv"
 
-    daqConfig = StreamDevConfig.from_id(device_config)
+    daqConfig = StreamDevConfig.from_id(config)
     daqConfig.runtime.frame_buffer_queue_size = buffer_size
     daqConfig.runtime.image_buffer_queue_size = buffer_size
     daqConfig.runtime.serial_buffer_queue_size = buffer_size
@@ -81,7 +81,7 @@ def test_video_output(
     data_file = DATA_DIR / data
     set_okdev_input(data_file)
 
-    daq_inst = StreamDevice(device_config=daqConfig)
+    daq_inst = StreamDevice(config=daqConfig)
     daq_inst.capture(
         video=output_video,
         metadata=output_csv,
@@ -129,7 +129,7 @@ def test_binary_output(config, data, set_okdev_input, tmp_path):
 
     output_file = tmp_path / "output.bin"
 
-    daq_inst = StreamDevice(device_config=daqConfig)
+    daq_inst = StreamDevice(config=daqConfig)
     daq_inst.capture(binary=output_file, show_video=False)
 
     assert output_file.exists()
@@ -223,26 +223,35 @@ def test_processing_speed(tmp_path, default_streamdaq):
     assert processing_fps > test_fail_fps
 
 
-def test_csv_no_duplicates(tmp_path, set_okdev_input):
+_bad_buffer_npix = [5072, 5072, 5072, 5072]
+
+
+class PatchedConfig(StreamDevConfig):
+    @property
+    def buffer_npix(self) -> list[int]:
+        global _bad_buffer_npix
+        return _bad_buffer_npix
+
+
+def test_csv_no_duplicates(tmp_path, set_okdev_input, monkeypatch):
     """
     Regression test for a bug where header rows would be written multiple times when
     buffer_npix was miscalculated and the buffer_list wasn't cleared after being put in the
     queue multiple times.
     """
-    bad_buffer_npix = [5072, 5072, 5072, 5072]
+    global _bad_buffer_npix
     output_csv = tmp_path / "output.csv"
 
-    daqConfig = StreamDevConfig.from_id("test-wireless-200px")
+    daqConfig = PatchedConfig.from_id("test-wireless-200px")
 
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)
 
-    daq_inst = StreamDevice(device_config=daqConfig)
-    daq_inst._buffer_npix = bad_buffer_npix
+    daq_inst = StreamDevice(config=daqConfig)
 
-    assert daq_inst.buffer_npix == bad_buffer_npix
+    assert daq_inst.config.buffer_npix == _bad_buffer_npix
     daq_inst.capture(metadata=output_csv, show_video=False)
-    assert daq_inst.buffer_npix == bad_buffer_npix
+    assert daq_inst.config.buffer_npix == _bad_buffer_npix
     df = pd.read_csv(output_csv)
     vals, counts = np.unique(df.buffer_count, return_counts=True)
     assert all(
@@ -333,7 +342,7 @@ def test_ber_measurement(tmp_path, set_okdev_input):
     data_file = DATA_DIR / "ber_prbs15_test.bin"
     set_okdev_input(data_file)
 
-    daq_inst = StreamDevice(device_config=daqConfig)
+    daq_inst = StreamDevice(config=daqConfig)
     daq_inst.capture(mode="ber", ber_output=output_json, show_video=False)
 
     assert output_json.exists()
@@ -417,7 +426,7 @@ def test_writer_calls_match_avi_frame_count(tmp_path: Path, set_okdev_input, mon
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)
 
-    daq = StreamDevice(device_config=daqConfig)
+    daq = StreamDevice(config=daqConfig)
     daq.capture(video=output_video, metadata=None, show_video=False)
 
     assert output_video.exists()
