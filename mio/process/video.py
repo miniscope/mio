@@ -8,9 +8,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
+from pandera.typing.pandas import DataFrame
 from tqdm import tqdm, trange
 
 from mio import init_logger
+from mio.devices.stream import StreamBufferTable
+from mio.devices.tables import NoiseTable, TimestampTable
 from mio.io import VideoReader, VideoWriter
 from mio.models.dataset import Recording
 from mio.models.frames import NamedFrame, NamedVideo
@@ -618,7 +621,7 @@ def denoise(
 
 def score_noise(
     recording: Recording, config: NoisePatchConfig, progress: bool = False
-) -> pd.DataFrame:
+) -> DataFrame[NoiseTable]:
     """
     Score framewise noise from a recording,
     yielding a dataframe with columns for each kind of noise
@@ -853,7 +856,7 @@ def _drop_frames_by_index(
     return filtered
 
 
-def _make_frame_timestamp_csv(csv_df: pd.DataFrame) -> pd.DataFrame:
+def _make_frame_timestamp_csv(csv_df: DataFrame[StreamBufferTable]) -> DataFrame[TimestampTable]:
     """
     Export a frame-timestamp CSV file mapping reconstructed_frame_index to unix timestamps.
 

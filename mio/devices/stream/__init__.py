@@ -5,16 +5,16 @@ like the miniscope zero and MSUS
 
 # ruff: noqa: I001
 
-from mio.devices.stream.headers import StreamBufferHeader, StreamDevRuntime, StreamPlotterConfig
-from mio.devices.stream.config import StreamDevConfig
+from mio.devices.stream.headers import StreamBufferHeader, StreamBufferTable
+from mio.devices.stream.config import StreamDevConfig, StreamDevRuntime
 from mio.devices.stream.device import StreamDevice
 from mio.devices.stream.nodes import iter_buffers
 
 __all__ = [
     "StreamBufferHeader",
+    "StreamBufferTable",
     "StreamDevice",
     "StreamDevConfig",
     "StreamDevRuntime",
-    "StreamPlotterConfig",
     "iter_buffers",
 ]

@@ -15,7 +15,10 @@ from mio.devices.base import Device
 from mio.devices.stream.ber import prbs15_ber
 from mio.devices.stream.config import StreamDevConfig
 from mio.devices.stream.headers import StreamBufferHeader
+from mio.exceptions import EndOfRecordingException, StreamReadError
+from mio.interfaces.mocks import okDevMock
 from mio.devices.stream.nodes import buffer_to_frame, exact_iter, format_frame, fpga_recv
+
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.models.process import FrequencyMaskingConfig
 from mio.plots.headers import StreamPlotter
@@ -314,7 +317,7 @@ class StreamDevice(Device):
                 if metadata:
                     self.logger.debug("Saving header metadata")
                     try:
-                        meta_row = header.model_dump_all()
+                        meta_row = header.model_dump()
                         self._buffered_writer.append(meta_row)
                     except Exception as e:
                         self.logger.exception(f"Exception saving headers: \n{e}")

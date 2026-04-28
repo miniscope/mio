@@ -11,9 +11,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from mio.devices.tables import StitchRecord
 from mio.models.dataset import Recording, StitchedRecording
 from mio.process.stitch import (
-    StitchRecord,
     _align_by_time,
     _has_discontinuous_runs,
     _score_edges,

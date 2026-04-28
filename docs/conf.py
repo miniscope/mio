@@ -7,6 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 from importlib.metadata import version as _version
+import logging
 import sys
 from unittest.mock import Mock
 
@@ -86,3 +87,27 @@ autodoc_pydantic_model_show_json_error_strategy = "coerce"
 
 # todo
 todo_include_todos = True
+
+
+class FuckTheSphinxFiltersFilter(logging.Filter):
+    """
+    A filter that goes like "fuck the sphinx logging filters that ignores our warning filters"
+
+    Use this whenever there are warnings that cause CI to fail but you can't actually
+    do normal python things to suppress the warnings because
+    """
+
+    def filter(self, record: logging.LogRecord):
+        # the pandera Config thing gets indexed multiple times but we actually don't care!
+        if (
+            hasattr(record, "getMessage")
+            and "pandera.api.dataframe.model.Config" in record.getMessage()
+        ):
+            return False
+
+        return True
+
+
+def setup(app):
+    logger = logging.getLogger("sphinx")
+    logger.filters.insert(0, FuckTheSphinxFiltersFilter())

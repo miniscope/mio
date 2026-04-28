@@ -6,4 +6,5 @@ High-level control of external devices like miniscopes and DAQs
 base
 sdcard
 stream
+tables
 ```
