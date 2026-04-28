@@ -1,0 +1,56 @@
+id: ber-prbs15
+mio_model: mio.models.stream.StreamDevConfig
+mio_version: "v5.0.0"
+
+# capture device. "OK" (Opal Kelly) or "UART"
+device: "OK"
+
+# bitstream file to upload to Opal Kelly board
+bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit"
+
+# COM port and baud rate is only required for UART mode
+port: null
+baudrate: null
+
+# Preamble for each data buffer.
+preamble: 0x12345678
+
+# Image format. StreamDaq will calculate buffer size, etc. based on these parameters
+frame_width: 200
+frame_height: 200
+pix_depth: 8
+
+# Buffer data format. These have to match the firmware value
+header_len: 384 # 12 * 32 (in bits)
+buffer_block_length: 10
+block_size: 512
+num_buffers: 32
+dummy_words: 10
+
+# Flags to flip bit/byte order when recovering headers and data. See model document for details.
+reverse_header_bits: True
+reverse_header_bytes: True
+reverse_payload_bits: True
+reverse_payload_bytes: False
+
+adc_scale:
+  ref_voltage: 1.1
+  bitdepth: 8
+  battery_div_factor: 5
+  vin_div_factor: 11.3
+
+runtime:
+  serial_buffer_queue_size: 10
+  frame_buffer_queue_size: 5
+  image_buffer_queue_size: 5
+  csv:
+    buffer: 100
+  plot:
+    keys:
+      - timestamp
+      - buffer_count
+      - frame_buffer_count
+      - battery_voltage
+      - input_voltage
+    update_ms: 1000
+    history: 500

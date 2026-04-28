@@ -2,6 +2,7 @@
 DAQ For use with FPGA and Uart streaming video sources.
 """
 
+import json
 import logging
 import multiprocessing
 import os
@@ -301,6 +302,162 @@ class StreamDevice(Device):
 
         return header_data, payload
 
+    def prbs15_ber(
+        self, serial_buffer_queue: multiprocessing.Queue, n_buffers: int = 100
+    ) -> dict[str, float | int]:
+        """
+        Measure bit-error-rate (BER) on the communication link using PRBS-15
+        (pseudo-random binary sequence; standard pattern for link tests).
+
+        Unlike typical continuous-stream BER tests, this preserves the buffer framing of
+        normal image capture and substitutes PRBS-15 for the pixel payload, so the
+        same data path that delivers images is what's being measured.
+
+        Each buffer's payload is seeded with the device's buffer_count (mod 2^15,
+        zero remapped to 1). The host regenerates the matching sequence and XORs
+        it against the first ``pixel_count`` bytes of payload; trailing bytes
+        (dummies, merged-buffer tails) are excluded so they don't inflate the count.
+        Errors and bits accumulate across up to ``n_buffers`` buffers.
+
+        Returns
+        -------
+        dict
+            Run summary: ``buffers`` received, ``bits`` and ``errors`` compared,
+            cumulative ``ber``, ``buffer_count`` range, and per-window snapshots.
+        """
+
+        def prbs15_bytes(n: int, seed: int) -> bytes:
+            # PRBS-15: x^15 + x^14 + 1, MSB-first
+            out = bytearray(n)
+            for i in range(n):
+                b = 0
+                for _ in range(8):
+                    newbit = ((seed >> 14) ^ (seed >> 13)) & 1
+                    seed = ((seed << 1) | newbit) & 0x7FFF
+                    b = (b << 1) | (seed & 1)
+                out[i] = b
+            return bytes(out)
+
+        total_bits = 0
+        total_errors = 0
+        window_bits = 0
+        window_errors = 0
+        got = 0
+        log_every = 100
+        windows: list[dict[str, float | int]] = []
+        first_buffer_count: int | None = None
+        last_buffer_count: int | None = None
+        window_first_buffer_count: int | None = None
+
+        self.logger.info("BER capture starting, target=%d buffers", n_buffers)
+
+        for buf in exact_iter(serial_buffer_queue.get, None):
+            header_data, payload_u8 = self._parse_header(buf)
+            if payload_u8.size == 0:
+                continue
+
+            # Trim to pixel_count; bytes beyond are dummies or random artifacts, not PRBS.
+            n_prbs = header_data.pixel_count
+            if n_prbs <= 0 or n_prbs > payload_u8.size:
+                continue
+            payload_u8 = payload_u8[:n_prbs]
+
+            # buffer_count seeds the PRBS.
+            buffer_count = header_data.buffer_count
+            seed = (buffer_count & 0x7FFF) or 1
+            exp = np.frombuffer(prbs15_bytes(payload_u8.size, seed), dtype=np.uint8)
+
+            diff = np.bitwise_xor(payload_u8, exp)
+            errors = int(np.unpackbits(diff).sum())
+            bits = payload_u8.size * 8
+
+            total_errors += errors
+            total_bits += bits
+            window_errors += errors
+            window_bits += bits
+            got += 1
+            if first_buffer_count is None:
+                first_buffer_count = buffer_count
+            if window_first_buffer_count is None:
+                window_first_buffer_count = buffer_count
+            last_buffer_count = buffer_count
+
+            if got % log_every == 0:
+                running = total_errors / total_bits if total_bits else float("nan")
+                window_ber = window_errors / window_bits if window_bits else float("nan")
+                self.logger.info(
+                    "BER progress: %d/%d buffers, bits=%d errors=%d "
+                    "cumulative_ber=%.6g window_ber=%.6g",
+                    got,
+                    n_buffers,
+                    total_bits,
+                    total_errors,
+                    running,
+                    window_ber,
+                )
+                windows.append(
+                    {
+                        "buffer_index_end": got,
+                        "buffer_count_start": window_first_buffer_count,
+                        "buffer_count_end": buffer_count,
+                        "bits": window_bits,
+                        "errors": window_errors,
+                        "window_ber": window_ber,
+                        "cumulative_ber": running,
+                    }
+                )
+                window_errors = 0
+                window_bits = 0
+                window_first_buffer_count = None
+
+            if got >= n_buffers:
+                break
+
+        ber = (total_errors / total_bits) if total_bits else float("nan")
+        return {
+            "buffers": got,
+            "bits": total_bits,
+            "errors": total_errors,
+            "ber": ber,
+            "buffer_count_start": first_buffer_count,
+            "buffer_count_end": last_buffer_count,
+            "windows": windows,
+        }
+
+    def _ber_mode(
+        self,
+        serial_buffer_queue: multiprocessing.Queue,
+        ber_output: Path | None,
+    ) -> None:
+        """
+        BER-mode dispatch from :meth:`.capture`. Runs :meth:`.prbs15_ber`, logs the
+        summary, and (optionally) writes the run's results as JSON to ``ber_output``.
+        """
+        target_buffers = self.config.runtime.ber_test_n_buffers
+        result = self.prbs15_ber(serial_buffer_queue, target_buffers)
+        self.logger.info(
+            "BER test complete: buffers=%d bits=%d errors=%d ber=%.6g",
+            result["buffers"],
+            result["bits"],
+            result["errors"],
+            result["ber"],
+        )
+        if ber_output:
+            summary = {
+                "prbs": "PRBS-15 (x^15+x^14+1, MSB-first), " "seed=(buffer_count & 0x7FFF) or 1",
+                "target_buffers": target_buffers,
+                "buffers_received": result["buffers"],
+                "buffer_count_start": result["buffer_count_start"],
+                "buffer_count_end": result["buffer_count_end"],
+                "bits": result["bits"],
+                "errors": result["errors"],
+                "ber": result["ber"],
+                "windows": result["windows"],
+            }
+            with open(ber_output, "w") as f:
+                json.dump(summary, f, indent=2, default=float)
+            self.logger.info("BER results written to %s", ber_output)
+
     def _buffer_to_frame(
         self,
         serial_buffer_queue: multiprocessing.Queue,
@@ -517,6 +674,8 @@ class StreamDevice(Device):
         show_video: bool | None = True,
         show_metadata: bool | None = False,
         freq_mask_config: FrequencyMaskingConfig | None = None,
+        mode: Literal["capture", "ber"] = "capture",
+        ber_output: Path | None = None,
     ) -> None:
         """
         Entry point to start frame capture.
@@ -541,6 +700,12 @@ class StreamDevice(Device):
             If True, display the video in real-time.
         show_metadata: bool, optional
             If True, show metadata information during capture.
+        mode: Literal["capture", "ber"], optional
+            Capture mode. ``"capture"`` (default) is the main capture routine
+            that outputs videos and metadata;
+            ``"ber"`` runs a PRBS bit-error-rate test on the incoming data stream.
+        ber_output: Path, optional
+            When ``mode == "ber"``, JSON file to write the BER summary to.
 
         Raises
         ------
@@ -548,6 +713,8 @@ class StreamDevice(Device):
             If `source` is not in `("uart", "fpga")`.
         """
         self.terminate.clear()
+        if mode not in ("capture", "ber"):
+            raise ValueError(f"Mode must be either 'capture' or 'ber', got {mode}")
 
         shared_resource_manager = multiprocessing.Manager()
         serial_buffer_queue = shared_resource_manager.Queue(
@@ -558,9 +725,13 @@ class StreamDevice(Device):
         )
         imagearray = shared_resource_manager.Queue(self.config.runtime.image_buffer_queue_size)
 
+        spawn_mode = "fork" if "fork" in multiprocessing.get_all_start_methods() else "spawn"
+        ctx = multiprocessing.get_context(spawn_mode)
+
+        procs = []
         if source == "uart":
             self.logger.debug("Starting uart capture process")
-            p_recv = multiprocessing.Process(
+            p_recv = ctx.Process(
                 target=self._uart_recv,
                 args=(
                     serial_buffer_queue,
@@ -570,13 +741,15 @@ class StreamDevice(Device):
             )
         elif source == "fpga":
             self.logger.debug("Starting fpga capture process")
-            p_recv = multiprocessing.Process(
+            p_recv = ctx.Process(
                 target=self._fpga_recv,
                 args=(serial_buffer_queue, read_length, True, binary),
                 name="_fpga_recv",
             )
         else:
             raise ValueError(f"source can be one of uart or fpga. Got {source}")
+
+        procs.append(p_recv)
 
         if freq_mask_config:
             freq_mask_helper = FrequencyMaskHelper(
@@ -594,26 +767,28 @@ class StreamDevice(Device):
                 fps=self.config.fs,
             )
 
-        p_buffer_to_frame = multiprocessing.Process(
-            target=self._buffer_to_frame,
-            args=(
-                serial_buffer_queue,
-                frame_buffer_queue,
-            ),
-            name="_buffer_to_frame",
-        )
-        p_format_frame = multiprocessing.Process(
-            target=self._format_frame,
-            args=(
-                frame_buffer_queue,
-                imagearray,
-            ),
-            name="_format_frame",
-        )
+        if mode == "capture":
+            p_buffer_to_frame = ctx.Process(
+                target=self._buffer_to_frame,
+                args=(
+                    serial_buffer_queue,
+                    frame_buffer_queue,
+                ),
+                name="_buffer_to_frame",
+            )
+            p_format_frame = ctx.Process(
+                target=self._format_frame,
+                args=(
+                    frame_buffer_queue,
+                    imagearray,
+                ),
+                name="_format_frame",
+            )
+            procs.append(p_buffer_to_frame)
+            procs.append(p_format_frame)
 
-        p_recv.start()
-        p_buffer_to_frame.start()
-        p_format_frame.start()
+        for p in procs:
+            p.start()
 
         if show_metadata:
             self._header_plotter = StreamPlotter(
@@ -629,6 +804,9 @@ class StreamDevice(Device):
             )
 
         try:
+            if mode == "ber":
+                self._ber_mode(serial_buffer_queue, ber_output)
+                return
             for image, header_list in exact_iter(imagearray.get, None):
                 self._handle_frame(
                     image,
@@ -674,7 +852,7 @@ class StreamDevice(Device):
             # Join child processes with a timeout
             # Should never happen except during a force quit, as we wait for all
             # queues to drain, and if they don't do so on their own, it's a bug.
-            for p in [p_recv, p_buffer_to_frame, p_format_frame]:
+            for p in procs:
                 p.join(timeout=5)
                 if p.is_alive():
                     self.logger.warning(f"Termination timeout: force terminating process {p.name}.")

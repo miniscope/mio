@@ -5,6 +5,7 @@ CLI commands for running streamDaq
 import os
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 import click
 
@@ -74,6 +75,15 @@ def _capture_options(fn: Callable) -> Callable:
         "(apply postprocessing separately).",
         type=ConfigIDOrPath(),
     )(fn)
+    fn = click.option(
+        "--mode",
+        type=click.Choice(["capture", "ber"]),
+        default="capture",
+        show_default=True,
+        help="Capture mode. \n"
+        "- 'capture' (default) capture video/metadata;\n"
+        "- 'ber' runs a PRBS bit-error-rate test and produces no video/metadata output.",
+    )(fn)
     return fn
 
 
@@ -88,6 +98,7 @@ def capture(
     no_display: bool | None,
     binary_export: bool | None,
     metadata_display: bool | None,
+    mode: Literal["capture", "ber"],
     **kwargs: dict,
 ) -> None:
     """
@@ -106,14 +117,15 @@ def capture(
 
     if output:
         unique_stem_path = get_unique_stempath(Path(output))
-        video_output = unique_stem_path.with_suffix(".avi")
-        metadata_output = unique_stem_path.with_suffix(".csv")
-
+        video_output = unique_stem_path.with_suffix(".avi") if mode == "capture" else None
+        metadata_output = unique_stem_path.with_suffix(".csv") if mode == "capture" else None
         binary_output = unique_stem_path.with_suffix(".bin") if binary_export else None
+        ber_output = unique_stem_path.with_suffix(".json") if mode == "ber" else None
     else:
         video_output = None
         metadata_output = None
         binary_output = None
+        ber_output = None
 
     if freq_mask_config:
         freq_mask_config = FrequencyMaskingConfig.from_any(freq_mask_config)
@@ -126,9 +138,11 @@ def capture(
         video_kwargs=okwargs,
         metadata=metadata_output,
         binary=binary_output,
-        show_video=not no_display,
-        show_metadata=metadata_display,
+        show_video=not no_display and mode == "capture",
+        show_metadata=metadata_display and mode == "capture",
         freq_mask_config=freq_mask_config,
+        mode=mode,
+        ber_output=ber_output,
     )
 
 
