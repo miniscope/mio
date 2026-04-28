@@ -2,6 +2,12 @@
 Base and meta model classes.
 """
 
+from pathlib import Path
+from typing import Any, ClassVar, Self
+
+import pandas as pd
+import pandera.pandas as pa
+from pandera.typing import DataFrame
 from pydantic import BaseModel
 
 
@@ -32,3 +38,18 @@ class Container(MiniscopeIOModel):
 
     See also: :class:`.MiniscopeConfig`
     """
+
+
+class Table(pa.DataFrameModel):
+    """
+    Root model for metadata tables.
+    Each table should have a corresponding record model for its individual rows
+    """
+
+    _RECORD_MODEL: ClassVar[type[Container] | None] = None
+
+    @classmethod
+    def read_csv(cls, path: Path, **kwargs: dict[str, Any]) -> DataFrame[Self]:
+        """Read and validate a table as a csv"""
+        df = pd.read_csv(path, **kwargs)
+        return cls.validate(df, inplace=True)
