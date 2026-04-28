@@ -7,7 +7,6 @@ Uses Click's CliRunner and the same trimmed fixtures as the stitch regression te
 import shutil
 from pathlib import Path
 
-import pytest
 from click.testing import CliRunner
 
 from mio.cli.process import process

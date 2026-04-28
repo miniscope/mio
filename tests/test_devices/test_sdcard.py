@@ -1,16 +1,15 @@
-import pytest
+import os
 import tempfile
 from pathlib import Path
-import os
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from mio.devices.sdcard import SDCardDevice
-from mio.devices.sdcard.headers import SectorConfig
-from mio.devices.sdcard.headers import SDBufferHeader
-from mio.exceptions import EndOfRecordingException
 from mio.devices.sdcard.data import SDCardFrame
+from mio.devices.sdcard.headers import SDBufferHeader, SectorConfig
+from mio.exceptions import EndOfRecordingException
 from mio.utils import hash_file, hash_video
 
 
@@ -145,7 +144,7 @@ def test_to_img(wirefree_battery, n_frames, hash, tmp_path):
     # we should be able to read all the frames!
     frames = []
     with sd:
-        for i in range(n_frames):
+        for _i in range(n_frames):
             frames.append(sd.read(return_header=True))
 
     assert not any([f.frame is None for f in frames])

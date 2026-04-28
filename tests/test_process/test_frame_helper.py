@@ -1,10 +1,11 @@
-import cv2
-import yaml
-import numpy as np
-import pytest
 import sys
 from enum import Enum
 from pprint import pformat
+
+import cv2
+import numpy as np
+import pytest
+import yaml
 from pydantic import BaseModel
 
 from mio.models.process import BlackAreaDetectorConfig, DenoiseConfig, NoisePatchConfig
@@ -57,9 +58,7 @@ def test_noisy_frame_detection(video, ground_truth, noise_detection_method, nois
     Contrast method of noise detection should correctly label frames corrupted
     by speckled noise
     """
-    if "gradient" in noise_detection_method:
-        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_noise_detection_test")
-    elif "black_area" in noise_detection_method:
+    if "gradient" in noise_detection_method or "black_area" in noise_detection_method:
         global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_noise_detection_test")
     else:
         raise ValueError("Invalid noise detection method")
@@ -67,7 +66,7 @@ def test_noisy_frame_detection(video, ground_truth, noise_detection_method, nois
     config: NoisePatchConfig = global_config.noise_patch
     config.method = noise_detection_method
 
-    with open(ground_truth, "r") as yfile:
+    with open(ground_truth) as yfile:
         expected = NoiseGroundTruth(**yaml.safe_load(yfile))
 
     if noise_category not in expected.frames:

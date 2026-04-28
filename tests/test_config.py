@@ -1,20 +1,11 @@
 import os
 from pathlib import Path
 
-import yaml
 import numpy as np
+import yaml
 
 from mio import Config
 from mio.models.config import _global_config_path, set_user_dir
-from tests.fixtures import (
-    set_env,
-    set_dotenv,
-    set_pyproject,
-    set_local_yaml,
-    set_user_yaml,
-    set_global_yaml,
-    set_config,
-)
 
 
 def test_config(tmp_path):
@@ -85,7 +76,7 @@ def test_set_user_dir(tmp_path):
 
     set_user_dir(tmp_path)
 
-    with open(_global_config_path, "r") as gfile:
+    with open(_global_config_path) as gfile:
         global_config = yaml.safe_load(gfile)
 
     assert global_config["user_dir"] == str(tmp_path)

@@ -2,9 +2,10 @@
 Test for skvideo.io.FFmpegWriter.
 """
 
-from skvideo.io import FFmpegWriter
-import numpy as np
 import cv2
+import numpy as np
+from skvideo.io import FFmpegWriter
+
 
 def test_write_video(tmp_path):
     """
@@ -18,7 +19,7 @@ def test_write_video(tmp_path):
         "-vcodec": "rawvideo",
         "-f": "avi",
         "-pix_fmt": "gray",
-        "-vsync": "0", # probably not necessary but for safety
+        "-vsync": "0",  # probably not necessary but for safety
     }
 
     out = tmp_path / "test.avi"

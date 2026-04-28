@@ -1,13 +1,12 @@
-from pathlib import Path
 from importlib.metadata import version
+from pathlib import Path
 
 import pytest
 import yaml
 from pydantic import BaseModel, ConfigDict
 
 from mio.const import CONFIG_DIR
-from mio.models.mixins import yaml_peek, ConfigYAMLMixin
-from tests.fixtures import tmp_config_source, yaml_config
+from mio.models.mixins import ConfigYAMLMixin, yaml_peek
 
 
 class NestedModel(BaseModel):
@@ -152,7 +151,7 @@ def test_complete_header(tmp_config_source, src: str):
 
     _ = MyModel.from_yaml(yaml_file)
 
-    with open(yaml_file, "r") as yfile:
+    with open(yaml_file) as yfile:
         loaded = yaml.safe_load(yfile)
 
     loaded_str = yaml_file.read_text()
@@ -170,7 +169,10 @@ def test_complete_header(tmp_config_source, src: str):
 
 @pytest.mark.parametrize("config_file", CONFIG_DIR.rglob("*.y*ml"))
 def test_builtins_unchanged(config_file):
-    """None of the builtin configs should be modified on load - i.e. they should all have correct headers."""
+    """
+    None of the builtin configs should be modified on load -
+    i.e. they should all have correct headers.
+    """
     before = config_file.read_text()
     _ = LoaderModel.from_yaml(config_file)
     after = config_file.read_text()

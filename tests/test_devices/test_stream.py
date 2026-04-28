@@ -1,19 +1,20 @@
 import re
+import warnings
+from collections.abc import Generator
 from pathlib import Path
 
-import numpy as np
-import pytest
-import pandas as pd
-from bitstring import Bits
-from typing import Generator
-import warnings
 import cv2
+import numpy as np
+import pandas as pd
+import pytest
+from bitstring import Bits
 
 from mio.const import BASE_DIR
 from mio.devices.stream import StreamBufferHeader, StreamDevConfig, StreamDevice, iter_buffers
-from mio.models.process import FrequencyMaskingConfig
-from mio.utils import hash_video, hash_file
 from mio.io import VideoWriter
+from mio.models.process import FrequencyMaskingConfig
+from mio.utils import hash_file, hash_video
+
 from ..conftest import DATA_DIR
 
 
@@ -157,7 +158,8 @@ def test_csv_output(tmp_path, default_streamdaq, write_metadata, caplog):
         # if there is a mismatch, the index will turn into a multi-index
         assert isinstance(df.index, pd.RangeIndex)
 
-        # we should have the same columns in the same order as our header format plus reconstruction metadata
+        # we should have the same columns in the same order as our header format
+        # plus reconstruction metadata
         col_names = df.columns.to_list()
         expected = [h[0] for h in sorted(StreamBufferHeader.POSITIONS.items(), key=lambda x: x[1])]
 
@@ -172,7 +174,8 @@ def test_csv_output(tmp_path, default_streamdaq, write_metadata, caplog):
         for record in caplog.records:
             assert "Exception saving headers" not in record.msg
 
-        # ensure the buffer_recv_index increments from 0 to the number of buffers in the data file as an array
+        # ensure the buffer_recv_index increments from 0
+        # to the number of buffers in the data file as an array
         buffer_recv_index = df.buffer_recv_index.to_numpy()
         assert np.all(buffer_recv_index == np.arange(0, len(buffer_recv_index)))
 
@@ -181,7 +184,8 @@ def test_csv_output(tmp_path, default_streamdaq, write_metadata, caplog):
         reconstructed_frame_index = reconstructed_frame_index[reconstructed_frame_index != -1]
         assert np.all(np.diff(reconstructed_frame_index) >= 0)
 
-        # ensure that reconstructed frame index contains all values from 0 to the number of frames in the data file
+        # ensure that reconstructed frame index contains all values from 0
+        # to the number of frames in the data file
         unique_reconstructed_frame_index = np.unique(reconstructed_frame_index)
         assert np.all(
             unique_reconstructed_frame_index == np.arange(0, len(unique_reconstructed_frame_index))
@@ -195,7 +199,8 @@ def test_csv_output(tmp_path, default_streamdaq, write_metadata, caplog):
 def test_processing_speed(tmp_path, default_streamdaq):
     """
     Processing speed test of the stream daq.
-    For being generous for runs in CI, the test will pass if the processing speed is faster than the test_fail_fps.
+    For being generous for runs in CI,
+    the test will pass if the processing speed is faster than the test_fail_fps.
     This will output a warning if it is slower than the warning_fps.
     """
     test_fail_fps = 10
@@ -218,7 +223,9 @@ def test_processing_speed(tmp_path, default_streamdaq):
 
     if processing_fps < warning_fps:
         warnings.warn(
-            f"Processing speed is {processing_fps} FPS, which is slower than the required {warning_fps} FPS"
+            f"Processing speed is {processing_fps} FPS, "
+            f"which is slower than the required {warning_fps} FPS",
+            stacklevel=2,
         )
 
     assert processing_fps > test_fail_fps
@@ -273,7 +280,9 @@ def test_continuous_and_termination(tmp_path, default_streamdaq):
     """
     timeout = 1
 
-    capture_process = multiprocessing.Process(target=capture_wrapper, args=(default_streamdaq, "fpga", False, True))
+    capture_process = multiprocessing.Process(
+        target=capture_wrapper, args=(default_streamdaq, "fpga", False, True)
+    )
 
     capture_process.start()
     alive_processes = default_streamdaq.alive_processes()
@@ -304,7 +313,7 @@ def test_metadata_plotting(tmp_path, default_streamdaq):
     # test that the object was instantiated and that it got the data it should have
     assert default_streamdaq._header_plotter is not None
     assert [
-        k for k in default_streamdaq._header_plotter.data.keys()
+        k for k in default_streamdaq._header_plotter.data
     ] == default_streamdaq.config.runtime.plot.keys
     assert all(
         [
@@ -357,7 +366,8 @@ def test_ber_measurement(tmp_path, set_okdev_input):
 
 def test_bitfile_names():
     """
-    Bitfile names should have no periods or whitespace in the filenames (except for the .bit extension)
+    Bitfile names should have no periods or whitespace in the filenames
+    (except for the .bit extension)
     """
     pattern = re.compile(r"\.(?!bit$)|\s")
     for path in Path(BASE_DIR).glob("**/*.bit"):
@@ -398,7 +408,7 @@ def test_writer_calls_match_avi_frame_count(tmp_path: Path, set_okdev_input, mon
     call_count = {"calls": 0, "ok": 0, "failed": 0}
     original = VideoWriter.write_frame
 
-    def wrapped(self, frame):  # type: ignore[no-redef]
+    def wrapped(self, frame) -> bool:  # type: ignore[no-redef]
         call_count["calls"] += 1
         ok = original(self, frame)
         if ok:

@@ -1,8 +1,9 @@
-import pytest
 from unittest.mock import patch
+
+import pytest
 from pydantic import ValidationError
 
-from mio.models.devupdate import DevUpdateCommand, UpdateKey, DeviceCommand
+from mio.models.devupdate import DeviceCommand, DevUpdateCommand, UpdateKey
 
 
 def mock_comports():
@@ -47,9 +48,11 @@ def test_invalid_key(mock_serial_ports):
 
 
 def test_invalid_port():
-    with patch("serial.tools.list_ports.comports", return_value=mock_comports()):
-        with pytest.raises(ValidationError):
-            DevUpdateCommand(device_id=1, port="COM3", key="LED", value=50)
+    with (
+        patch("serial.tools.list_ports.comports", return_value=mock_comports()),
+        pytest.raises(ValidationError),
+    ):
+        DevUpdateCommand(device_id=1, port="COM3", key="LED", value=50)
 
 
 def test_device_command(mock_serial_ports):
