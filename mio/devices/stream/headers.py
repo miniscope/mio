@@ -1,19 +1,13 @@
 """Headers & metadata for stream devices"""
 
-import sys
-from collections.abc import Sequence
 from typing import ClassVar
 
+import pandera.pandas as pa
 from pydantic import Field, computed_field
 
 from mio.devices.base.headers import BufferHeader
 from mio.models import MiniscopeConfig
-from mio.models.sinks import CSVWriterConfig, StreamPlotterConfig
-
-if sys.version_info < (3, 11):
-    from typing_extensions import Self
-else:
-    from typing import Self
+from mio.models.models import Table
 
 
 class ADCScaling(MiniscopeConfig):
@@ -68,6 +62,35 @@ class RuntimeMetadata(MiniscopeConfig):
     Runtime metadata for data streams.
     """
 
+
+class StreamBufferHeader(BufferHeader):
+    """
+    Refinements of :class:`.BufferHeader` for
+    :class:`~mio.devices.stream.StreamDevice`
+
+    Additional runtime keys not specified in ``POSITIONS`` must be provided
+    when instantiating the object as ``kwargs`` to the ``from_sequence`` method.
+    """
+
+    POSITIONS: ClassVar[dict[str, int]] = {
+        "linked_list": 0,
+        "frame_num": 1,
+        "buffer_count": 2,
+        "frame_buffer_count": 3,
+        "write_buffer_count": 4,
+        "dropped_buffer_count": 5,
+        "timestamp": 6,
+        "write_timestamp": 8,
+        "pixel_count": 7,
+        "battery_voltage_raw": 9,
+        "input_voltage_raw": 10,
+    }
+
+    pixel_count: int
+    battery_voltage_raw: int
+    input_voltage_raw: int
+
+    # runtime metadata
     buffer_recv_index: int = Field(
         -1,
         description=(
@@ -97,33 +120,7 @@ class RuntimeMetadata(MiniscopeConfig):
         ),
     )
 
-
-class StreamBufferHeader(BufferHeader):
-    """
-    Refinements of :class:`.BufferHeader` for
-    :class:`~mio.devices.stream.StreamDevice`
-    """
-
-    POSITIONS: ClassVar[dict[str, int]] = {
-        "linked_list": 0,
-        "frame_num": 1,
-        "buffer_count": 2,
-        "frame_buffer_count": 3,
-        "write_buffer_count": 4,
-        "dropped_buffer_count": 5,
-        "timestamp": 6,
-        "write_timestamp": 8,
-        "pixel_count": 7,
-        "battery_voltage_raw": 9,
-        "input_voltage_raw": 10,
-    }
-
-    pixel_count: int
-    battery_voltage_raw: int
-    input_voltage_raw: int
     _adc_scaling: ADCScaling = None
-
-    runtime_metadata: RuntimeMetadata = Field(default_factory=lambda: RuntimeMetadata())
 
     @property
     def adc_scaling(self) -> ADCScaling | None:
@@ -156,124 +153,26 @@ class StreamBufferHeader(BufferHeader):
         else:
             return self._adc_scaling.scale_input_voltage(self.input_voltage_raw)
 
-    def model_dump_all(self, warning: bool = False) -> dict:
-        """
-        Return a dictionary of the model values, including runtime metadata if available.
 
-        Returns:
-            dict: Dictionary of model values
-        """
-        meta_row = self.model_dump(warnings=warning)
-        if "runtime_metadata" in meta_row and meta_row["runtime_metadata"]:
-            runtime_data = meta_row.pop("runtime_metadata")
-            meta_row.update(runtime_data)
-
-        return meta_row
-
-    @classmethod
-    def from_sequence(
-        cls,
-        vals: Sequence,
-        construct: bool = False,
-        runtime_metadata: RuntimeMetadata = None,
-    ) -> Self:
-        """
-        Instantiate a stream buffer header from linearized values (eg. in an ndarray or list),
-        an associated format that tells us what index the model values are found in that data,
-        and runtime metadata container.
-
-        Args:
-            vals (list, :class:`numpy.ndarray` ): Indexable values to cast to the header model
-            construct (bool): If ``True`` , use :meth:`~pydantic.BaseModel.model_construct`
-                to create the model instance (ie. without validation, but faster).
-                Default: ``False``
-            runtime_metadata (:class:`.RuntimeMetadata`, optional): Runtime metadata
-             to attach to the header.
-
-        Returns:
-            :class:`.StreamBufferHeader`
-        """
-        header = super().from_sequence(vals=vals, construct=construct)
-        if runtime_metadata is not None:
-            header.runtime_metadata = runtime_metadata
-        return header
-
-    @classmethod
-    def csv_header_cols(cls) -> list[str]:
-        """
-        Return the standardized column names for CSV output.
-
-        This ensures consistent column ordering across all StreamBufferHeader instances
-        when writing to CSV files.
-
-        Args:
-            header_format: The StreamBufferHeaderFormat instance to get column ordering from
-
-        Returns:
-            list[str]: Column names in the order they should appear in CSV output
-        """
-        # Get the base header format columns (excluding internal fields)
-        header_items = sorted(cls.POSITIONS.items(), key=lambda x: x[1])
-        base_cols = [name for name, _ in header_items]
-
-        # Add runtime metadata fields from the class's own runtime_metadata attribute
-        runtime_fields = list(cls.model_fields["runtime_metadata"].annotation.model_fields.keys())
-
-        return base_cols + runtime_fields
-
-
-class StreamDevRuntime(MiniscopeConfig):
+class StreamBufferTable(Table):
     """
-    Runtime configuration for :class:`.StreamDevice`
-
-    Included within :class:`.StreamDevConfig` to separate config that is not
-    unique to the device, but how that device is controlled at runtime.
+    Table form of the stream
     """
 
-    serial_buffer_queue_size: int = Field(
-        10,
-        description="Buffer length for serial data reception in streamDaq",
-    )
-    frame_buffer_queue_size: int = Field(
-        5,
-        description="Buffer length for storing frames in streamDaq",
-    )
-    image_buffer_queue_size: int = Field(
-        5,
-        description="Buffer length for storing images in streamDaq",
-    )
-    queue_put_timeout: int = Field(
-        5,
-        description="Timeout for putting data into the queue",
-    )
-    plot: StreamPlotterConfig | None = Field(
-        StreamPlotterConfig(
-            keys=["timestamp", "buffer_count", "frame_buffer_count"], update_ms=1000, history=500
-        ),
-        description="Configuration for plotting header data as it is collected. "
-        "If ``None``, use the default params in StreamPlotter. "
-        "Note that this does *not* control whether header metadata is plotted during capture, "
-        "for enabling/disabling, use the ``show_metadata`` kwarg in the capture method",
-    )
-    csvwriter: CSVWriterConfig | None = Field(
-        CSVWriterConfig(buffer=100),
-        description="Default configuration for writing header data to a CSV file. "
-        "If ``None``, use the default params in BufferedCSVWriter. "
-        "Note that this does *not* control whether header metadata is written during capture, "
-        "for enabling/disabling, use the ``metadata`` kwarg in the capture method.",
-    )
-    ntp_server: str | None = Field(
-        default=None,
-        description="NTP server address for time synchronization check. "
-        "If specified, the system time will be verified against this server before capture.",
-    )
-    ntp_max_offset_seconds: float = Field(
-        default=0.01,
-        description="Maximum allowed time offset in seconds "
-        "for NTP synchronization check (default: 0.01 = 10ms).",
-    )
-    ber_test_n_buffers: int = Field(
-        32767,
-        description="Number of buffers to consume when running BER test mode. "
-        "Default is 2^15 - 1, one full cycle of the PRBS-15 seed space.",
-    )
+    _RECORD_MODEL = StreamBufferHeader
+
+    linked_list: int = pa.Field(ge=0, coerce=True)
+    frame_num: int = pa.Field(ge=0, coerce=True)
+    buffer_count: int = pa.Field(ge=0, coerce=True)
+    frame_buffer_count: int = pa.Field(ge=0, coerce=True)
+    write_buffer_count: int = pa.Field(ge=0, coerce=True)
+    dropped_buffer_count: int = pa.Field(ge=0, coerce=True)
+    timestamp: int = pa.Field(ge=0, coerce=True)
+    pixel_count: int = pa.Field(ge=0, coerce=True)
+    write_timestamp: int = pa.Field(ge=0, coerce=True)
+    battery_voltage_raw: float = pa.Field(ge=0, coerce=True)
+    input_voltage_raw: float = pa.Field(ge=0, coerce=True)
+    buffer_recv_index: int = pa.Field(ge=0, coerce=True)
+    buffer_recv_unix_time: float = pa.Field(ge=0, coerce=True)
+    black_padding_px: int = pa.Field(ge=0, coerce=True)
+    reconstructed_frame_index: int = pa.Field(ge=0, coerce=True)

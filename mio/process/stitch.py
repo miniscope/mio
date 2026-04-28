@@ -16,9 +16,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
 from tqdm import tqdm, trange
 
+from mio.devices.tables import StitchRecord
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.logging import init_logger
 from mio.models.dataset import Dataset, Recording, StitchedRecording, paths_from_video
@@ -302,34 +302,6 @@ def _score_edges(frame: np.ndarray) -> float:
     gx = cv2.Sobel(frame, cv2.CV_16S, 1, 0, ksize=3)
     gy = cv2.Sobel(frame, cv2.CV_16S, 0, 1, ksize=3)
     return -float(np.abs(gx).sum() + np.abs(gy).sum())
-
-
-class StitchRecord(BaseModel):
-    """
-    Row schema for debug metadata emitted during stitching.
-
-    The field order defines the CSV header order.
-    """
-
-    index: int
-    frame_num: int | None = None
-    selected_video: str
-    compare_video: str | None = None
-    selected_num_buffers: int
-    selected_black_padding: int
-    selected_black_pixels: int
-    selected_noisy_pixels: int
-    compare_num_buffers: int | None = None
-    compare_black_padding: int | None = None
-    compare_black_pixels: int | None = None
-    compare_noisy_pixels: int | None = None
-    selected_edge_score: float | None = None
-    compare_edge_score: float | None = None
-
-    @classmethod
-    def header(cls) -> list[str]:
-        """Return CSV header preserving declared field order."""
-        return list(cls.model_fields.keys())
 
 
 def _select_best_candidate(

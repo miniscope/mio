@@ -65,6 +65,7 @@ from typing import Any, Literal, TypeAlias
 import pandas as pd
 from numpydantic import NDArraySchema
 from numpydantic.interface.video import VideoProxy
+from pandera.typing.pandas import DataFrame
 from pydantic import (
     ConfigDict,
     Discriminator,
@@ -73,6 +74,8 @@ from pydantic import (
     model_validator,
 )
 
+from mio.devices.stream import StreamBufferTable
+from mio.devices.tables import NoiseTable, StitchTable, TimestampTable
 from mio.models import MiniscopeIOModel
 from mio.models.process import NoisePatchConfig
 from mio.utils import _format_ranges
@@ -134,15 +137,15 @@ class Recording(MiniscopeIOModel):
     """What type of recording this is"""
     video: VideoType
     """A video created as part of this recording"""
-    metadata: pd.DataFrame | None = None
+    metadata: DataFrame[StreamBufferTable] | None = None
     """Metadata for frames within the video"""
-    timestamps: pd.DataFrame | None = None
+    timestamps: DataFrame[TimestampTable] | None = None
     """
     Timestamps table, (currently) stored as ``{video_name}_timestamps.csv`` next to the video.
     When instantiating a recording, if a metadata file exists but timestamps do not,
     they are automatically generated. 
     """
-    noise: pd.DataFrame | None = None
+    noise: DataFrame[NoiseTable] | None = None
     """
     Framewise noise measurements (created with :meth:`score_noise` ).
     """
@@ -256,8 +259,8 @@ class StitchedRecording(Recording):
     """Multiple video recordings stitched together, picking one best aligned frame from each"""
 
     type: Literal["stitched"] = "stitched"
-    metadata: pd.DataFrame
-    scores: pd.DataFrame
+    metadata: DataFrame[StreamBufferTable]
+    scores: DataFrame[StitchTable]
     """A csv that indicates which recording each stitched frame was selected from"""
     derived_from: RecordingDerivation
     """A derivation reference that indicates which videos this stitch was derived from"""

@@ -21,7 +21,7 @@ from mio import init_logger
 from mio.bit_operation import BufferFormatter
 from mio.devices.base import Device
 from mio.devices.stream.config import StreamDevConfig
-from mio.devices.stream.headers import RuntimeMetadata, StreamBufferHeader
+from mio.devices.stream.headers import StreamBufferHeader
 from mio.exceptions import EndOfRecordingException, StreamReadError
 from mio.interfaces.mocks import okDevMock
 from mio.io import BufferedCSVWriter, VideoWriter
@@ -153,15 +153,15 @@ class StreamDevice(Device):
             # trim if too long
             if data.shape[0] > expected_data_size:
                 data = data[0:expected_data_size]
-                header.runtime_metadata.black_padding_px = 0  # No padding, data was trimmed
+                header.black_padding_px = 0  # No padding, data was trimmed
             # pad if too short
             else:
                 padding_amount = expected_data_size - data.shape[0]
                 data = np.pad(data, (0, padding_amount))
-                header.runtime_metadata.black_padding_px = padding_amount
+                header.black_padding_px = padding_amount
         else:
             # No trimming or padding needed
-            header.runtime_metadata.black_padding_px = 0
+            header.black_padding_px = 0
 
         return data
 
@@ -256,7 +256,8 @@ class StreamDevice(Device):
                     )
                 except queue.Full:
                     locallogs.warning("Serial buffer queue full, skipping buffer.")
-
+        except Exception as e:
+            locallogs.exception(f"Exception in _fpga_recv: {e}")
         finally:
             locallogs.debug("Quitting, putting sentinel in queue")
             try:
@@ -291,13 +292,11 @@ class StreamDevice(Device):
             reverse_payload_bytes=self.config.reverse_payload_bytes,
         )
 
-        runtime_metadata = RuntimeMetadata(
+        runtime_metadata = dict(
             buffer_recv_index=-1,  # will be set later in _buffer_to_frame for processed buffers
             buffer_recv_unix_time=time.time(),
         )
-        header_data = StreamBufferHeader.from_sequence(
-            header.astype(int), runtime_metadata=runtime_metadata
-        )
+        header_data = StreamBufferHeader.from_sequence(header.astype(int), **runtime_metadata)
         header_data.adc_scaling = self.config.adc_scale
 
         return header_data, payload
@@ -496,7 +495,7 @@ class StreamDevice(Device):
                     continue
 
                 # update buffer_recv_index only for processed buffers
-                header_data.runtime_metadata.buffer_recv_index = self._buffer_recv_index
+                header_data.buffer_recv_index = self._buffer_recv_index
                 self._buffer_recv_index += 1
 
                 try:
@@ -552,6 +551,9 @@ class StreamDevice(Device):
                 frame_buffer[header_data.frame_buffer_count] = serial_buffer
                 header_list.append(header_data)
                 locallogs.debug("----buffer #" + str(header_data.frame_buffer_count) + " stored")
+        except Exception as e:
+            locallogs.exception(f"Exception in _buffer_to_frame: {e}")
+
         finally:
             try:
                 # get remaining buffers.
@@ -631,7 +633,7 @@ class StreamDevice(Device):
 
                 # Populate reconstructed_frame_index for all headers in this frame
                 for header in header_list:
-                    header.runtime_metadata.reconstructed_frame_index = frame_index_counter
+                    header.reconstructed_frame_index = frame_index_counter
 
                 try:
                     imagearray.put(
@@ -643,6 +645,8 @@ class StreamDevice(Device):
                     locallogs.warning("Image array queue full, skipping frame.")
 
                 frame_index_counter += 1
+        except Exception as e:
+            locallogs.exception(f"Exception in _format_frame: {e}")
         finally:
             locallogs.debug("Quitting, putting sentinel in queue")
             try:
@@ -869,7 +873,7 @@ class StreamDevice(Device):
                 if metadata:
                     self.logger.debug("Saving header metadata")
                     try:
-                        meta_row = header.model_dump_all()
+                        meta_row = header.model_dump()
                         self._buffered_writer.append(meta_row)
                     except Exception as e:
                         self.logger.exception(f"Exception saving headers: \n{e}")

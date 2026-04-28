@@ -3,13 +3,70 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from mio.const import INTERFACES_DIR
-from mio.devices.stream import StreamDevRuntime
 from mio.devices.stream.headers import ADCScaling
 from mio.models import MiniscopeConfig
 from mio.models.mixins import ConfigYAMLMixin
+from mio.models.sinks import CSVWriterConfig, StreamPlotterConfig
+
+
+class StreamDevRuntime(MiniscopeConfig):
+    """
+    Runtime configuration for :class:`.StreamDevice`
+
+    Included within :class:`.StreamDevConfig` to separate config that is not
+    unique to the device, but how that device is controlled at runtime.
+    """
+
+    serial_buffer_queue_size: int = Field(
+        10,
+        description="Buffer length for serial data reception in streamDaq",
+    )
+    frame_buffer_queue_size: int = Field(
+        10,
+        description="Buffer length for storing frames in streamDaq",
+    )
+    image_buffer_queue_size: int = Field(
+        10,
+        description="Buffer length for storing images in streamDaq",
+    )
+    queue_put_timeout: int = Field(
+        5,
+        description="Timeout for putting data into the queue",
+    )
+    plot: StreamPlotterConfig | None = Field(
+        StreamPlotterConfig(
+            keys=["timestamp", "buffer_count", "frame_buffer_count"], update_ms=1000, history=500
+        ),
+        description="Configuration for plotting header data as it is collected. "
+        "If ``None``, use the default params in StreamPlotter. "
+        "Note that this does *not* control whether header metadata is plotted during capture, "
+        "for enabling/disabling, use the ``show_metadata`` kwarg in the capture method",
+    )
+    csvwriter: CSVWriterConfig | None = Field(
+        CSVWriterConfig(buffer=100),
+        description="Default configuration for writing header data to a CSV file. "
+        "If ``None``, use the default params in BufferedCSVWriter. "
+        "Note that this does *not* control whether header metadata is written during capture, "
+        "for enabling/disabling, use the ``metadata`` kwarg in the capture method.",
+    )
+    ntp_server: str | None = Field(
+        default=None,
+        description="NTP server address for time synchronization check. "
+        "If specified, the system time will be verified against this server before capture.",
+    )
+    ntp_max_offset_seconds: float = Field(
+        default=0.01,
+        description="Maximum allowed time offset in seconds "
+        "for NTP synchronization check (default: 0.01 = 10ms).",
+    )
+    ber_test_n_buffers: int = Field(
+        32767,
+        description="Number of buffers to consume when running BER test mode. "
+        "Default is 2^15 - 1, one full cycle of the PRBS-15 seed space.",
+    )
 
 
 class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
