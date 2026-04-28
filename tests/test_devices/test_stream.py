@@ -230,19 +230,24 @@ def test_processing_speed(tmp_path, default_streamdaq):
     assert processing_fps > test_fail_fps
 
 
+_bad_buffer_npix = [5072, 5072, 5072, 5072]
+
+
+class PatchedConfig(StreamDevConfig):
+    @property
+    def buffer_npix(self) -> list[int]:
+        global _bad_buffer_npix
+        return _bad_buffer_npix
+
+
 def test_csv_no_duplicates(tmp_path, set_okdev_input, monkeypatch):
     """
     Regression test for a bug where header rows would be written multiple times when
     buffer_npix was miscalculated and the buffer_list wasn't cleared after being put in the
     queue multiple times.
     """
-    bad_buffer_npix = [5072, 5072, 5072, 5072]
+    global _bad_buffer_npix
     output_csv = tmp_path / "output.csv"
-
-    class PatchedConfig(StreamDevConfig):
-        @property
-        def buffer_npix(self) -> list[int]:
-            return bad_buffer_npix
 
     daqConfig = PatchedConfig.from_id("test-wireless-200px")
 
@@ -250,11 +255,10 @@ def test_csv_no_duplicates(tmp_path, set_okdev_input, monkeypatch):
     set_okdev_input(data_file)
 
     daq_inst = StreamDevice(config=daqConfig)
-    daq_inst._buffer_npix = bad_buffer_npix
 
-    assert daq_inst.config.buffer_npix == bad_buffer_npix
+    assert daq_inst.config.buffer_npix == _bad_buffer_npix
     daq_inst.capture(metadata=output_csv, show_video=False)
-    assert daq_inst.config.buffer_npix == bad_buffer_npix
+    assert daq_inst.config.buffer_npix == _bad_buffer_npix
     df = pd.read_csv(output_csv)
     vals, counts = np.unique(df.buffer_count, return_counts=True)
     assert all(
