@@ -146,7 +146,7 @@ def test_csv_output(tmp_path, default_streamdaq, write_metadata, caplog):
     output_csv = tmp_path / "output.csv"
 
     if write_metadata:
-        default_streamdaq.capture( metadata=output_csv, show_video=False)
+        default_streamdaq.capture(metadata=output_csv, show_video=False)
 
         df = pd.read_csv(output_csv)
         # actually not sure what we should be looking for here, for now we just check for shape
@@ -192,7 +192,7 @@ def test_csv_output(tmp_path, default_streamdaq, write_metadata, caplog):
         )
 
     else:
-        default_streamdaq.capture( metadata=None, show_video=False)
+        default_streamdaq.capture(metadata=None, show_video=False)
         assert not output_csv.exists()
 
 
