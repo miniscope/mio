@@ -83,7 +83,6 @@ def test_video_output(
 
     daq_inst = StreamDevice(device_config=daqConfig)
     daq_inst.capture(
-        source="fpga",
         video=output_video,
         metadata=output_csv,
         show_video=show_video,
@@ -131,7 +130,7 @@ def test_binary_output(config, data, set_okdev_input, tmp_path):
     output_file = tmp_path / "output.bin"
 
     daq_inst = StreamDevice(device_config=daqConfig)
-    daq_inst.capture(source="fpga", binary=output_file, show_video=False)
+    daq_inst.capture(binary=output_file, show_video=False)
 
     assert output_file.exists()
 
@@ -146,7 +145,7 @@ def test_csv_output(tmp_path, default_streamdaq, write_metadata, caplog):
     output_csv = tmp_path / "output.csv"
 
     if write_metadata:
-        default_streamdaq.capture(source="fpga", metadata=output_csv, show_video=False)
+        default_streamdaq.capture(metadata=output_csv, show_video=False)
 
         df = pd.read_csv(output_csv)
         # actually not sure what we should be looking for here, for now we just check for shape
@@ -192,7 +191,7 @@ def test_csv_output(tmp_path, default_streamdaq, write_metadata, caplog):
         )
 
     else:
-        default_streamdaq.capture(source="fpga", metadata=None, show_video=False)
+        default_streamdaq.capture(metadata=None, show_video=False)
         assert not output_csv.exists()
 
 
@@ -207,7 +206,7 @@ def test_processing_speed(tmp_path, default_streamdaq):
     warning_fps = 40
     output_csv = tmp_path / "output.csv"
 
-    default_streamdaq.capture(source="fpga", metadata=output_csv, show_video=False)
+    default_streamdaq.capture(metadata=output_csv, show_video=False)
 
     df = pd.read_csv(output_csv)
 
@@ -249,7 +248,7 @@ def test_csv_no_duplicates(tmp_path, set_okdev_input):
     daq_inst._buffer_npix = bad_buffer_npix
 
     assert daq_inst.buffer_npix == bad_buffer_npix
-    daq_inst.capture(source="fpga", metadata=output_csv, show_video=False)
+    daq_inst.capture(metadata=output_csv, show_video=False)
     assert daq_inst.buffer_npix == bad_buffer_npix
     df = pd.read_csv(output_csv)
     vals, counts = np.unique(df.buffer_count, return_counts=True)
@@ -307,7 +306,7 @@ def test_metadata_plotting(tmp_path, default_streamdaq):
     Setting the capture kwarg ``show_metadata == True`` should plot the frame metadata
     during capture.
     """
-    default_streamdaq.capture(source="fpga", show_metadata=True, show_video=False)
+    default_streamdaq.capture(show_metadata=True, show_video=False)
 
     # unit tests for the stream plotter should go elsewhere, here we just
     # test that the object was instantiated and that it got the data it should have
@@ -342,7 +341,7 @@ def test_ber_measurement(tmp_path, set_okdev_input):
     set_okdev_input(data_file)
 
     daq_inst = StreamDevice(device_config=daqConfig)
-    daq_inst.capture(source="fpga", mode="ber", ber_output=output_json, show_video=False)
+    daq_inst.capture(mode="ber", ber_output=output_json, show_video=False)
 
     assert output_json.exists()
     result = json.loads(output_json.read_text())
@@ -426,7 +425,7 @@ def test_writer_calls_match_avi_frame_count(tmp_path: Path, set_okdev_input, mon
     set_okdev_input(data_file)
 
     daq = StreamDevice(device_config=daqConfig)
-    daq.capture(source="fpga", video=output_video, metadata=None, show_video=False)
+    daq.capture(video=output_video, metadata=None, show_video=False)
 
     assert output_video.exists()
 

@@ -2,9 +2,6 @@ id: test-wireless-200px
 mio_model: mio.models.stream.StreamDevConfig
 mio_version: "v5.0.0"
 
-# capture device. "OK" (Opal Kelly) or "UART"
-device: "OK"
-
 # bitstream file to upload to Opal Kelly board
 bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit"
 

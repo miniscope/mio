@@ -133,7 +133,6 @@ def capture(
         freq_mask_config = None
 
     daq_inst.capture(
-        source="fpga",
         video=video_output,
         video_kwargs=okwargs,
         metadata=metadata_output,

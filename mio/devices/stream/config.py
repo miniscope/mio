@@ -21,7 +21,7 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
     ----------
     device: str
         Interface hardware used for receiving data.
-        Current options are "OK" (Opal Kelly XEM 7310) and "UART" (generic UART-USB converters).
+        Current options are "OK" (Opal Kelly XEM 7310)
         Only "OK" is supported at the moment.
     bitstream: str, optional
         Required when device is "OK".
@@ -30,12 +30,6 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
         to configure different data rates and bit polarity.
         This is a binary file synthesized using Vivado,
         and details for generating this file will be provided in later updates.
-    port: str, optional
-        Required when device is "UART".
-        COM port connected to the UART-USB converter.
-    baudrate: Optional[int]
-        Required when device is "UART".
-        Baudrate of the connection to the UART-USB converter.
     frame_width: int
         Frame width of transferred image. This is used to reconstruct image.
     frame_height: int
@@ -85,15 +79,10 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
         Number of 32-bit dummy words in the header.
         This is used to stabilize clock recovery in FPGA Manchester decoder.
         This value does not have a meaning for image recovery.
-
-    ..todo::
-        Move port (for USART) to a user config area. This should make this pure device config.
     """
 
-    device: Literal["OK", "UART"]
+    device: Literal["OK"] = "OK"
     bitstream: Path | None = None
-    port: str | None = None
-    baudrate: int | None = None
     frame_width: int
     frame_height: int
     fs: int = 20
