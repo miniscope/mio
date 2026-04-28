@@ -77,9 +77,12 @@ class StreamDevice(Device):
 
     """
 
+    config_cls = StreamDevConfig
+    header_cls = StreamBufferHeader
+
     def __init__(
         self,
-        device_config: StreamDevConfig | ConfigSource,
+        config: StreamDevConfig | ConfigSource,
     ) -> None:
         """
         Constructer for the class.
@@ -95,7 +98,7 @@ class StreamDevice(Device):
         """
 
         self.logger = init_logger("streamDaq")
-        self.config = StreamDevConfig.from_any(device_config)
+        self.config = StreamDevConfig.from_any(config)
         self.preamble = self.config.preamble
         self.terminate: multiprocessing.Event = multiprocessing.Event()
 

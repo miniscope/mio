@@ -27,7 +27,7 @@ def stream() -> None:
 def _common_options(fn: Callable) -> Callable:
     fn = click.option(
         "-c",
-        "--device_config",
+        "--config",
         required=True,
         help=(
             "Either a config `id` or a path to device config YAML file for streamDaq. "
@@ -112,7 +112,7 @@ def capture(
             config.runtime.ntp_server, max_offset_seconds=config.runtime.ntp_max_offset_seconds
         )
 
-    daq_inst = StreamDevice(device_config=device_config)
+    daq_inst = StreamDevice(config=device_config)
     okwargs = dict(okwarg)
 
     if output:

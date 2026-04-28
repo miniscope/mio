@@ -26,14 +26,14 @@ def default_streamdaq(set_okdev_input, request) -> StreamDevice:
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)
 
-    daq_inst = StreamDevice(device_config=daqConfig)
+    daq_inst = StreamDevice(config=daqConfig)
     return daq_inst
 
 
 # Second parameter makes sure the filtering does not affect the video output
 @pytest.mark.parametrize("buffer_size", [5, 50])
 @pytest.mark.parametrize(
-    "device_config,filter_config,data,video_hash_list,show_video",
+    "config,filter_config,data,video_hash_list,show_video",
     [
         (
             "test-wireless-200px",
@@ -81,7 +81,7 @@ def test_video_output(
     data_file = DATA_DIR / data
     set_okdev_input(data_file)
 
-    daq_inst = StreamDevice(device_config=daqConfig)
+    daq_inst = StreamDevice(config=daqConfig)
     daq_inst.capture(
         video=output_video,
         metadata=output_csv,
@@ -129,7 +129,7 @@ def test_binary_output(config, data, set_okdev_input, tmp_path):
 
     output_file = tmp_path / "output.bin"
 
-    daq_inst = StreamDevice(device_config=daqConfig)
+    daq_inst = StreamDevice(config=daqConfig)
     daq_inst.capture(binary=output_file, show_video=False)
 
     assert output_file.exists()
@@ -244,7 +244,7 @@ def test_csv_no_duplicates(tmp_path, set_okdev_input):
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)
 
-    daq_inst = StreamDevice(device_config=daqConfig)
+    daq_inst = StreamDevice(config=daqConfig)
     daq_inst._buffer_npix = bad_buffer_npix
 
     assert daq_inst.buffer_npix == bad_buffer_npix
@@ -340,7 +340,7 @@ def test_ber_measurement(tmp_path, set_okdev_input):
     data_file = DATA_DIR / "ber_prbs15_test.bin"
     set_okdev_input(data_file)
 
-    daq_inst = StreamDevice(device_config=daqConfig)
+    daq_inst = StreamDevice(config=daqConfig)
     daq_inst.capture(mode="ber", ber_output=output_json, show_video=False)
 
     assert output_json.exists()
@@ -424,7 +424,7 @@ def test_writer_calls_match_avi_frame_count(tmp_path: Path, set_okdev_input, mon
     data_file = DATA_DIR / "stream_daq_test_fpga_raw_input_200px.bin"
     set_okdev_input(data_file)
 
-    daq = StreamDevice(device_config=daqConfig)
+    daq = StreamDevice(config=daqConfig)
     daq.capture(video=output_video, metadata=None, show_video=False)
 
     assert output_video.exists()
