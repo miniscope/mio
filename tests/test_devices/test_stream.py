@@ -83,7 +83,6 @@ def test_video_output(
 
     daq_inst = StreamDevice(device_config=daqConfig)
     daq_inst.capture(
-        source="fpga",
         video=output_video,
         metadata=output_csv,
         show_video=show_video,
