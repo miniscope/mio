@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import sys
 import time
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, ClassVar
 
-import pandera.pandas as pa
 import numpy as np
+import pandera.pandas as pa
 from bitstring import Bits
 from pydantic import Field, computed_field
 
@@ -19,6 +18,11 @@ from mio.models.models import Table
 
 if TYPE_CHECKING:
     from mio.devices.stream.config import StreamDevConfig
+
+if sys.version_info < (3, 11):
+    from typing_extensions import Self
+else:
+    from typing import Self
 
 
 class ADCScaling(MiniscopeConfig):
@@ -164,7 +168,6 @@ class StreamBufferHeader(BufferHeader):
         else:
             return self._adc_scaling.scale_input_voltage(self.input_voltage_raw)
 
-
     @classmethod
     def from_buffer(cls, buffer: bytes, config: StreamDevConfig) -> tuple[Self, np.ndarray]:
         """
@@ -185,9 +188,7 @@ class StreamBufferHeader(BufferHeader):
             buffer_recv_index=-1,  # will be set later in buffer_to_frame for processed buffers
             buffer_recv_unix_time=time.time(),
         )
-        header_data = StreamBufferHeader.from_sequence(
-            header.astype(int), **runtime_metadata
-        )
+        header_data = StreamBufferHeader.from_sequence(header.astype(int), **runtime_metadata)
         header_data.adc_scaling = config.adc_scale
         return header_data, payload
 

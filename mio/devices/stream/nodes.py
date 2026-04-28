@@ -242,7 +242,7 @@ def buffer_to_frame(
                 continue
 
             # update buffer_recv_index only for processed buffers
-            header_data.runtime_metadata.buffer_recv_index = buffer_recv_index
+            header_data.buffer_recv_index = buffer_recv_index
             buffer_recv_index += 1
 
             try:
@@ -377,7 +377,7 @@ def format_frame(
 
             # Populate reconstructed_frame_index for all headers in this frame
             for header in header_list:
-                header.runtime_metadata.reconstructed_frame_index = frame_index_counter
+                header.reconstructed_frame_index = frame_index_counter
 
             try:
                 imagearray.put(
@@ -432,14 +432,14 @@ def _trim(
         # trim if too long
         if data.shape[0] > expected_data_size:
             data = data[0:expected_data_size]
-            header.runtime_metadata.black_padding_px = 0  # No padding, data was trimmed
+            header.black_padding_px = 0  # No padding, data was trimmed
         # pad if too short
         else:
             padding_amount = expected_data_size - data.shape[0]
             data = np.pad(data, (0, padding_amount))
-            header.runtime_metadata.black_padding_px = padding_amount
+            header.black_padding_px = padding_amount
     else:
         # No trimming or padding needed
-        header.runtime_metadata.black_padding_px = 0
+        header.black_padding_px = 0
 
     return data

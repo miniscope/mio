@@ -15,10 +15,7 @@ from mio.devices.base import Device
 from mio.devices.stream.ber import prbs15_ber
 from mio.devices.stream.config import StreamDevConfig
 from mio.devices.stream.headers import StreamBufferHeader
-from mio.exceptions import EndOfRecordingException, StreamReadError
-from mio.interfaces.mocks import okDevMock
 from mio.devices.stream.nodes import buffer_to_frame, exact_iter, format_frame, fpga_recv
-
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.models.process import FrequencyMaskingConfig
 from mio.plots.headers import StreamPlotter
