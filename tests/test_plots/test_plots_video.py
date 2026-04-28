@@ -1,9 +1,11 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import numpy as np
 
 from mio.models.frames import NamedVideo
 from mio.plots.video import VideoPlotter
+
 
 class TestVideoPlotter(unittest.TestCase):
 

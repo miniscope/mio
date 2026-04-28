@@ -1,15 +1,16 @@
+from collections.abc import Callable, MutableMapping
 from pathlib import Path
-from typing import Callable, Optional, Any, MutableMapping
+from typing import Any
 
 import pytest
-import yaml
 import tomli_w
+import yaml
 from _pytest.monkeypatch import MonkeyPatch
 
 from mio import Config
+from mio.devices.sdcard.data import SDCardVideo
 from mio.devices.sdcard.device import SDCardDevice
 from mio.models.config import _global_config_path, set_user_dir
-from mio.devices.sdcard.data import SDCardVideo
 from mio.models.mixins import ConfigYAMLMixin, YamlDumper
 
 
@@ -80,10 +81,10 @@ def tmp_config_dir(tmp_path, monkeypatch, set_env) -> Path:
 @pytest.fixture()
 def yaml_config(
     tmp_config_source, tmp_path, monkeypatch
-) -> Callable[[str, dict, Optional[Path]], Path]:
+) -> Callable[[str, dict, Path | None], Path]:
     out_file = tmp_config_source / "test_config.yaml"
 
-    def _yaml_config(id: str, data: dict, path: Optional[Path] = None) -> Path:
+    def _yaml_config(id: str, data: dict, path: Path | None = None) -> Path:
         if path is None:
             path = out_file
         else:

@@ -1,19 +1,18 @@
 import sys
+from pathlib import Path
 
 import pytest
 import yaml
 from click.testing import CliRunner
 from pydantic import BaseModel
-from pathlib import Path
 
-from mio.cli.config import config, _list, create, config_path
-from mio.cli.stream import capture
 from mio import Config
-from mio.utils import hash_video
+from mio.cli.config import _list, config, config_path, create
+from mio.cli.stream import capture
 from mio.models import config as _config_mod
-from .conftest import CONFIG_DIR
+from mio.utils import hash_video
 
-from .conftest import DATA_DIR
+from .conftest import CONFIG_DIR, DATA_DIR
 
 
 @pytest.mark.skip("Needs to be implemented")
@@ -228,7 +227,7 @@ def test_cli_config_create(tmp_config_dir):
     assert expected_path.exists()
 
     # get raw from file, and asset matches that loaded from the id
-    with open(expected_path, "r") as f:
+    with open(expected_path) as f:
         data = yaml.safe_load(f)
     assert data["id"] == "my-cool-config"
     loaded = MyConfigModel(**data)

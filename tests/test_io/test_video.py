@@ -1,7 +1,7 @@
 from pathlib import Path
 
-import pytest
 import numpy as np
+import pytest
 
 from mio.io.video import VideoWriter
 

@@ -1,13 +1,12 @@
 import logging
+import multiprocessing as mp
+import re
+import warnings
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+from time import sleep
 
 import pytest
-from pathlib import Path
-import re
-import multiprocessing as mp
-from time import sleep
-import warnings
-
-from logging.handlers import RotatingFileHandler
 from rich.logging import RichHandler
 
 from mio.logging import init_logger
@@ -41,7 +40,7 @@ def test_init_logger(capsys, tmp_path):
     captured = capsys.readouterr()
     assert "WARNING" in captured.out
 
-    with open(log_file, "r") as lfile:
+    with open(log_file) as lfile:
         log_str = lfile.read()
     assert "WARNING" in log_str
 
@@ -49,7 +48,7 @@ def test_init_logger(capsys, tmp_path):
     logger.info(info_msg)
     captured = capsys.readouterr()
     assert "INFO" in captured.out
-    with open(log_file, "r") as lfile:
+    with open(log_file) as lfile:
         log_str = lfile.read()
     assert "INFO" not in log_str
 

@@ -2,9 +2,10 @@
 Test for skvideo.io.FFmpegWriter.
 """
 
-from skvideo.io import FFmpegWriter
-import numpy as np
 import cv2
+import numpy as np
+from skvideo.io import FFmpegWriter
+
 
 def test_write_video(tmp_path):
     """

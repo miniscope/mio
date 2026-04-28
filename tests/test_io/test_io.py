@@ -1,6 +1,6 @@
-import pytest
-
 import csv
+
+import pytest
 
 from mio.io import BufferedCSVWriter
 

@@ -1,8 +1,8 @@
-from unittest.mock import MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock
 
-import pytest
 import numpy as np
+import pytest
 from pydantic import ValidationError
 
 import mio.io.video

@@ -7,23 +7,20 @@ Fixtures are trimmed from real recordings.
 from pathlib import Path
 
 import cv2
+import numpy as np
 import pandas as pd
 import pytest
 
-import numpy as np
-
-from mio.io import VideoWriter
-from mio.models.dataset import Recording, Dataset, StitchedRecording
+from mio.models.dataset import Recording, StitchedRecording
 from mio.process.stitch import (
-    CandidateFrame,
     StitchRecord,
-    concat_recordings,
-    stitch,
     _align_by_time,
     _has_discontinuous_runs,
     _score_edges,
+    concat_recordings,
+    stitch,
 )
-from mio.process.video import trim, remove_frames
+from mio.process.video import remove_frames, trim
 from mio.utils import hash_video
 
 STITCH_DATA_DIR = Path(__file__).parent.parent / "data" / "stitch"

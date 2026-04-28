@@ -1,6 +1,6 @@
 import os
-from typing import Union
 from datetime import datetime
+from pathlib import Path
 
 from .fixtures import *
 
@@ -11,9 +11,9 @@ MOCK_DIR = Path(__file__).parent / "mock"
 
 @pytest.fixture(autouse=True)
 def mock_okdev(monkeypatch):
-    from mio.interfaces.mocks import okDevMock
-    from mio.interfaces import opalkelly
     from mio.devices.stream import device
+    from mio.interfaces import opalkelly
+    from mio.interfaces.mocks import okDevMock
 
     monkeypatch.setattr(opalkelly, "okDev", okDevMock)
     monkeypatch.setattr(device, "okDev", okDevMock)
@@ -48,7 +48,7 @@ def set_okdev_input(monkeypatch):
     okDev data source
     """
 
-    def _set_okdev_input(file: Union[str, Path]):
+    def _set_okdev_input(file: str | Path):
         from mio.interfaces.mocks import okDevMock
 
         monkeypatch.setattr(okDevMock, "DATA_FILE", file)
@@ -64,7 +64,7 @@ def config_override(tmp_path) -> Callable[[Path, dict], Path]:
     """
 
     def _config_override(path: Path, config: dict) -> Path:
-        with open(path, "r") as f:
+        with open(path) as f:
             data = yaml.safe_load(f)
         data.update(config)
         out_path = tmp_path / f"config_override_{datetime.now().strftime('%H_%M_%S_%f')}.yml"

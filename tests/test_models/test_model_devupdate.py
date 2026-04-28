@@ -1,8 +1,9 @@
-import pytest
 from unittest.mock import patch
+
+import pytest
 from pydantic import ValidationError
 
-from mio.models.devupdate import DevUpdateCommand, UpdateKey, DeviceCommand
+from mio.models.devupdate import DeviceCommand, DevUpdateCommand, UpdateKey
 
 
 def mock_comports():

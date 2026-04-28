@@ -9,14 +9,14 @@ each of the methods.
 import numpy as np
 import pytest
 
-from mio.process.video import (
-    NoisePatchProcessor,
-    FreqencyMaskProcessor,
-    PassThroughProcessor,
-    MinProjSubtractProcessor,
-    MinimumProjectionConfig,
-)
 from mio.models.process import DenoiseConfig
+from mio.process.video import (
+    FreqencyMaskProcessor,
+    MinimumProjectionConfig,
+    MinProjSubtractProcessor,
+    NoisePatchProcessor,
+    PassThroughProcessor,
+)
 
 
 @pytest.fixture()

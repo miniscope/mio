@@ -1,19 +1,20 @@
 import re
+import warnings
+from collections.abc import Generator
 from pathlib import Path
 
-import numpy as np
-import pytest
-import pandas as pd
-from bitstring import Bits
-from typing import Generator
-import warnings
 import cv2
+import numpy as np
+import pandas as pd
+import pytest
+from bitstring import Bits
 
 from mio.const import BASE_DIR
 from mio.devices.stream import StreamBufferHeader, StreamDevConfig, StreamDevice, iter_buffers
-from mio.models.process import FrequencyMaskingConfig
-from mio.utils import hash_video, hash_file
 from mio.io import VideoWriter
+from mio.models.process import FrequencyMaskingConfig
+from mio.utils import hash_file, hash_video
+
 from ..conftest import DATA_DIR
 
 

@@ -1,9 +1,8 @@
 import pandas as pd
-
 import pytest
+from numpydantic.interface.video import VideoProxy
 
 from mio.models.dataset import Recording
-from numpydantic.interface.video import VideoProxy
 
 from ..conftest import DATA_DIR
 

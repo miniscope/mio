@@ -1,13 +1,12 @@
-from pathlib import Path
 from importlib.metadata import version
+from pathlib import Path
 
 import pytest
 import yaml
 from pydantic import BaseModel, ConfigDict
 
 from mio.const import CONFIG_DIR
-from mio.models.mixins import yaml_peek, ConfigYAMLMixin
-from tests.fixtures import tmp_config_source, yaml_config
+from mio.models.mixins import ConfigYAMLMixin, yaml_peek
 
 
 class NestedModel(BaseModel):
@@ -152,7 +151,7 @@ def test_complete_header(tmp_config_source, src: str):
 
     _ = MyModel.from_yaml(yaml_file)
 
-    with open(yaml_file, "r") as yfile:
+    with open(yaml_file) as yfile:
         loaded = yaml.safe_load(yfile)
 
     loaded_str = yaml_file.read_text()

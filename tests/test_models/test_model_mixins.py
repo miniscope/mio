@@ -1,8 +1,7 @@
-import pytest
-from typing import List, Dict
 
 import yaml
 from pydantic import BaseModel
+
 from mio.models.mixins import YAMLMixin
 
 
@@ -14,8 +13,8 @@ def test_yaml_mixin(tmp_path):
     class MyModel(BaseModel, YAMLMixin):
         a_str: str
         a_int: int
-        a_list: List[int]
-        a_dict: Dict[str, float]
+        a_list: list[int]
+        a_dict: dict[str, float]
 
     data = {"a_str": "string!", "a_int": 5, "a_list": [1, 2, 3], "a_dict": {"a": 1.1, "b": 2.5}}
 

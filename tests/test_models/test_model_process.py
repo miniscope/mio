@@ -1,10 +1,6 @@
-from pydantic import ValidationError
 import pytest
 
 from mio.models.process import DenoiseConfig
-from mio.const import BASE_DIR
-from mio.utils import hash_video, hash_file
-from ..conftest import DATA_DIR, CONFIG_DIR
 
 
 @pytest.mark.skip(reason="Not sure how to get config.")
