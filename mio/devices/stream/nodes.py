@@ -4,6 +4,7 @@ Separable processing operations for streaming devices
 
 import logging
 import multiprocessing
+import multiprocessing as mp
 import os
 import queue
 import time
@@ -122,6 +123,7 @@ def init_okdev(BIT_FILE: Path, read_length: int) -> Union["okDev", okDevMock]:
 def fpga_recv(
     serial_buffer_queue: multiprocessing.Queue,
     config: StreamDevConfig,
+    terminate: mp.Event,
     read_length: int = None,
     pre_first: bool = True,
     capture_binary: Path | None = None,
@@ -189,6 +191,8 @@ def fpga_recv(
                 )
             except queue.Full:
                 locallogs.warning("Serial buffer queue full, skipping buffer.")
+            if terminate.is_set():
+                break
 
     except Exception as e:
         locallogs.exception(f"Exception in fpga_recv: {e}")
@@ -206,6 +210,7 @@ def buffer_to_frame(
     frame_buffer_queue: multiprocessing.Queue,
     config: StreamDevConfig,
     header_cls: type[StreamBufferHeader],
+    terminate: mp.Event,
     buffer_idx_start: int = 0,
 ) -> None:
     """
@@ -299,6 +304,8 @@ def buffer_to_frame(
             frame_buffer[header_data.frame_buffer_count] = serial_buffer
             header_list.append(header_data)
             locallogs.debug("----buffer #" + str(header_data.frame_buffer_count) + " stored")
+            if terminate.is_set():
+                break
 
     except Exception as e:
         locallogs.exception(f"Exception in buffer_to_frame: {e}")
@@ -323,6 +330,7 @@ def format_frame(
     frame_buffer_queue: multiprocessing.Queue,
     imagearray: multiprocessing.Queue,
     config: StreamDevConfig,
+    terminate: mp.Event,
 ) -> None:
     """
     Construct frame from grouped buffers.
@@ -387,6 +395,9 @@ def format_frame(
                 )
             except queue.Full:
                 locallogs.warning("Image array queue full, skipping frame.")
+
+            if terminate.is_set():
+                break
 
             frame_index_counter += 1
     except Exception as e:

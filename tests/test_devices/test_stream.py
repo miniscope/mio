@@ -250,7 +250,7 @@ def test_csv_no_duplicates(tmp_path, set_okdev_input, monkeypatch):
     daq_inst = StreamDevice(config=daqConfig)
 
     assert daq_inst.config.buffer_npix == _bad_buffer_npix
-    daq_inst.capture(metadata=output_csv, show_video=False)
+    daq_inst.capture(metadata=output_csv, show_video=False, n_frames=5)
     assert daq_inst.config.buffer_npix == _bad_buffer_npix
     df = pd.read_csv(output_csv)
     vals, counts = np.unique(df.buffer_count, return_counts=True)
@@ -308,7 +308,7 @@ def test_metadata_plotting(tmp_path, default_streamdaq):
     Setting the capture kwarg ``show_metadata == True`` should plot the frame metadata
     during capture.
     """
-    default_streamdaq.capture(show_metadata=True, show_video=False)
+    default_streamdaq.capture(show_metadata=True, show_video=False, n_frames=1)
 
     # unit tests for the stream plotter should go elsewhere, here we just
     # test that the object was instantiated and that it got the data it should have
