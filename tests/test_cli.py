@@ -6,10 +6,10 @@ import yaml
 from click.testing import CliRunner
 from pydantic import BaseModel
 
-from mio import Config
 from mio.cli.config import _list, config, config_path, create
 from mio.cli.stream import capture
 from mio.models import config as _config_mod
+from mio.models.config import Config
 from mio.utils import hash_video
 
 from .conftest import CONFIG_DIR, DATA_DIR
