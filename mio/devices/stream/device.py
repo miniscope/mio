@@ -206,7 +206,6 @@ class StreamDevice(Device):
                     self.config,
                     self.header_cls,
                     self.terminate,
-                    self.terminate,
                 ),
                 name="buffer_to_frame",
             )
