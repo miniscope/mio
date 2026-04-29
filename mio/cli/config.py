@@ -17,7 +17,7 @@ from rich.table import Table
 
 from mio.const import CONFIG_DIR
 from mio.models import config as _config
-from mio.models.config import set_user_dir
+from mio.models.config import Config, set_user_dir
 from mio.models.mixins import ConfigYAMLMixin
 from mio.types import ConfigID
 
@@ -265,7 +265,7 @@ def create(
     except ValidationError as err:
         raise ValueError("Config ID must follow config id pattern") from err
 
-    output = Path(output) if output else _config.get_config().config_dir / (config_id + ".yaml")
+    output = Path(output) if output else Config().config_dir / (config_id + ".yaml")
 
     if not force and output.exists():
         click.echo(f"{output} already exists. use --force to overwrite")
