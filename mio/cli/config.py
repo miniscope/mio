@@ -31,7 +31,7 @@ def config(ctx: click.Context) -> None:
     When run without arguments, displays current config from all sources
     """
     if ctx.invoked_subcommand is None:
-        config_str = _config.Config().to_yaml()
+        config_str = _config.get_config().to_yaml()
         click.echo(f"mio configuration:\n-----\n{config_str}")
 
 
@@ -65,7 +65,7 @@ def user(ctx: click.Context) -> None:
     When invoked without arguments, displays the contents of the current user directory
     """
     if ctx.invoked_subcommand is None:
-        config = _config.Config()
+        config = _config.get_config()
         config_file = list(config.user_dir.glob("mio_config.*"))
         if len(config_file) == 0:
             click.echo(
@@ -154,7 +154,7 @@ def user_create(
 @user.command("path")
 def user_path() -> None:
     """Location of the current user config"""
-    path = list(_config.Config().user_dir.glob("mio_config.*"))[0]
+    path = list(_config.get_config().user_dir.glob("mio_config.*"))[0]
     click.echo(str(path))
 
 
@@ -265,7 +265,7 @@ def create(
     except ValidationError as err:
         raise ValueError("Config ID must follow config id pattern") from err
 
-    output = Path(output) if output else _config.Config().config_dir / (config_id + ".yaml")
+    output = Path(output) if output else _config.get_config().config_dir / (config_id + ".yaml")
 
     if not force and output.exists():
         click.echo(f"{output} already exists. use --force to overwrite")

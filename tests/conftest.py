@@ -42,7 +42,11 @@ def mock_config_source(monkeypatch_session: MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def set_log_levels(set_global_yaml: Callable[[dict], None]) -> None:
+    from mio.models.config import get_config
+
     set_global_yaml({"logs": {"level": "ERROR"}})
+    config = get_config()
+    config.logs.level = "ERROR"
 
 
 @pytest.fixture(scope="session", autouse=True)

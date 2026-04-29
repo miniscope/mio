@@ -7,10 +7,9 @@ import tomli_w
 import yaml
 from _pytest.monkeypatch import MonkeyPatch
 
-from mio import Config
 from mio.devices.sdcard.data import SDCardVideo
 from mio.devices.sdcard.device import SDCardDevice
-from mio.models.config import _global_config_path, set_user_dir
+from mio.models.config import Config, _global_config_path, set_user_dir
 from mio.models.mixins import ConfigYAMLMixin, YamlDumper
 
 
@@ -271,7 +270,12 @@ def set_global_yaml() -> Callable[[dict[str, Any]], Path]:
         "set_global_yaml",
     ]
 )
-def set_config(request: pytest.FixtureRequest) -> Callable[[dict[str, Any]], Path]:
+def set_config(
+    request: pytest.FixtureRequest, monkeypatch: MonkeyPatch
+) -> Callable[[dict[str, Any]], Path]:
+    from mio.models import config
+
+    monkeypatch.setattr(config, "_config", None)
     return request.getfixturevalue(request.param)
 
 
