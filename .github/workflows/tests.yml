@@ -43,7 +43,9 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pylock.toml') }}
 
       - name: Install dependencies
-        run: pdm install --with tests
+        run: |
+          python -m pip install pdm
+          pdm install --with tests
       
       - name: show runner.os
         run: echo ${{ runner.os }}
