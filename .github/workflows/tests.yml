@@ -30,13 +30,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: pdm-project/setup-pdm@v4
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
+          cache: true
+          cache-dependency-path: pylock.toml
 
       - name: Install dependencies
-        run: pip install -e .[tests] pytest-md
+        run: pdm install --with tests
       
       - name: show runner.os
         run: echo ${{ runner.os }}
@@ -56,10 +57,7 @@ jobs:
           sudo apt-get install -y ffmpeg
 
       - name: Run tests
-        uses: pavelzw/pytest-action@v2
-        with:
-          emoji: false
-          job-summary: true
+        run: pdm run test
 
       - name: Report to coveralls
         id: coverage-report
