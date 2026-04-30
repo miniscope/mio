@@ -90,6 +90,9 @@ all = [
     "mio[tests,docs,dev,ntp]"
 ]
 
+[project.entry-points."noob.add_sources"]
+tubes = "mio.utils:add_noob_sources"
+
 [project.scripts]
 mio = "mio.cli.main:cli"
 

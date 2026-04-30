@@ -9,11 +9,17 @@ import os
 import queue
 import time
 from collections.abc import Callable, Generator, Iterator
+from functools import cached_property
 from pathlib import Path
+from typing import Annotated as A
 from typing import Any, Union
+from typing import Literal as L
 
 import numpy as np
 from bitstring import BitArray, Bits
+from noob import Name, Node
+from noob.event import MetaSignal
+from pydantic import PrivateAttr
 
 from mio import init_logger
 from mio.devices.stream import StreamBufferHeader, StreamDevConfig
@@ -31,6 +37,61 @@ try:
     HAVE_OK = True
 except (ImportError, ModuleNotFoundError):
     pass  # okDev stays None; error raised when actually trying to use FPGA
+
+
+def iter_fpga(config: StreamDevConfig) -> Generator[A[bytes, Name("chunk")], None, None]:
+    """
+    Iterate a raw binary stream from the FPGA in chunks
+    (not necessarily split into buffers)
+    """
+    # set up fpga interfaces
+    dev = init_okdev(config.bitstream, config.read_length)
+
+    while True:
+        yield next(dev)
+
+
+class SplitBuffers(Node):
+    """
+    Collect raw chunks from the FPGA, yield buffers
+
+    The data are passed in fixed chunks.
+    Then we concatenate the chunks and try to look for {attr}`.SplitBuffers.preamble` in the data.
+    The data between every pair of {attr}`.SplitBuffers.preamble`
+    is considered to be a single buffer and yielded.
+    """
+
+    config: StreamDevConfig
+    _buffer: BitArray = PrivateAttr(default_factory=BitArray)
+
+    @cached_property
+    def preamble(self) -> Bits:
+        """
+        The preamble that indicates the start of a buffer.
+
+        If ``config.reverse_header_bits`` is true, the preamble is bit-flipped
+        """
+        pre = Bits(self.config.preamble)
+        if self.config.reverse_header_bits:
+            pre = pre[::-1]
+        return pre
+
+    def process(self, chunk: bytes) -> A[list[bytes] | L[MetaSignal.NoEvent], Name("chunks")]:
+        """
+        Append the chunk to the buffer, return any split buffers, if found.
+        """
+        self._buffer += BitArray(chunk)
+        pos = list(self._buffer.findall(self.preamble))
+        buffers = [self._buffer[start:stop].tobytes() for start, stop in zip(pos[:-1], pos[1:])]
+        if buffers:
+            self._buffer = self._buffer[pos[-1] :]
+            return buffers
+        else:
+            return MetaSignal.NoEvent
+
+    def deinit(self) -> None:
+        """Clear the internal buffer"""
+        self._buffer = BitArray()
 
 
 def exact_iter(f: Callable, sentinel: Any) -> Generator[Any, None, None]:
