@@ -28,15 +28,24 @@ jobs:
             python-version: "3.14"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
+          cache-dependency-path: pylock.toml
+
+      - name: Cache Venv
+        uses: actions/cache@v5
+        with:
+          path: '.venv'
+          key: ${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pylock.toml') }}
 
       - name: Install dependencies
-        run: pip install -e .[tests] pytest-md
+        run: |
+          python -m pip install pdm
+          pdm install --with tests
       
       - name: show runner.os
         run: echo ${{ runner.os }}
@@ -56,11 +65,7 @@ jobs:
           sudo apt-get install -y ffmpeg
 
       - name: Run tests
-        uses: pavelzw/pytest-action@v2
-        with:
-          verbose: true
-          emoji: false
-          job-summary: true
+        run: pdm run test
 
       - name: Report to coveralls
         id: coverage-report

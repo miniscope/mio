@@ -9,7 +9,7 @@ from pathlib import Path
 
 from rich.logging import RichHandler
 
-from mio.models.config import LOG_LEVELS, Config
+from mio.models.config import LOG_LEVELS, get_config
 
 
 def init_logger(
@@ -44,7 +44,7 @@ def init_logger(
     Returns:
         :class:`logging.Logger`
     """
-    config = Config()
+    config = get_config()
     if log_dir is None:
         log_dir = config.log_dir
     if level is None:

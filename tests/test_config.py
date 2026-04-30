@@ -4,8 +4,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from mio import Config
-from mio.models.config import _global_config_path, set_user_dir
+from mio.models.config import Config, _global_config_path, set_user_dir
 
 
 def test_config(tmp_path):

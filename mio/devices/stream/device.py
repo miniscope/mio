@@ -122,6 +122,7 @@ class StreamDevice(Device):
         freq_mask_config: FrequencyMaskingConfig | None = None,
         mode: Literal["capture", "ber"] = "capture",
         ber_output: Path | None = None,
+        n_frames: int | None = None,
     ) -> None:
         """
         Entry point to start frame capture.
@@ -150,6 +151,8 @@ class StreamDevice(Device):
             ``"ber"`` runs a PRBS bit-error-rate test on the incoming data stream.
         ber_output: Path, optional
             When ``mode == "ber"``, JSON file to write the BER summary to.
+        n_frames: int, optional
+            If set, only capture n_frames from the source, then quit
         """
         self.terminate.clear()
         if mode not in ("capture", "ber"):
@@ -171,7 +174,7 @@ class StreamDevice(Device):
         self.logger.debug("Starting fpga capture process")
         p_recv = ctx.Process(
             target=fpga_recv,
-            args=(serial_buffer_queue, self.config, read_length, True, binary),
+            args=(serial_buffer_queue, self.config, self.terminate, read_length, True, binary),
             name="fpga_recv",
         )
 
@@ -197,7 +200,13 @@ class StreamDevice(Device):
         if mode == "capture":
             p_buffer_to_frame = ctx.Process(
                 target=buffer_to_frame,
-                args=(serial_buffer_queue, frame_buffer_queue, self.config, self.header_cls),
+                args=(
+                    serial_buffer_queue,
+                    frame_buffer_queue,
+                    self.config,
+                    self.header_cls,
+                    self.terminate,
+                ),
                 name="buffer_to_frame",
             )
             p_format_frame = ctx.Process(
@@ -206,6 +215,7 @@ class StreamDevice(Device):
                     frame_buffer_queue,
                     imagearray,
                     self.config,
+                    self.terminate,
                 ),
                 name="format_frame",
             )
@@ -228,6 +238,7 @@ class StreamDevice(Device):
                 metadata, header=header_cols, buffer_size=self.config.runtime.csvwriter.buffer
             )
 
+        captured_frames = 0
         try:
             if mode == "ber":
                 self._ber_mode(serial_buffer_queue, ber_output)
@@ -242,6 +253,10 @@ class StreamDevice(Device):
                     metadata=metadata,
                     freq_mask_helper=freq_mask_helper,
                 )
+                captured_frames += 1
+                if n_frames is not None and captured_frames >= n_frames:
+                    break
+
         except KeyboardInterrupt:
             self.logger.exception(
                 "Quitting capture, processing remaining frames. Ctrl+C again to force quit"
@@ -261,8 +276,8 @@ class StreamDevice(Device):
                 self.logger.exception("Force quitting")
         except Exception as e:
             self.logger.exception(f"Error during capture: {e}")
-            self.terminate.set()
         finally:
+            self.terminate.set()
             if writer:
                 writer.close()
                 self.logger.debug("VideoWriter released")
@@ -278,7 +293,7 @@ class StreamDevice(Device):
             # Should never happen except during a force quit, as we wait for all
             # queues to drain, and if they don't do so on their own, it's a bug.
             for p in procs:
-                p.join(timeout=5)
+                p.join(timeout=2)
                 if p.is_alive():
                     self.logger.warning(f"Termination timeout: force terminating process {p.name}.")
                     p.terminate()

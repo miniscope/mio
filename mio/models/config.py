@@ -243,6 +243,7 @@ def _update_value(path: Path, key: str, value: Any) -> None:
         Make this work with nested keys
 
     """
+    global _config
     data = None
     if path.exists():
         with open(path) as f:
@@ -255,3 +256,19 @@ def _update_value(path: Path, key: str, value: Any) -> None:
 
     with open(path, "w") as f:
         yaml.dump(data, f)
+
+    _config = None
+
+
+_config: Config | None = None
+
+
+def get_config() -> Config:
+    """
+    Get the global config singleton -
+    use this rather than instantiating the Config object directly
+    """
+    global _config
+    if _config is None:
+        _config = Config()
+    return _config

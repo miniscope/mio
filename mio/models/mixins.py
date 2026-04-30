@@ -158,9 +158,9 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
             except KeyError:
                 continue
 
-        from mio import Config
+        from mio import get_config
 
-        raise KeyError(f"No config with id {id} found in {Config().config_dir}")
+        raise KeyError(f"No config with id {id} found in {get_config().config_dir}")
 
     @classmethod
     def from_any(cls: Self, source: ConfigSource | Self) -> Self:
@@ -233,10 +233,10 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
         Directories to search for config files, in order of priority
         such that earlier sources are preferred over later sources.
         """
-        from mio import Config
+        from mio import get_config
         from mio.const import CONFIG_DIR
 
-        return [Config().config_dir, CONFIG_DIR]
+        return [get_config().config_dir, CONFIG_DIR]
 
     def _dump_data(self, **kwargs: Any) -> dict:
         """Ensure that header is prepended to model data"""

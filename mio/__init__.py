@@ -5,10 +5,10 @@ I/O SDK for UCLA Miniscopes
 from importlib import metadata
 
 from mio.logging import init_logger
-from mio.models.config import Config
+from mio.models.config import get_config
 
 __all__ = [
-    "Config",
+    "get_config",
     "init_logger",
 ]
 
