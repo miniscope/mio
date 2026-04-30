@@ -56,11 +56,10 @@ but provide iterators or other accessors to get their contents by slicing syntax
 """
 
 import re
-import sys
 import warnings
 from pathlib import Path
 from typing import Annotated as A
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, Self, TypeAlias, TypedDict
 
 import pandas as pd
 from numpydantic import NDArraySchema
@@ -79,11 +78,6 @@ from mio.devices.tables import NoiseTable, StitchTable, TimestampTable
 from mio.models import MiniscopeIOModel
 from mio.models.process import NoisePatchConfig
 from mio.utils import _format_ranges
-
-if sys.version_info < (3, 11):
-    from typing_extensions import Self, TypedDict
-else:
-    from typing import Self, TypedDict
 
 VIDEO_EXTENSIONS = (".avi", ".mp4")
 RECORDING_TYPES = Literal["raw", "stitched"]

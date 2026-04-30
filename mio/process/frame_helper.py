@@ -4,8 +4,8 @@ This module contains a helper class for frame operations.
 
 from __future__ import annotations
 
-import sys
 from abc import abstractmethod
+from typing import TypedDict
 
 import cv2
 import numpy as np
@@ -17,11 +17,6 @@ from mio.models.process import (
     GradientDetectorConfig,
     NoisePatchConfig,
 )
-
-if sys.version_info < (3, 11):
-    from typing_extensions import TypedDict
-else:
-    from typing import TypedDict
 
 logger = init_logger("frame_helper")
 

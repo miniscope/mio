@@ -6,16 +6,14 @@ import re
 import sys
 from os import PathLike
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, TypeAlias
 
 from pydantic import AfterValidator, Field
 
-if sys.version_info < (3, 10) or sys.version_info < (3, 13):
-    from typing import TypeAlias
-
+if sys.version_info < (3, 13):
     from typing_extensions import TypeIs
 else:
-    from typing import TypeAlias, TypeIs
+    from typing import TypeIs
 
 CONFIG_ID_PATTERN = r"[\w\-\/#]+"
 """
