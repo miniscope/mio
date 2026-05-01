@@ -340,6 +340,7 @@ class StreamDevice(Device):
 
         total_bits = 0
         total_errors = 0
+        total_errored_buffers = 0
         window_bits = 0
         window_errors = 0
         got = 0
@@ -373,6 +374,8 @@ class StreamDevice(Device):
 
             total_errors += errors
             total_bits += bits
+            if errors > 0:
+                total_errored_buffers += 1
             window_errors += errors
             window_bits += bits
             got += 1
@@ -418,6 +421,7 @@ class StreamDevice(Device):
             "buffers": got,
             "bits": total_bits,
             "errors": total_errors,
+            "errored_buffers": total_errored_buffers,
             "ber": ber,
             "buffer_count_start": first_buffer_count,
             "buffer_count_end": last_buffer_count,
@@ -435,23 +439,53 @@ class StreamDevice(Device):
         """
         target_buffers = self.config.runtime.ber_test_n_buffers
         result = self.prbs15_ber(serial_buffer_queue, target_buffers)
+
+        buffers_received = result["buffers"]
+        bits = result["bits"]
+        errors = result["errors"]
+        errored_buffers = result["errored_buffers"]
+        buf_start = result["buffer_count_start"]
+        buf_end = result["buffer_count_end"]
+
+        if buf_start is not None and buf_end is not None and buffers_received > 0:
+            expected_buffers = buf_end - buf_start + 1
+            dropped_buffers = max(expected_buffers - buffers_received, 0)
+            per = (
+                (dropped_buffers + errored_buffers) / expected_buffers
+                if expected_buffers
+                else float("nan")
+            )
+        else:
+            expected_buffers = 0
+            dropped_buffers = 0
+            per = float("nan")
+
         self.logger.info(
-            "BER test complete: buffers=%d bits=%d errors=%d ber=%.6g",
-            result["buffers"],
-            result["bits"],
-            result["errors"],
+            "BER test complete: buffers=%d/%d dropped=%d errored=%d "
+            "bits=%d errors=%d ber=%.6g per=%.6g",
+            buffers_received,
+            expected_buffers,
+            dropped_buffers,
+            errored_buffers,
+            bits,
+            errors,
             result["ber"],
+            per,
         )
         if ber_output:
             summary = {
                 "prbs": "PRBS-15 (x^15+x^14+1, MSB-first), " "seed=(buffer_count & 0x7FFF) or 1",
                 "target_buffers": target_buffers,
-                "buffers_received": result["buffers"],
-                "buffer_count_start": result["buffer_count_start"],
-                "buffer_count_end": result["buffer_count_end"],
-                "bits": result["bits"],
-                "errors": result["errors"],
+                "buffers_received": buffers_received,
+                "buffer_count_start": buf_start,
+                "buffer_count_end": buf_end,
+                "expected_buffers": expected_buffers,
+                "dropped_buffers": dropped_buffers,
+                "errored_buffers": errored_buffers,
+                "bits": bits,
+                "errors": errors,
                 "ber": result["ber"],
+                "per": per,
                 "windows": result["windows"],
             }
             with open(ber_output, "w") as f:

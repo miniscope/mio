@@ -345,6 +345,10 @@ def test_ber_measurement(tmp_path, set_okdev_input):
     assert result["ber"] == pytest.approx(0.2936758910, rel=1e-9)
     assert result["buffer_count_start"] == 207576
     assert result["buffer_count_end"] == 207695
+    assert result["expected_buffers"] == 120
+    assert result["dropped_buffers"] == 0
+    assert result["errored_buffers"] == 120
+    assert result["per"] == pytest.approx(1.0, rel=1e-12)
 
     # Mid-run window (logged every 100 buffers)
     assert len(result["windows"]) == 1
