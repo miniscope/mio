@@ -303,7 +303,10 @@ class StreamDevice(Device):
         return header_data, payload
 
     def prbs15_ber(
-        self, serial_buffer_queue: multiprocessing.Queue, n_buffers: int = 100
+        self,
+        serial_buffer_queue: multiprocessing.Queue,
+        n_buffers: int = 100,
+        timeout_s: float | None = 10.0,
     ) -> dict[str, float | int]:
         """
         Measure bit-error-rate (BER) on the communication link using PRBS-15
@@ -349,10 +352,42 @@ class StreamDevice(Device):
         first_buffer_count: int | None = None
         last_buffer_count: int | None = None
         window_first_buffer_count: int | None = None
+        aborted: str | None = None
 
-        self.logger.info("BER capture starting, target=%d buffers", n_buffers)
+        self.logger.info(
+            "BER capture starting, target=%d buffers, timeout=%s",
+            n_buffers,
+            f"{timeout_s:.1f}s" if timeout_s is not None else "none",
+        )
 
-        for buf in exact_iter(serial_buffer_queue.get, None):
+        while True:
+            try:
+                buf = (
+                    serial_buffer_queue.get(timeout=timeout_s)
+                    if timeout_s is not None
+                    else serial_buffer_queue.get()
+                )
+            except queue.Empty:
+                self.logger.warning(
+                    "BER capture timed out after %.1fs with no buffer received "
+                    "(got %d/%d buffers)",
+                    timeout_s,
+                    got,
+                    n_buffers,
+                )
+                aborted = "timeout"
+                break
+            except KeyboardInterrupt:
+                self.logger.warning(
+                    "BER capture interrupted by user (got %d/%d buffers)",
+                    got,
+                    n_buffers,
+                )
+                aborted = "interrupted"
+                self.terminate.set()
+                break
+            if buf is None:
+                break
             header_data, payload_u8 = self._parse_header(buf)
             if payload_u8.size == 0:
                 continue
@@ -426,6 +461,7 @@ class StreamDevice(Device):
             "buffer_count_start": first_buffer_count,
             "buffer_count_end": last_buffer_count,
             "windows": windows,
+            "aborted": aborted,
         }
 
     def _ber_mode(
@@ -446,6 +482,7 @@ class StreamDevice(Device):
         errored_buffers = result["errored_buffers"]
         buf_start = result["buffer_count_start"]
         buf_end = result["buffer_count_end"]
+        aborted = result["aborted"]
 
         if buf_start is not None and buf_end is not None and buffers_received > 0:
             expected_buffers = buf_end - buf_start + 1
@@ -461,8 +498,9 @@ class StreamDevice(Device):
             per = float("nan")
 
         self.logger.info(
-            "BER test complete: buffers=%d/%d dropped=%d errored=%d "
+            "BER test %s: buffers=%d/%d dropped=%d errored=%d "
             "bits=%d errors=%d ber=%.6g per=%.6g",
+            f"aborted ({aborted})" if aborted else "complete",
             buffers_received,
             expected_buffers,
             dropped_buffers,
@@ -486,6 +524,7 @@ class StreamDevice(Device):
                 "errors": errors,
                 "ber": result["ber"],
                 "per": per,
+                "aborted": aborted,
                 "windows": result["windows"],
             }
             with open(ber_output, "w") as f:

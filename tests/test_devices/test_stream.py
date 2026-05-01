@@ -349,6 +349,7 @@ def test_ber_measurement(tmp_path, set_okdev_input):
     assert result["dropped_buffers"] == 0
     assert result["errored_buffers"] == 120
     assert result["per"] == pytest.approx(1.0, rel=1e-12)
+    assert result["aborted"] is None
 
     # Mid-run window (logged every 100 buffers)
     assert len(result["windows"]) == 1
