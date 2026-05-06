@@ -87,28 +87,35 @@ class StreamDevice(Device):
         result = prbs15_ber(
             serial_buffer_queue, self.config, self.logger, target_buffers, self.header_cls
         )
+        aborted = result["aborted"]
+        status = f"aborted ({aborted})" if aborted else "complete"
         self.logger.info(
-            "BER test complete: buffers=%d bits=%d errors=%d ber=%.6g",
-            result["buffers"],
-            result["bits"],
-            result["errors"],
-            result["ber"],
+            f"BER test {status}: "
+            f"buffers={result['buffers']}/{result['expected_buffers']} "
+            f"dropped={result['dropped_buffers']} errored={result['errored_buffers']} "
+            f"bits={result['bits']} errors={result['errors']} "
+            f"ber={result['ber']:.6g} per={result['per']:.6g}"
         )
         if ber_output:
             summary = {
-                "prbs": "PRBS-15 (x^15+x^14+1, MSB-first), " "seed=(buffer_count & 0x7FFF) or 1",
+                "prbs": "PRBS-15 (x^15+x^14+1, MSB-first), seed=(buffer_count & 0x7FFF) or 1",
                 "target_buffers": target_buffers,
                 "buffers_received": result["buffers"],
                 "buffer_count_start": result["buffer_count_start"],
                 "buffer_count_end": result["buffer_count_end"],
+                "expected_buffers": result["expected_buffers"],
+                "dropped_buffers": result["dropped_buffers"],
+                "errored_buffers": result["errored_buffers"],
                 "bits": result["bits"],
                 "errors": result["errors"],
                 "ber": result["ber"],
+                "per": result["per"],
+                "aborted": aborted,
                 "windows": result["windows"],
             }
             with open(ber_output, "w") as f:
                 json.dump(summary, f, indent=2, default=float)
-            self.logger.info("BER results written to %s", ber_output)
+            self.logger.info(f"BER results written to {ber_output}")
 
     def capture(
         self,
