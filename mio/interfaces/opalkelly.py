@@ -20,13 +20,11 @@ from mio.vendor import opalkelly as ok
 
 class okDev(ok.okCFrontPanel):
     """
-    I/O and configuration for an (what kind of opal kelly device?)
+    I/O and configuration for an Opal Kelly FPGA
 
-    .. todo::
+    Uses the FPGA code found here: https://github.com/Aharoni-Lab/wireless_fpga_daq
 
-        Phil: document what this thing does, including how bitfiles work
-        and how they're generated/where they're located.
-
+    See that repository's README for further documentation.
     """
 
     def __init__(self, read_length: int, serial_id: str = ""):

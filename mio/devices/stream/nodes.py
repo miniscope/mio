@@ -98,7 +98,19 @@ def iter_buffers(
 
 
 def init_okdev(BIT_FILE: Path, read_length: int) -> Union["okDev", okDevMock]:
-    """Create a connection to an :class:`.okDev` device"""
+    """
+    Create a connection to an :class:`.okDev` device
+
+    Writes to the FPGA to reset its state:
+
+    * put the manchester decoder at reset mode
+    * sleep 0.01
+    * un-reset all components
+    * put the clock generator/multiplier at reset
+    * sleep 0.01
+    * un-reset all components (presumably the system is ready at this point).
+
+    """
     # FIXME: when multiprocessing bug resolved, remove this and just mock in tests
     if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("STREAMDAQ_MOCKRUN"):
         dev = okDevMock(read_length=read_length)

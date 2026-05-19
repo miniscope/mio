@@ -21,7 +21,13 @@ A window displaying the image transferred from the Miniscope and a graph plottin
 A YAML file is used to configure Stream DAQ based on the device configuration. The device configuration needs to match the imaging and data capture hardware for proper operation. This file is used to set up hardware, define data formats, and set data preambles. The contents of this YAML file will be parsed into a {class}`mio.devices.stream.config.StreamDevConfig <model>`, which then configures the Stream DAQ.
 
 ### FPGA (Opal Kelly) configuration
-The `bitstream` field in the device configuration yaml file specifies the image that will be uploaded to the opal kelly board. This file needs to be placed in `mio.devices`.
+The `bitstream` field in the device configuration yaml file specifies the image that will be uploaded to the opal kelly board. This file needs to be placed in `mio.interfaces`.
+
+```{tip}
+See the FPGA repository for further information about the FPGA code:
+
+<https://github.com/Aharoni-Lab/wireless_fpga_daq>
+```
 
 
 #### Bitstream file nomenclature
