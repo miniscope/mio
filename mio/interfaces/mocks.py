@@ -10,13 +10,8 @@ Not to be considered part of the public interface of mio <3
 # ruff: noqa: D102
 
 import os
-import sys
 from pathlib import Path
-
-if sys.version_info < (3, 11):
-    from typing_extensions import Self
-else:
-    from typing import Self
+from typing import Self
 
 from mio.exceptions import EndOfRecordingException
 

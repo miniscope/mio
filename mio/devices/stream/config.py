@@ -231,3 +231,10 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
         )
         quotient, remainder = divmod(px_per_frame, payload_bytes)
         return [payload_bytes] * int(quotient) + ([int(remainder)] if remainder else [])
+
+    @property
+    def read_length(self) -> int:
+        """
+        How many bytes to read from the FPGA per chunk, roughly the expected size of a buffer
+        """
+        return int(max(self.buffer_npix) * self.pix_depth / 8 / 16) * 16

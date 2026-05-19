@@ -1,0 +1,11 @@
+noob_id: 1
+description: |
+  Frame assembly from buffers
+  
+input:
+  config:
+    type: mio.devices.stream.StreamDevConfig
+    scope: tube
+  buffers:
+    type: list[bytes]
+    scope: process

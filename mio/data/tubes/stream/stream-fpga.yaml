@@ -1,0 +1,35 @@
+noob_id: stream-fpga
+description: |
+  Source of fpga data for the stream device
+
+input:
+  config:
+    type: mio.devices.stream.StreamDevConfig
+    scope: tube
+  capture_binary:
+    type: pathlib.Path | None
+    scope: tube
+
+nodes:
+  fpga:
+    type: mio.devices.stream.nodes.iter_fpga
+    params:
+      config: input.config
+  split_buffers:
+    type: mio.devices.stream.nodes.SplitBuffers
+    params:
+      config: input.config
+    depends:
+      - chunk: fpga.chunk
+
+  # binary i/o
+  write_binary:
+    type: mio.io.append_binary
+    depends:
+      - path: input.capture_binary
+      - data: fpga.chunk
+
+  return:
+    type: return
+    depends:
+      - buffers: split_buffers.buffers

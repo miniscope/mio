@@ -8,7 +8,7 @@ authors = [
 license = {text = "AGPL-3.0"}
 dynamic = ["version"]
 
-requires-python = "<4.0,>=3.10"
+requires-python = "<4.0,>=3.11"
 dependencies = [
     "opencv-python>=4.7.0.72; platform_system!='Darwin'",
     "opencv-python>=4.7.0.72,<4.13.0.90; platform_system=='Darwin'", # latest versions not built with ffmpeg support
@@ -29,6 +29,7 @@ dependencies = [
     'scipy>=1.16.1; python_version>="3.14"', # first version with wheels for 3.14
     "numpydantic>=1.8.1",
     "pandera>=0.31.1",
+    "noob>=1000.0.1",
 ]
 
 readme = "README.md"
@@ -89,6 +90,9 @@ all = [
     "mio[tests,docs,dev,ntp]"
 ]
 
+[project.entry-points."noob.add_sources"]
+tubes = "mio.utils:add_noob_sources"
+
 [project.scripts]
 mio = "mio.cli.main:cli"
 
@@ -105,8 +109,8 @@ format.composite = [
 docs-prod = "python -m sphinx -M html ./docs ./docs/_build -W -E -a --keep-going"
 # lock twice until we drop 3.10 because of scipy dropping wheels for 3.10
 lock.composite = [
-    'pdm lock --with :all --python="<3.14.*"',
-    'pdm lock --with :all --python=">=3.14.*" --append'
+    'pdm lock --with :all --python="<3.14"',
+    'pdm lock --with :all --python=">=3.14" --append'
 ]
 
 [tool.pdm.build]
@@ -145,7 +149,7 @@ omit = [
 ]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 include = ["mio/**/*.py", "tests/**/*.py", "pyproject.toml"]
 exclude = ["docs", "mio/vendor", "noxfile.py"]
 line-length = 100
@@ -227,6 +231,6 @@ follow_imports = "silent"
 warn_unreachable = true
 
 [tool.black]
-target-version = ['py310', 'py311', 'py312', 'py313']
+target-version = ['py311', 'py312', 'py313']
 extend-exclude = 'mio/vendor/.*'
 line-length = 100

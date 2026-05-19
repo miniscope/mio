@@ -5,7 +5,6 @@ to use composition for functionality and inheritance for semantics.
 
 import re
 import shutil
-import sys
 from collections.abc import Iterator
 from importlib.metadata import version
 from itertools import chain
@@ -14,6 +13,8 @@ from typing import (
     Any,
     ClassVar,
     Literal,
+    NotRequired,
+    Self,
     TypedDict,
     TypeVar,
     overload,
@@ -21,11 +22,6 @@ from typing import (
 
 import yaml
 from pydantic import BaseModel, Field, ValidationError, field_validator
-
-if sys.version_info < (3, 11):
-    from typing_extensions import NotRequired, Self
-else:
-    from typing import NotRequired, Self
 
 from mio.types import ConfigID, ConfigSource, PythonIdentifier, valid_config_id
 

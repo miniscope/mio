@@ -1,0 +1,23 @@
+noob_id: stream
+description: |
+  Combined core streamdev pipeline (WIP)
+
+input:
+  config:
+    type: mio.devices.stream.StreamDevConfig
+    scope: tube
+  capture_binary:
+    type: pathlib.Path | None
+    scope: tube
+
+nodes:
+  fpga:
+    type: tube
+    params:
+      tube: stream-fpga
+  frame-assembly:
+    type: tube
+    params:
+      tube: stream-frame
+    depends:
+      - buffers: fpga.buffers
