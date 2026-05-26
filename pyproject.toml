@@ -29,7 +29,7 @@ dependencies = [
     'scipy>=1.16.1; python_version>="3.14"', # first version with wheels for 3.14
     "numpydantic>=1.8.1",
     "pandera>=0.31.1",
-    "noob>=1000.0.1",
+    "noob[zmq]>=1000.1.0",
 ]
 
 readme = "README.md"
@@ -64,7 +64,10 @@ documentation = "https://miniscope-io.readthedocs.io/"
 
 [project.optional-dependencies]
 ntp = ["ntplib>=0.4.0"]
-plot = ["matplotlib>=3.9.2"]
+plot = [
+    "matplotlib>=3.9.2",
+    "noob[gui,zmq]>=1000.1.0",
+]
 tests = [
     "pytest>=8.2.2",
     "pytest-cov>=7.0.0",
@@ -192,6 +195,8 @@ ignore = [
     "ANN401",
     # explicit strict arg for zip
     "B905",
+    # ok not *all* methods need docstrings
+    "D102",
     # docstrings for __init__
     "D107",
 ]

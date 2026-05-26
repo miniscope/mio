@@ -112,7 +112,7 @@ class BaseVideoProcessor:
         Parameters:
         frame (np.ndarray): The frame to process.
         """
-        raise NotImplementedError("process_frame method must be implemented in the subclass.")
+        raise NotImplementedError("process method must be implemented in the subclass.")
 
     def batch_export_videos(self) -> None:
         """
@@ -263,7 +263,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         super().__init__(name, output_dir, force)
         self.freq_mask_config: FrequencyMaskingConfig = freq_mask_config
         self.freq_mask_helper = FrequencyMaskHelper(
-            height=height, width=width, freq_mask_config=freq_mask_config
+            freq_mask_config=freq_mask_config, height=height, width=width
         )
         self.freq_domain_frames = []
         self.frame_width: int = width
@@ -304,7 +304,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         if input_frame is None:
             return None
         if self.freq_mask_config.enable:
-            freq_filtered_frame = self.freq_mask_helper.process_frame(img=input_frame)
+            freq_filtered_frame = self.freq_mask_helper.process(img=input_frame)
             frame_freq_domain = self.freq_mask_helper.freq_domain(img=input_frame)
             self.append_output_frame(freq_filtered_frame)
             self.freq_domain_frames.append(frame_freq_domain)

@@ -10,6 +10,9 @@ from typing import Literal
 
 import cv2
 import numpy as np
+from noob import Tube
+from noob.runner.zmq import ZMQRunner
+from noob.runner import SynchronousRunner
 
 from mio.devices.base import Device
 from mio.devices.stream.ber import prbs15_ber
@@ -48,10 +51,7 @@ class StreamDevice(Device):
     header_cls = StreamBufferHeader
     device_name = "stream"
 
-    def __init__(
-        self,
-        config: StreamDevConfig | ConfigSource,
-    ) -> None:
+    def __init__(self, config: StreamDevConfig | ConfigSource, tube_id: str = "stream") -> None:
         """
         Constructer for the class.
         This parses configuration from the input yaml file.
@@ -65,6 +65,8 @@ class StreamDevice(Device):
             Passed either as the instantiated config object or a path to on-disk yaml configuration
         """
         super().__init__(config)
+
+        self.tube_id = tube_id
 
         self.terminate: multiprocessing.Event = multiprocessing.Event()
 
@@ -119,7 +121,6 @@ class StreamDevice(Device):
 
     def capture(
         self,
-        read_length: int | None = None,
         video: Path | None = None,
         video_kwargs: dict | None = None,
         metadata: Path | None = None,
@@ -127,8 +128,6 @@ class StreamDevice(Device):
         show_video: bool | None = True,
         show_metadata: bool | None = False,
         freq_mask_config: FrequencyMaskingConfig | None = None,
-        mode: Literal["capture", "ber"] = "capture",
-        ber_output: Path | None = None,
         n_frames: int | None = None,
     ) -> None:
         """
@@ -136,9 +135,6 @@ class StreamDevice(Device):
 
         Parameters
         ----------
-        read_length : Optional[int], optional
-            Passed to :func:`~mio.stream_daq.stream_daq.fpga_recv` when
-            `source == "fpga"`, by default None.
         video: Path, optional
             If present, a path to an output video file
         video_kwargs: dict, optional
@@ -161,151 +157,30 @@ class StreamDevice(Device):
         n_frames: int, optional
             If set, only capture n_frames from the source, then quit
         """
-        self.terminate.clear()
-        if mode not in ("capture", "ber"):
-            raise ValueError(f"Mode must be either 'capture' or 'ber', got {mode}")
-
-        shared_resource_manager = multiprocessing.Manager()
-        serial_buffer_queue = shared_resource_manager.Queue(
-            self.config.runtime.serial_buffer_queue_size
-        )
-        frame_buffer_queue = shared_resource_manager.Queue(
-            self.config.runtime.frame_buffer_queue_size
-        )
-        imagearray = shared_resource_manager.Queue(self.config.runtime.image_buffer_queue_size)
-
-        spawn_mode = "fork" if "fork" in multiprocessing.get_all_start_methods() else "spawn"
-        ctx = multiprocessing.get_context(spawn_mode)
-
-        procs = []
-        self.logger.debug("Starting fpga capture process")
-        p_recv = ctx.Process(
-            target=fpga_recv,
-            args=(serial_buffer_queue, self.config, self.terminate, read_length, True, binary),
-            name="fpga_recv",
-        )
-
-        procs.append(p_recv)
-
-        if freq_mask_config:
-            freq_mask_helper = FrequencyMaskHelper(
-                height=self.config.frame_height,
-                width=self.config.frame_width,
-                freq_mask_config=freq_mask_config,
-            )
-        else:
-            freq_mask_helper = None
-
-        writer = None
-        if video:
-            writer = VideoWriter(
-                path=video,
-                fps=self.config.fs,
-                output_dict=video_kwargs,
-            )
-
-        if mode == "capture":
-            p_buffer_to_frame = ctx.Process(
-                target=buffer_to_frame,
-                args=(
-                    serial_buffer_queue,
-                    frame_buffer_queue,
-                    self.config,
-                    self.header_cls,
-                    self.terminate,
+        tube = Tube.from_specification(
+            self.tube_id,
+            input={
+                "config": self.config,
+                "capture_binary": binary,
+                "header_csv": metadata,
+                "show_video": show_video,
+                "show_metadata": show_metadata,
+                "freq_mask_config": (
+                    FrequencyMaskingConfig.from_any(freq_mask_config) if freq_mask_config else None
                 ),
-                name="buffer_to_frame",
-            )
-            p_format_frame = ctx.Process(
-                target=format_frame,
-                args=(
-                    frame_buffer_queue,
-                    imagearray,
-                    self.config,
-                    self.terminate,
-                ),
-                name="format_frame",
-            )
-            procs.append(p_buffer_to_frame)
-            procs.append(p_format_frame)
-
-        for p in procs:
-            p.start()
-
-        if show_metadata:
-            self._header_plotter = StreamPlotter(
-                header_keys=self.config.runtime.plot.keys,
-                history_length=self.config.runtime.plot.history,
-                update_ms=self.config.runtime.plot.update_ms,
-            )
-
-        if metadata:
-            header_cols = StreamBufferHeader.csv_header_cols()
-            self._buffered_writer = BufferedCSVWriter(
-                metadata, header=header_cols, buffer_size=self.config.runtime.csvwriter.buffer
-            )
-
-        captured_frames = 0
-        try:
-            if mode == "ber":
-                self._ber_mode(serial_buffer_queue, ber_output)
-                return
-            for image, header_list in exact_iter(imagearray.get, None):
-                self._handle_frame(
-                    image,
-                    header_list,
-                    show_video=show_video,
-                    writer=writer,
-                    show_metadata=show_metadata,
-                    metadata=metadata,
-                    freq_mask_helper=freq_mask_helper,
-                )
-                captured_frames += 1
-                if n_frames is not None and captured_frames >= n_frames:
-                    break
-
-        except KeyboardInterrupt:
-            self.logger.exception(
-                "Quitting capture, processing remaining frames. Ctrl+C again to force quit"
-            )
-            self.terminate.set()
+                "video_path": video,
+            },
+        )
+        runner = SynchronousRunner(tube)
+        with runner:
             try:
-                for image, header_list in exact_iter(lambda: imagearray.get(1), None):
-                    self._handle_frame(
-                        image,
-                        header_list,
-                        show_video=show_video,
-                        writer=writer,
-                        show_metadata=show_metadata,
-                        metadata=metadata,
-                    )
+                runner.run(n_frames)
+                # runner.join()
             except KeyboardInterrupt:
-                self.logger.exception("Force quitting")
-        except Exception as e:
-            self.logger.exception(f"Error during capture: {e}")
-        finally:
-            self.terminate.set()
-            if writer:
-                writer.close()
-                self.logger.debug("VideoWriter released")
-            if show_video:
-                cv2.destroyAllWindows()
-                cv2.waitKey(100)
-            if show_metadata:
-                self._header_plotter.close_plot()
-            if metadata:
-                self._buffered_writer.close()
-
-            # Join child processes with a timeout
-            # Should never happen except during a force quit, as we wait for all
-            # queues to drain, and if they don't do so on their own, it's a bug.
-            for p in procs:
-                p.join(timeout=2)
-                if p.is_alive():
-                    self.logger.warning(f"Termination timeout: force terminating process {p.name}.")
-                    p.terminate()
-                    p.join()
-            self.logger.info("Child processes joined. End capture.")
+                self.logger.exception(
+                    "Quitting capture, processing remaining frames. Ctrl+C again to force quit"
+                )
+                # runner.stop()
 
     def _handle_frame(
         self,
@@ -337,7 +212,7 @@ class StreamDevice(Device):
                     self.logger.debug("Saving header metadata")
                     try:
                         meta_row = header.model_dump()
-                        self._buffered_writer.append(meta_row)
+                        self._buffered_writer.process(meta_row)
                     except Exception as e:
                         self.logger.exception(f"Exception saving headers: \n{e}")
         if image is None or image.size == 0:
@@ -345,7 +220,7 @@ class StreamDevice(Device):
             return
         if show_video:
             try:
-                display_image = freq_mask_helper.process_frame(image) if freq_mask_helper else image
+                display_image = freq_mask_helper.process(image) if freq_mask_helper else image
 
                 cv2.imshow("image", display_image)
                 cv2.waitKey(1)

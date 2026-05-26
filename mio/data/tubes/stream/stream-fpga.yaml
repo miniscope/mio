@@ -1,4 +1,6 @@
 noob_id: stream-fpga
+noob_model: noob.tube.TubeSpecification
+noob_version: v1000.1.0
 description: |
   Source of fpga data for the stream device
 
@@ -32,4 +34,4 @@ nodes:
   return:
     type: return
     depends:
-      - buffers: split_buffers.buffers
+      - chunks: split_buffers.chunks

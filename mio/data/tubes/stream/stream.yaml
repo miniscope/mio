@@ -1,23 +1,62 @@
 noob_id: stream
+noob_model: noob.tube.TubeSpecification
+noob_version: v1000.1.0
 description: |
   Combined core streamdev pipeline (WIP)
 
 input:
   config:
     type: mio.devices.stream.StreamDevConfig
-    scope: tube
   capture_binary:
-    type: pathlib.Path | None
-    scope: tube
+    type: pathlib.Path
+    required: false
+  video_path:
+    type: pathlib.Path
+    required: false
+  header_csv:
+    type: pathlib.Path
+    required: false
+  header_cls:
+    type: str
+    default: mio.devices.stream.StreamBufferHeader
+  show_video:
+    type: bool
+    default: false
+  show_metadata:
+    type: bool
+    default: false
+  freq_mask_config:
+    type: str
+    required: false
+
 
 nodes:
   fpga:
     type: tube
     params:
       tube: stream-fpga
-  frame-assembly:
+      capture_binary: input.capture_binary
+      config: input.config
+
+  frame_assembly:
     type: tube
     params:
       tube: stream-frame
+      header_csv: input.header_csv
+      header_cls: input.header_cls
+      video_path: input.video_path
     depends:
-      - buffers: fpga.buffers
+      - chunks: fpga.chunks
+
+  display:
+    type: tube
+    params:
+      tube: stream-display
+      show_video: input.show_video
+      show_metadata: input.show_metadata
+      header_cls: input.header_cls
+      config: input.config
+    depends:
+      - frame: frame_assembly.frame
+      - header: frame_assembly.header
+

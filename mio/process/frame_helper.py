@@ -5,10 +5,11 @@ This module contains a helper class for frame operations.
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import TypedDict
+from typing import Annotated as A, TypedDict, TYPE_CHECKING
 
 import cv2
 import numpy as np
+from noob import Name, process_method
 
 from mio import init_logger
 from mio.models.process import (
@@ -17,6 +18,9 @@ from mio.models.process import (
     GradientDetectorConfig,
     NoisePatchConfig,
 )
+
+if TYPE_CHECKING:
+    from mio.devices.stream.config import StreamDevConfig
 
 logger = init_logger("frame_helper")
 
@@ -56,7 +60,7 @@ class BaseSingleFrameHelper:
         pass
 
     @abstractmethod
-    def process_frame(self, frame: np.ndarray) -> np.ndarray:
+    def process(self, frame: np.ndarray) -> np.ndarray:
         """
         Process a single frame.
 
@@ -250,7 +254,13 @@ class FrequencyMaskHelper(BaseSingleFrameHelper):
     Helper class for frequency masking operations.
     """
 
-    def __init__(self, height: int, width: int, freq_mask_config: FrequencyMaskingConfig):
+    def __init__(
+        self,
+        freq_mask_config: FrequencyMaskingConfig,
+        height: int | None = None,
+        width: int | None = None,
+        device_config: StreamDevConfig | None = None,
+    ):
         """
         Initialize the FreqMaskHelper object and generate a frequency mask.
 
@@ -262,8 +272,14 @@ class FrequencyMaskHelper(BaseSingleFrameHelper):
         Returns:
             FreqMaskHelper: A FreqMaskHelper object.
         """
-        self._height = height
-        self._width = width
+        if height and width:
+            self._height = height
+            self._width = width
+        elif device_config:
+            self._height = device_config.frame_height
+            self._width = device_config.frame_width
+        else:
+            raise ValueError("Either width and height or a device config must be passed")
         self._freq_mask_config = freq_mask_config
         self._freq_mask = self._gen_freq_mask()
 
@@ -277,7 +293,7 @@ class FrequencyMaskHelper(BaseSingleFrameHelper):
         """
         return self._freq_mask
 
-    def process_frame(self, img: np.ndarray) -> np.ndarray:
+    def process(self, frame: np.ndarray) -> A[np.ndarray, Name("frame")]:
         """
         Perform FFT/IFFT to remove horizontal stripes from a single frame.
 

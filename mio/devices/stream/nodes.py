@@ -12,18 +12,19 @@ from collections.abc import Callable, Generator, Iterator
 from functools import cached_property
 from pathlib import Path
 from typing import Annotated as A
-from typing import Any, Union
+from typing import Any, Union, TypeVar
 from typing import Literal as L
+from itertools import count
 
 import numpy as np
 from bitstring import BitArray, Bits
-from noob import Name, Node
+from noob import Name, Node, NoEventable
 from noob.event import MetaSignal
 from pydantic import PrivateAttr
 
 from mio import init_logger
 from mio.devices.stream import StreamBufferHeader, StreamDevConfig
-from mio.exceptions import EndOfRecordingException, StreamReadError
+from mio.exceptions import EndOfRecordingException, StreamReadError, DeviceConfigurationError
 from mio.interfaces.mocks import okDevMock
 
 HAVE_OK = False
@@ -92,6 +93,93 @@ class SplitBuffers(Node):
     def deinit(self) -> None:
         """Clear the internal buffer"""
         self._buffer = BitArray()
+
+
+_THeader = TypeVar("_THeader", bound=StreamBufferHeader)
+
+
+def parse_header(
+    chunk: bytes,
+    config: StreamDevConfig,
+    header_cls: type[_THeader] = StreamBufferHeader,
+    counter: count | None = None,
+) -> tuple[A[_THeader, Name("header")], A[np.ndarray, Name("buffer")]]:
+    """
+    Parse a raw binary chunk into its header and 1-dimensional pixel buffer array
+
+    If a counter is provided, mark :attr:`StreamBufferHeader.buffer_recv_index`
+    to track the count of buffers received by mio,
+    which might differ from the on-device count.
+    """
+
+    header_data, buffer = header_cls.from_buffer(chunk, config)
+    if counter is not None:
+        header_data.buffer_recv_index = next(counter)
+    init_logger("parse_header").debug("HEADER: %s", header_data)
+    return header_data, buffer
+
+
+class CombineBuffers(Node):
+    """Collect buffers until we the header tells us that we're in a new frame"""
+
+    config: StreamDevConfig
+
+    _buffers: list[np.ndarray] = PrivateAttr(default_factory=list)
+    _current_frame: int = -1
+    _frame_idx: int = 0
+
+    def process(
+        self, buffer: np.ndarray, header: StreamBufferHeader
+    ) -> tuple[A[NoEventable[np.ndarray], Name("frame")], A[int, Name("frame_idx")]]:
+        # when starting, wait for the start of a new frame
+        if self._current_frame == -1:
+            if header.frame_buffer_count != 0:
+                return MetaSignal.NoEvent, self._frame_idx
+            else:
+                self._current_frame = header.frame_num
+
+        if header.frame_num != self._current_frame:
+            # return the completed, previous frame - this is a new frame!
+            buffers = self._buffers
+            self._buffers = [buffer]
+            self._current_frame = header.frame_num
+            frame_idx = self._frame_idx
+            self._frame_idx += 1
+            try:
+                frame = np.concatenate(buffers, axis=0).reshape(
+                    (self.config.frame_width, self.config.frame_height)
+                )
+            except ValueError as e:
+                raise DeviceConfigurationError(
+                    f"Could not reshape frame, "
+                    f"expected ({self.config.frame_width}, {self.config.frame_height}), "
+                    f"{self.config.frame_width * self.config.frame_height}px, "
+                    f"but buffers were {sum(len(b) for b in self._buffers)} pixels"
+                ) from e
+
+            return frame, frame_idx
+        else:
+            self._buffers.append(buffer)
+            return MetaSignal.NoEvent, self._frame_idx
+
+    def deinit(self) -> None:
+        """
+        Clear mutable state *except* for the buffer index,
+        which should continue incrementing across stop/start cycles.
+        """
+        self._buffers = []
+        self._current_frame = -1
+
+
+def imshow(frame: np.ndarray, window: str = "image") -> None:
+    """
+    Show an image with opencv imshow.
+
+    (Need to wrap the function because the c extension doesn't ``inspect`` correctly)
+    """
+    import cv2
+
+    cv2.imshow(window, frame)
 
 
 def exact_iter(f: Callable, sentinel: Any) -> Generator[Any, None, None]:
@@ -324,12 +412,10 @@ def buffer_to_frame(
             buffer_recv_index += 1
 
             try:
-                serial_buffer = _trim(
+                serial_buffer = trim_or_pad(
                     serial_buffer,
-                    config,
-                    config.buffer_npix,
                     header_data,
-                    locallogs,
+                    config,
                 )
             except IndexError:
                 locallogs.exception(
@@ -484,13 +570,9 @@ def format_frame(
             locallogs.error("Image array queue full, Could not put sentinel.")
 
 
-def _trim(
-    data: np.ndarray,
-    config: StreamDevConfig,
-    expected_size_array: list[int],
-    header: StreamBufferHeader,
-    logger: logging.Logger,
-) -> np.ndarray:
+def trim_or_pad(
+    buffer: np.ndarray, header: StreamBufferHeader, config: StreamDevConfig
+) -> tuple[A[NoEventable[np.ndarray], Name("buffer")], A[StreamBufferHeader, Name("header")]]:
     """
     Trim or pad an array to match an expected size
 
@@ -500,30 +582,32 @@ def _trim(
         That way, all data we inject into later stages will be pure metadata and pixel data.
         This isn't critical and I don't want to slow down detection so skipping for now.
     """
-    expected_payload_size = expected_size_array[0]
-    expected_data_size = expected_size_array[header.frame_buffer_count]
-
-    # This validation is temporary. More info in todo above.
-    if data.shape[0] != expected_payload_size + config.dummy_words * 4:
-        logger.warning(
+    try:
+        expected_data_size = config.buffer_npix[header.frame_buffer_count]
+    except IndexError:
+        logger = init_logger("stream.trim_or_pad")
+        logger.exception(
             f"Frame {header.frame_num}; Buffer {header.buffer_count} "
             f"(#{header.frame_buffer_count} in frame)\n"
-            f"Expected buffer data length: {expected_payload_size}, got data with shape "
-            f"{data.shape}.\nPadding to expected length",
+            f"Frame buffer count {header.frame_buffer_count} "
+            f"exceeds buffer number per frame {len(config.buffer_npix)}\n"
+            f"Discarding buffer.\n"
+            f"-- THERE IS AN ERROR IN YOUR CONFIGURATION CAUSING YOU TO LOSE DATA --\n"
+            f"If you are seeing this emitted on every frame, "
+            f"The device is sending more buffers per frame than expected based on "
+            f"the configured frame width, height, and buffer size. "
+            f"You must fix the configuration such that it matches the data being sent "
+            f"by the device."
         )
+        return MetaSignal.NoEvent, header
 
-    if data.shape[0] != expected_data_size:
-        # trim if too long
-        if data.shape[0] > expected_data_size:
-            data = data[0:expected_data_size]
-            header.black_padding_px = 0  # No padding, data was trimmed
-        # pad if too short
+    if buffer.shape[0] != expected_data_size:
+        header.black_padding_px = expected_data_size - buffer.shape[0]
+        if buffer.shape[0] > expected_data_size:
+            buffer = buffer[0:expected_data_size]
         else:
-            padding_amount = expected_data_size - data.shape[0]
-            data = np.pad(data, (0, padding_amount))
-            header.black_padding_px = padding_amount
+            buffer = np.pad(buffer, (0, header.black_padding_px))
     else:
-        # No trimming or padding needed
         header.black_padding_px = 0
 
-    return data
+    return buffer, header

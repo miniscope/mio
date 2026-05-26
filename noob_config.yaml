@@ -1,0 +1,3 @@
+logs:
+  level: DEBUG
+  dir: ./tmp/logs

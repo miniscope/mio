@@ -254,8 +254,8 @@ def stitch(
             for _, md_row in selected.metadata_rows.iterrows():
                 row_dict = dict(md_row)
                 row_dict["reconstructed_frame_index"] = row["index"]
-                metadata_writer.append(row_dict)
-            scores_writer.append(result.model_dump())
+                metadata_writer.process(row_dict)
+            scores_writer.process(result.model_dump())
 
     finally:
         metadata_writer.close()

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from noob import process_method
 from skvideo.io import FFmpegWriter
 
 from mio import init_logger
@@ -26,7 +27,7 @@ class VideoWriter:
     def __init__(
         self,
         path: str | Path,
-        fps: int,
+        fps: int = 30,  # FIXME: should be required, just defaulting for testing
         output_dict: dict | None = None,
         force: bool = False,
     ):
@@ -49,6 +50,7 @@ class VideoWriter:
             filename=str(self.path), inputdict=input_dict, outputdict=output_dict
         )
 
+    @process_method
     def write_frame(self, frame: np.ndarray) -> bool:
         """
         Write a frame to the video file.
