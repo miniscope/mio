@@ -29,7 +29,9 @@ preamble: 0x78563412 # new preamble
 frame_width: 120  # 328 * 12 PP, with the extra 8 coming from the start_of_frame sequence
 frame_height: 120 # 320 # 320 lines total, set to the ROI number on the firmware!
 pix_depth: 8 # pixel depth, or, pixel period
-max_pixels_per_buffer:  4800 # 3600 #  ORIGINAL: 10000 ~ rows x col per buffer
+max_pixels_per_buffer:  10000
+# 4800 # 3600 #  ORIGINAL: 10000 ~ rows x col per buffer
+# literally how man pixels do you have per buffer? rxc
 
 # Buffer data format. These have to match the firmware value
 header_len: 384 # 12 * 32 (in bits)

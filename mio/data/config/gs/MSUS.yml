@@ -11,8 +11,8 @@ device: "OK"
 # bitstream: "XEM7310-A75/USBInterface-3_03mhz-J2_2-3v3-IEEE.bit"
 # bitstream: "XEM7310-A75/USBInterface-5mhz-J2_2-3v3-IEEE.bit"
 # bitstream: "XEM7310-A75/USBInterface-6_67mhz-J2_2-3v3-IEEE.bit"
-bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit" # original
-# bitstream: "XEM7310-A75/USBInterface-12_5mhz-J2_2-3v3-IEEE.bit"
+# bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit" # original
+bitstream: "XEM7310-A75/USBInterface-12_5mhz-J2_2-3v3-IEEE.bit"
 # bitstream: "XEM7310-A75/USBInterface-16_67mhz-J2_2-3v3-IEEE.bit"
 # bitstream: "XEM7310-A75/USBInterface-20mhz-J2_2-3v3-IEEE.bit" 
 
@@ -29,13 +29,13 @@ preamble: 0x78563412 # new preamble
 frame_width: 320  # 328 * 12 PP, with the extra 8 coming from the start_of_frame sequence
 frame_height: 328 # 320 # 320 lines total, set to the ROI number on the firmware!
 pix_depth: 8 # pixel depth, or, pixel period
-max_pixels_per_buffer:  9840 #  ORIGINAL: 10000
+max_pixels_per_buffer:  13120  # 9840 #  ORIGINAL: 10000
 
 # Buffer data format. These have to match the firmware value
 header_len: 384 # 12 * 32 (in bits)
 buffer_block_length: 4  # 10 # originally 12 how many words per block length
-block_size:   3714 # just buffer (header+data-header)
-num_buffers: 6 # 6 # (maybe change to 10 num of data buffers inside mcu
+block_size:  3280 # 3714 # just buffer (header+data-header)
+num_buffers: 5 # 6 # (maybe change to 10 num of data buffers inside mcu
 dummy_words: 12 # 12 # num of dummy words before header file
 
 # Flags to flip bit/byte order when recovering headers and data. See model document for details.
