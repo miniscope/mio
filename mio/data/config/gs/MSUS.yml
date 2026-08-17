@@ -14,7 +14,8 @@ device: "OK"
 # bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit" # original
 bitstream: "XEM7310-A75/USBInterface-12_5mhz-J2_2-3v3-IEEE.bit"
 # bitstream: "XEM7310-A75/USBInterface-16_67mhz-J2_2-3v3-IEEE.bit"
-# bitstream: "XEM7310-A75/USBInterface-20mhz-J2_2-3v3-IEEE.bit" 
+# bitstream: "XEM7310-A75/USBInterface-20mhz-J2_2-3v3-IEEE.bit"
+# bitstream: "XEM7310-A75/USBInterface-14_3mhz-J2_2-3v3-IEEE.bit"
 
 # COM port and baud rate is only required for UART mode
 port: null
@@ -26,8 +27,8 @@ preamble: 0x78563412 # new preamble
 # Incoming Pre-Processed Image format. 
 # StreamDaq will calculate buffer size, etc. based on these parameters
 # this should be 320x320x10
-frame_width: 320  # 328 * 12 PP, with the extra 8 coming from the start_of_frame sequence
-frame_height: 328 # 320 # 320 lines total, set to the ROI number on the firmware!
+frame_width: 328  # 328 * 12 PP, with the extra 8 coming from the start_of_frame sequence
+frame_height: 320 # 320 # 320 lines total, set to the ROI number on the firmware!
 pix_depth: 8 # pixel depth, or, pixel period
 max_pixels_per_buffer:  13120  # 9840 #  ORIGINAL: 10000
 

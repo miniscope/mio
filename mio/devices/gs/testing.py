@@ -17,7 +17,7 @@ DUMMY_WORD = b"\xcc\xcc\x00\xff"
 """Values added between each buffer to calibrate the manchester encoding"""
 
 
-def patterned_frame(width: int = 320, height: int = 328, pattern: str = "sequence") -> np.ndarray:
+def patterned_frame(width: int = 328, height: int = 320, pattern: str = "sequence") -> np.ndarray:
     """
     Create a frame for the naneye as a uint16 array with a testing pattern
     """
