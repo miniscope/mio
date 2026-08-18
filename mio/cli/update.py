@@ -28,7 +28,7 @@ from mio.models.devupdate import DeviceCommand
     "-k",
     "--key",
     required=False,
-    type=click.Choice(["LED", "GAIN", "ROI_X", "ROI_Y", "SUBSAMPLE"]),
+    type=click.Choice(["LED", "GAIN", "ROI_X", "ROI_Y", "SUBSAMPLE","TL"]),
     help="key to update.",
 )
 @click.option(
