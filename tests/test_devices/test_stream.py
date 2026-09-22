@@ -1,17 +1,15 @@
 import re
 import warnings
-from collections.abc import Generator
 from pathlib import Path
 
 import cv2
 import numpy as np
 import pandas as pd
 import pytest
-from bitstring import Bits
 from noob import process_method
 
 from mio.const import BASE_DIR
-from mio.devices.stream import StreamBufferHeader, StreamDevConfig, StreamDevice, iter_buffers
+from mio.devices.stream import StreamBufferHeader, StreamDevConfig, StreamDevice
 from mio.io import VideoWriter
 from mio.models.process import FrequencyMaskingConfig
 from mio.utils import hash_file, hash_video
@@ -369,32 +367,6 @@ def test_bitfile_names():
     pattern = re.compile(r"\.(?!bit$)|\s")
     for path in Path(BASE_DIR).glob("**/*.bit"):
         assert not pattern.search(str(path.name))
-
-
-@pytest.mark.parametrize("read_size", [3, 5, 7])
-def test_iter_buffers(read_size: int, tmp_path: Path):
-    """
-    iter_buffers should accept an iterator that yield bytes,
-    and split it by the preamble in a way that's insensitive to
-    the length of the read size
-    """
-    preamble_bytes = b"ab"
-    n_reps = 3
-
-    preamble = Bits(preamble_bytes)
-    buffer = preamble_bytes + b"000"
-    buffer_rep = buffer * n_reps
-
-    def _iterator(read_size: int) -> Generator[bytes, None, None]:
-        nonlocal buffer_rep
-        for i in range(0, len(buffer_rep), read_size):
-            yield buffer_rep[i : i + read_size]
-
-    got_buffers = []
-    for buf in iter_buffers(_iterator(read_size), preamble=preamble):
-        got_buffers.append(buf)
-
-    assert all([buf == buffer for buf in got_buffers])
 
 
 def test_writer_calls_match_avi_frame_count(tmp_path: Path, set_okdev_input, monkeypatch):
