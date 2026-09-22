@@ -108,6 +108,31 @@ class FuckTheSphinxFiltersFilter(logging.Filter):
         return True
 
 
+def _no_attribute_fallback_for_annotations():
+    """
+    Stop type annotations in signatures from cross-referencing unrelated *attributes*.
+    e.g. a `type[T]` annotation starts looking around for things named "type"
+    rather than looking for builtins.type
+    """
+    from sphinx.domains.python import PythonDomain
+
+    _resolve_xref = PythonDomain.resolve_xref
+
+    def resolve_xref(self, env, fromdocname, builder, typ, target, node, contnode):
+        if typ == "class":
+            args = (env, node.get("py:module"), node.get("py:class"), target)
+            searchmode = 1 if node.hasattr("refspecific") else 0
+            if not self.find_obj(*args, "class", searchmode) and not self.find_obj(
+                *args, "data", searchmode
+            ):
+                # return unresolved so intersphinx gets a shot at it (eg. builtin ``type``)
+                return None
+        return _resolve_xref(self, env, fromdocname, builder, typ, target, node, contnode)
+
+    PythonDomain.resolve_xref = resolve_xref
+
+
 def setup(app):
     logger = logging.getLogger("sphinx")
     logger.filters.insert(0, FuckTheSphinxFiltersFilter())
+    _no_attribute_fallback_for_annotations()
