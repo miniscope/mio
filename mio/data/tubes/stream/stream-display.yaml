@@ -41,6 +41,7 @@ nodes:
     type: mio.process.frame_helper.FrequencyMaskHelper
     enabled: input.freq_mask_config
     params:
+      freq_mask_config: input.freq_mask_config
       device_config: input.config
     depends:
       - frame: input.frame

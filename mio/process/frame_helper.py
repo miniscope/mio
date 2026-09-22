@@ -5,11 +5,12 @@ This module contains a helper class for frame operations.
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Annotated as A, TypedDict, TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
+from typing import Annotated as A
 
 import cv2
 import numpy as np
-from noob import Name, process_method
+from noob import Name
 
 from mio import init_logger
 from mio.models.process import (
@@ -298,8 +299,7 @@ class FrequencyMaskHelper(BaseSingleFrameHelper):
         Perform FFT/IFFT to remove horizontal stripes from a single frame.
 
         Parameters:
-            img (np.ndarray): The image to process.
-            cast_f32 (bool): Cast the image to float32 before processing.
+            frame (np.ndarray): The image to process.
 
         Returns:
             np.ndarray: The filtered image
@@ -307,7 +307,7 @@ class FrequencyMaskHelper(BaseSingleFrameHelper):
         .. todo:: Confirm if the option for casting to float32 is necessary. See issue #104.
         """
         if self._freq_mask_config.cast_float32:
-            img = img.astype(np.float32)
+            img = frame.astype(np.float32)
         f = np.fft.fft2(img)
         fshift = np.fft.fftshift(f)
 

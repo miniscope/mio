@@ -56,6 +56,7 @@ nodes:
       show_metadata: input.show_metadata
       header_cls: input.header_cls
       config: input.config
+      freq_mask_config: input.freq_mask_config
     depends:
       - frame: frame_assembly.frame
       - header: frame_assembly.header

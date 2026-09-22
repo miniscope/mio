@@ -29,7 +29,7 @@ dependencies = [
     'scipy>=1.16.1; python_version>="3.14"', # first version with wheels for 3.14
     "numpydantic>=1.8.1",
     "pandera>=0.31.1",
-    "noob[zmq]>=1000.1.0",
+    "noob[zmq]>=1003.0.1",
 ]
 
 readme = "README.md"

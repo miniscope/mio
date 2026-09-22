@@ -124,12 +124,13 @@ def capture(
         video_output = unique_stem_path.with_suffix(".avi") if mode == "capture" else None
         metadata_output = unique_stem_path.with_suffix(".csv") if mode == "capture" else None
         binary_output = unique_stem_path.with_suffix(".bin") if binary_export else None
-        ber_output = unique_stem_path.with_suffix(".json") if mode == "ber" else None
+        # TODO: Restore BER mode
+        # ber_output = unique_stem_path.with_suffix(".json") if mode == "ber" else None
     else:
         video_output = None
         metadata_output = None
         binary_output = None
-        ber_output = None
+        # ber_output = None
 
     if freq_mask_config:
         freq_mask_config = FrequencyMaskingConfig.from_any(freq_mask_config)

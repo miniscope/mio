@@ -6,7 +6,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from noob import process_method
+from noob import deinit_method, init_method, process_method
 from skvideo.io import FFmpegWriter
 
 from mio import init_logger
@@ -21,7 +21,6 @@ class VideoWriter:
         "-vcodec": "rawvideo",
         "-f": "avi",
         "-pix_fmt": "gray",
-        "-vsync": "0",
     }
 
     def __init__(
@@ -36,9 +35,9 @@ class VideoWriter:
         """
         if output_dict is None:
             output_dict = {}
-        output_dict = {**self.DEFAULT_OUTPUT, **output_dict}
+        self.output_dict = {**self.DEFAULT_OUTPUT, **output_dict}
 
-        input_dict = {"-framerate": str(fps)}
+        self.input_dict = {"-framerate": str(fps)}
 
         self.path = Path(path)
         if force:
@@ -46,8 +45,12 @@ class VideoWriter:
         elif self.path.exists():
             raise FileExistsError(f"{self.path} exists! use force=True to overwrite.")
 
+        self.writer = None
+
+    @init_method
+    def init(self) -> None:
         self.writer = FFmpegWriter(
-            filename=str(self.path), inputdict=input_dict, outputdict=output_dict
+            filename=str(self.path), inputdict=self.input_dict, outputdict=self.output_dict
         )
 
     @process_method
@@ -58,9 +61,12 @@ class VideoWriter:
         Parameters:
         frame (np.ndarray): The frame to write.
         """
+        if self.writer is None:
+            self.init()
         self.writer.writeFrame(frame)
         return True
 
+    @deinit_method
     def close(self) -> None:
         """
         Close the video file.

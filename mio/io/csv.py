@@ -7,13 +7,12 @@ import csv
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel
+from noob import deinit_method
 from noob.utils import resolve_python_identifier
+from pydantic import BaseModel
 
 from mio.devices.base import BufferHeader
 from mio.logging import init_logger
-from noob import process_method
-
 from mio.types import PythonIdentifier
 
 
@@ -105,6 +104,7 @@ class BufferedCSVWriter:
             # Handle exceptions, e.g., log them
             self.logger.error(f"Failed to write to file {self.file_path}: {e}")
 
+    @deinit_method
     def close(self) -> None:
         """
         Close the CSV file and flush any remaining data.

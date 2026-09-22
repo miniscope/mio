@@ -2,7 +2,6 @@
 Separable processing operations for streaming devices
 """
 
-import logging
 import multiprocessing
 import multiprocessing as mp
 import os
@@ -10,11 +9,11 @@ import queue
 import time
 from collections.abc import Callable, Generator, Iterator
 from functools import cached_property
+from itertools import count
 from pathlib import Path
 from typing import Annotated as A
-from typing import Any, Union, TypeVar
+from typing import Any, TypeVar, Union
 from typing import Literal as L
-from itertools import count
 
 import numpy as np
 from bitstring import BitArray, Bits
@@ -24,7 +23,7 @@ from pydantic import PrivateAttr
 
 from mio import init_logger
 from mio.devices.stream import StreamBufferHeader, StreamDevConfig
-from mio.exceptions import EndOfRecordingException, StreamReadError, DeviceConfigurationError
+from mio.exceptions import DeviceConfigurationError, EndOfRecordingException, StreamReadError
 from mio.interfaces.mocks import okDevMock
 
 HAVE_OK = False
@@ -48,8 +47,7 @@ def iter_fpga(config: StreamDevConfig) -> Generator[A[bytes, Name("chunk")], Non
     # set up fpga interfaces
     dev = init_okdev(config.bitstream, config.read_length)
 
-    while True:
-        yield next(dev)
+    yield from dev
 
 
 class SplitBuffers(Node):
@@ -98,12 +96,7 @@ class SplitBuffers(Node):
 _THeader = TypeVar("_THeader", bound=StreamBufferHeader)
 
 
-def parse_header(
-    chunk: bytes,
-    config: StreamDevConfig,
-    header_cls: type[_THeader] = StreamBufferHeader,
-    counter: count | None = None,
-) -> tuple[A[_THeader, Name("header")], A[np.ndarray, Name("buffer")]]:
+class ParseHeader(Node):
     """
     Parse a raw binary chunk into its header and 1-dimensional pixel buffer array
 
@@ -112,11 +105,36 @@ def parse_header(
     which might differ from the on-device count.
     """
 
-    header_data, buffer = header_cls.from_buffer(chunk, config)
-    if counter is not None:
-        header_data.buffer_recv_index = next(counter)
-    init_logger("parse_header").debug("HEADER: %s", header_data)
-    return header_data, buffer
+    stateful: bool = True
+
+    config: StreamDevConfig
+    header_cls: type[_THeader] = StreamBufferHeader
+
+    _seen_start_buffer: bool = False
+    """
+    Whether or not we have seen a buffer with a 0 index, the start of a frame.
+    Drop buffers/headers until we do. 
+    """
+
+    def process(
+        self,
+        chunk: bytes,
+        counter: count | None = None,
+    ) -> tuple[
+        A[NoEventable[_THeader], Name("header")], A[NoEventable[np.ndarray], Name("buffer")]
+    ]:
+        header_data, buffer = self.header_cls.from_buffer(chunk, self.config)
+
+        if not self._seen_start_buffer:
+            if header_data.frame_buffer_count != 0:
+                return MetaSignal.NoEvent, MetaSignal.NoEvent
+            else:
+                self._seen_start_buffer = True
+
+        if counter is not None:
+            header_data.buffer_recv_index = next(counter)
+        init_logger("parse_header").debug("HEADER: %s", header_data)
+        return header_data, buffer
 
 
 class CombineBuffers(Node):
@@ -125,6 +143,7 @@ class CombineBuffers(Node):
     config: StreamDevConfig
 
     _buffers: list[np.ndarray] = PrivateAttr(default_factory=list)
+    _buffers_prealloc: list[np.ndarray] = PrivateAttr(default_factory=list)
     _current_frame: int = -1
     _frame_idx: int = 0
 
@@ -141,10 +160,17 @@ class CombineBuffers(Node):
         if header.frame_num != self._current_frame:
             # return the completed, previous frame - this is a new frame!
             buffers = self._buffers
-            self._buffers = [buffer]
+
+            # stash this buffer and prepare for next iteration
+            self._buffers = [None for _ in range(len(self._buffers_prealloc))]
+            self._buffers[header.frame_buffer_count] = buffer
             self._current_frame = header.frame_num
-            frame_idx = self._frame_idx
             self._frame_idx += 1
+
+            # fill in missing buffers with zeros (the header csv will show this as a missing buffer)
+            for i in range(len(buffers)):
+                if buffers[i] is None:
+                    buffers[i] = self._buffers_prealloc[i]
             try:
                 frame = np.concatenate(buffers, axis=0).reshape(
                     (self.config.frame_width, self.config.frame_height)
@@ -154,13 +180,19 @@ class CombineBuffers(Node):
                     f"Could not reshape frame, "
                     f"expected ({self.config.frame_width}, {self.config.frame_height}), "
                     f"{self.config.frame_width * self.config.frame_height}px, "
-                    f"but buffers were {sum(len(b) for b in self._buffers)} pixels"
+                    f"but buffers were {sum(len(b) for b in buffers)} pixels"
                 ) from e
 
-            return frame, frame_idx
+            return frame, self._frame_idx
         else:
-            self._buffers.append(buffer)
+            self._buffers[header.frame_buffer_count] = buffer
             return MetaSignal.NoEvent, self._frame_idx
+
+    def init(self) -> None:
+        self._buffers_prealloc = [
+            np.zeros(bufsize, dtype=np.uint8) for bufsize in self.config.buffer_npix
+        ]
+        self._buffers = [None for _ in range(len(self._buffers_prealloc))]
 
     def deinit(self) -> None:
         """

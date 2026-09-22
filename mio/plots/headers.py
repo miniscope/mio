@@ -6,15 +6,15 @@ from collections import deque
 from itertools import count
 from time import time
 from typing import Any
-from noob import process_method
-from noob.utils import resolve_python_identifier
 
 import numpy as np
 import pandas as pd
+from noob import process_method
+from noob.utils import resolve_python_identifier
 
-from mio.types import PythonIdentifier
 from mio.devices.base import BufferHeader
 from mio.devices.stream.headers import StreamBufferHeader
+from mio.types import PythonIdentifier
 
 try:
     import matplotlib.pyplot as plt

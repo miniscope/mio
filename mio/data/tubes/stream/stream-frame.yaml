@@ -34,7 +34,7 @@ nodes:
     depends:
       - value: input.chunks
   parse_header:
-    type: mio.devices.stream.nodes.parse_header
+    type: mio.devices.stream.nodes.ParseHeader
     params:
       config: input.config
     depends:
@@ -57,6 +57,7 @@ nodes:
 
   write_csv:
     type: mio.io.BufferedCSVWriter
+    enabled: input.header_csv
     params:
       file_path: input.header_csv
       header: input.header_cls
@@ -65,6 +66,7 @@ nodes:
       - reconstructed_frame_index: combine.frame_idx
   write_video:
     type: mio.io.VideoWriter
+    enabled: input.video_path
     params:
       path: input.video_path
     depends:

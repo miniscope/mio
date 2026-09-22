@@ -304,7 +304,7 @@ class FreqencyMaskProcessor(BaseVideoProcessor):
         if input_frame is None:
             return None
         if self.freq_mask_config.enable:
-            freq_filtered_frame = self.freq_mask_helper.process(img=input_frame)
+            freq_filtered_frame = self.freq_mask_helper.process(frame=input_frame)
             frame_freq_domain = self.freq_mask_helper.freq_domain(img=input_frame)
             self.append_output_frame(freq_filtered_frame)
             self.freq_domain_frames.append(frame_freq_domain)

@@ -6,19 +6,16 @@ import json
 import multiprocessing
 import sys
 from pathlib import Path
-from typing import Literal
 
 import cv2
 import numpy as np
 from noob import Tube
-from noob.runner.zmq import ZMQRunner
 from noob.runner import SynchronousRunner
 
 from mio.devices.base import Device
 from mio.devices.stream.ber import prbs15_ber
 from mio.devices.stream.config import StreamDevConfig
 from mio.devices.stream.headers import StreamBufferHeader
-from mio.devices.stream.nodes import buffer_to_frame, exact_iter, format_frame, fpga_recv
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.models.process import FrequencyMaskingConfig
 from mio.plots.headers import StreamPlotter
@@ -175,12 +172,9 @@ class StreamDevice(Device):
         with runner:
             try:
                 runner.run(n_frames)
-                # runner.join()
             except KeyboardInterrupt:
-                self.logger.exception(
-                    "Quitting capture, processing remaining frames. Ctrl+C again to force quit"
-                )
-                # runner.stop()
+                # TODO: soft-stop, drain remaining frame queues
+                self.logger.exception("Quitting capture")
 
     def _handle_frame(
         self,
