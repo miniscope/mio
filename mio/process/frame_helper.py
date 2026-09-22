@@ -4,11 +4,13 @@ This module contains a helper class for frame operations.
 
 from __future__ import annotations
 
-import sys
 from abc import abstractmethod
+from typing import TYPE_CHECKING, TypedDict
+from typing import Annotated as A
 
 import cv2
 import numpy as np
+from noob import Name
 
 from mio import init_logger
 from mio.models.process import (
@@ -18,10 +20,8 @@ from mio.models.process import (
     NoisePatchConfig,
 )
 
-if sys.version_info < (3, 11):
-    from typing_extensions import TypedDict
-else:
-    from typing import TypedDict
+if TYPE_CHECKING:
+    from mio.devices.stream.config import StreamDevConfig
 
 logger = init_logger("frame_helper")
 
@@ -61,7 +61,7 @@ class BaseSingleFrameHelper:
         pass
 
     @abstractmethod
-    def process_frame(self, frame: np.ndarray) -> np.ndarray:
+    def process(self, frame: np.ndarray) -> np.ndarray:
         """
         Process a single frame.
 
@@ -255,7 +255,13 @@ class FrequencyMaskHelper(BaseSingleFrameHelper):
     Helper class for frequency masking operations.
     """
 
-    def __init__(self, height: int, width: int, freq_mask_config: FrequencyMaskingConfig):
+    def __init__(
+        self,
+        freq_mask_config: FrequencyMaskingConfig,
+        height: int | None = None,
+        width: int | None = None,
+        device_config: StreamDevConfig | None = None,
+    ):
         """
         Initialize the FreqMaskHelper object and generate a frequency mask.
 
@@ -267,8 +273,14 @@ class FrequencyMaskHelper(BaseSingleFrameHelper):
         Returns:
             FreqMaskHelper: A FreqMaskHelper object.
         """
-        self._height = height
-        self._width = width
+        if height and width:
+            self._height = height
+            self._width = width
+        elif device_config:
+            self._height = device_config.frame_height
+            self._width = device_config.frame_width
+        else:
+            raise ValueError("Either width and height or a device config must be passed")
         self._freq_mask_config = freq_mask_config
         self._freq_mask = self._gen_freq_mask()
 
@@ -282,13 +294,12 @@ class FrequencyMaskHelper(BaseSingleFrameHelper):
         """
         return self._freq_mask
 
-    def process_frame(self, img: np.ndarray) -> np.ndarray:
+    def process(self, frame: np.ndarray) -> A[np.ndarray, Name("frame")]:
         """
         Perform FFT/IFFT to remove horizontal stripes from a single frame.
 
         Parameters:
-            img (np.ndarray): The image to process.
-            cast_f32 (bool): Cast the image to float32 before processing.
+            frame (np.ndarray): The image to process.
 
         Returns:
             np.ndarray: The filtered image
@@ -296,7 +307,7 @@ class FrequencyMaskHelper(BaseSingleFrameHelper):
         .. todo:: Confirm if the option for casting to float32 is necessary. See issue #104.
         """
         if self._freq_mask_config.cast_float32:
-            img = img.astype(np.float32)
+            img = frame.astype(np.float32)
         f = np.fft.fft2(img)
         fshift = np.fft.fftshift(f)
 

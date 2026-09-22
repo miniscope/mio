@@ -5,8 +5,15 @@ I/O functions for files.
 import atexit
 import csv
 from pathlib import Path
+from typing import Any
 
+from noob import deinit_method
+from noob.utils import resolve_python_identifier
+from pydantic import BaseModel
+
+from mio.devices.base import BufferHeader
 from mio.logging import init_logger
+from mio.types import PythonIdentifier
 
 
 class BufferedCSVWriter:
@@ -36,8 +43,17 @@ class BufferedCSVWriter:
     """
 
     def __init__(
-        self, file_path: str | Path, header: list[str], buffer_size: int = 100, force: bool = False
+        self,
+        file_path: str | Path,
+        header: list[str] | PythonIdentifier,
+        buffer_size: int = 100,
+        force: bool = False,
     ):
+        if isinstance(header, str):
+            header_cls = resolve_python_identifier(header)
+            if not issubclass(header_cls, BufferHeader):
+                raise TypeError("Header class must be a buffer header")
+            header = header_cls.csv_header_cols()
         self.file_path: Path = Path(file_path)
         self.header = header
         self.buffer_size = buffer_size
@@ -53,7 +69,7 @@ class BufferedCSVWriter:
         # Ensure the buffer is flushed when the program exits
         atexit.register(self.flush_buffer)
 
-    def append(self, data: dict) -> None:
+    def process(self, data: dict | BaseModel, **kwargs: Any) -> None:
         """
         Append data (as a list) to the buffer.
 
@@ -64,6 +80,9 @@ class BufferedCSVWriter:
             Rows are constructed and columns are ordered according to `header` -
             keys that are not in `header` are ignored, and missing keys are `None`
         """
+        if isinstance(data, BaseModel):
+            data = data.model_dump()
+        data = {**data, **kwargs}
         row = [data.get(key) for key in self.header]
         self.buffer.append(row)
         if len(self.buffer) >= self.buffer_size:
@@ -85,6 +104,7 @@ class BufferedCSVWriter:
             # Handle exceptions, e.g., log them
             self.logger.error(f"Failed to write to file {self.file_path}: {e}")
 
+    @deinit_method
     def close(self) -> None:
         """
         Close the CSV file and flush any remaining data.

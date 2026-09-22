@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 import time
 from typing import TYPE_CHECKING, ClassVar
 
@@ -19,10 +18,7 @@ from mio.models.models import Table
 if TYPE_CHECKING:
     from mio.devices.stream.config import StreamDevConfig
 
-if sys.version_info < (3, 11):
-    from typing_extensions import Self
-else:
-    from typing import Self
+from typing import Self
 
 
 class ADCScaling(MiniscopeConfig):

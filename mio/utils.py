@@ -83,3 +83,8 @@ def _format_ranges(indices: list[int] | set[int]) -> list[str]:
 
     ranges.append(f"{start}-{end}" if start != end else str(start))
     return ranges
+
+
+def add_noob_sources() -> list[Path]:
+    """Provide the tubes directory so that noob can find it!"""
+    return [Path(__file__).parent / "data" / "tubes"]

@@ -84,6 +84,9 @@ def _capture_options(fn: Callable) -> Callable:
         "- 'capture' (default) capture video/metadata;\n"
         "- 'ber' runs a PRBS bit-error-rate test and produces no video/metadata output.",
     )(fn)
+    fn = click.option(
+        "--ntp", is_flag=True, help="Synchronize system clock with NTP before capturing"
+    )(fn)
     return fn
 
 
@@ -99,6 +102,7 @@ def capture(
     binary_export: bool | None,
     metadata_display: bool | None,
     mode: Literal["capture", "ber"],
+    ntp: bool = False,
     **kwargs: dict,
 ) -> None:
     """
@@ -107,7 +111,7 @@ def capture(
 
     # Rather don't like getting config here, but I want to do ntp check in the CLI so it's here.
     config = StreamDevConfig.from_any(config)
-    if config.runtime.ntp_server is not None:
+    if ntp and config.runtime.ntp_server is not None:
         prompt_ntp_sync(
             config.runtime.ntp_server, max_offset_seconds=config.runtime.ntp_max_offset_seconds
         )
@@ -120,12 +124,13 @@ def capture(
         video_output = unique_stem_path.with_suffix(".avi") if mode == "capture" else None
         metadata_output = unique_stem_path.with_suffix(".csv") if mode == "capture" else None
         binary_output = unique_stem_path.with_suffix(".bin") if binary_export else None
-        ber_output = unique_stem_path.with_suffix(".json") if mode == "ber" else None
+        # TODO: Restore BER mode
+        # ber_output = unique_stem_path.with_suffix(".json") if mode == "ber" else None
     else:
         video_output = None
         metadata_output = None
         binary_output = None
-        ber_output = None
+        # ber_output = None
 
     if freq_mask_config:
         freq_mask_config = FrequencyMaskingConfig.from_any(freq_mask_config)
@@ -140,8 +145,6 @@ def capture(
         show_video=not no_display and mode == "capture",
         show_metadata=metadata_display and mode == "capture",
         freq_mask_config=freq_mask_config,
-        mode=mode,
-        ber_output=ber_output,
     )
 
 

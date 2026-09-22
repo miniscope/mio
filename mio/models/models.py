@@ -2,19 +2,13 @@
 Base and meta model classes.
 """
 
-import sys
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
 import pandas as pd
 import pandera.pandas as pa
 from pandera.typing import DataFrame
 from pydantic import BaseModel
-
-if sys.version_info < (3, 11):
-    from typing_extensions import Self
-else:
-    from typing import Self
 
 
 class MiniscopeIOModel(BaseModel):

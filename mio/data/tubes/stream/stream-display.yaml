@@ -1,0 +1,54 @@
+noob_id: stream-display
+noob_model: noob.tube.TubeSpecification
+noob_version: v1000.1.0
+description: |
+  Display data as it's being acquired
+
+input:
+  config:
+    type: mio.devices.stream.config.StreamDevConfig
+  show_video:
+    type: bool
+    default: false
+  show_metadata:
+    type: bool
+    default: false
+  freq_mask_config:
+    type: noob.models.process.FrequencyMaskingConfig
+    required: false
+  header_cls:
+    type: str
+    default: mio.devices.stream.StreamBufferHeader
+    required: false
+
+  frame:
+    type: numpy.ndarray
+    scope: process
+  header:
+    type: mio.devices.stream.StreamBufferHeader
+    scope: process
+
+
+nodes:
+  metadata:
+    type: mio.plots.headers.StreamPlotter
+    enabled: input.show_metadata
+    params:
+      header_keys: input.header_cls
+    depends:
+      - header: input.header
+  filter:
+    type: mio.process.frame_helper.FrequencyMaskHelper
+    enabled: input.freq_mask_config
+    params:
+      freq_mask_config: input.freq_mask_config
+      device_config: input.config
+    depends:
+      - frame: input.frame
+  video:
+    type: mio.devices.stream.nodes.imshow
+    enabled: input.show_video
+    params:
+      window: "image"
+    depends:
+      - frame: filter.value
