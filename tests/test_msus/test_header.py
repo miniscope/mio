@@ -11,7 +11,7 @@ from mio.devices.msus.header import MSUSBufferHeader, MSUSBufferHeaderFormat, bu
 def test_format_headers_synthetic():
     """We can split a buffer into a (header, 1D pixel array) pairs"""
     format = MSUSBufferHeaderFormat.from_id("msus-buffer-header")
-    config = MSUSDevConfig.from_id("MSUS-test")
+    config = MSUSDevConfig.from_id("MSUS")
 
     frame = testing.patterned_frame(pattern="sequence")
     buffers = testing.frame_to_naneye_buffers(frame)

@@ -24,7 +24,7 @@ def test_format_frames():
     and reassemble it to the original frame.
     """
     format = MSUSBufferHeaderFormat.from_id("msus-buffer-header")
-    config = MSUSDevConfig.from_id("MSUS-test")
+    config = MSUSDevConfig.from_id("MSUS")
 
     frame = patterned_frame(
         width=config.frame_width, height=config.frame_height, pattern="sequential"
@@ -45,7 +45,7 @@ def test_format_headers_raw(msus_raw_buffers):
     Use the fixtures and previously recorded .bin files to test the format_headers method.
     """
     format = MSUSBufferHeaderFormat.from_id("msus-buffer-header")
-    config = MSUSDevConfig.from_id("MSUS-test")
+    config = MSUSDevConfig.from_id("MSUS")
 
     frame_buffers = defaultdict(list)
     for buffer in msus_raw_buffers:
@@ -83,7 +83,7 @@ def test_format_frame_with_known_input(binary_input, thresh_low, thresh_high):
     correct pixel values (or as close as we can verify with such a coarse notion of known input)
     """
     format = MSUSBufferHeaderFormat.from_id("msus-buffer-header")
-    config: MSUSDevConfig = MSUSDevConfig.from_id("MSUS-test")
+    config: MSUSDevConfig = MSUSDevConfig.from_id("MSUS")
 
     iterator = file_iter(binary_input, 2048)
     frame_buffers = defaultdict(list)
