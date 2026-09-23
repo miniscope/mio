@@ -3,8 +3,8 @@ The junk drawer my dogs
 """
 
 import hashlib
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 import cv2
 

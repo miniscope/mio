@@ -2,7 +2,7 @@
 
 import time
 from pathlib import Path
-from typing import ClassVar, Optional, Union
+from typing import ClassVar
 
 import cv2
 import numpy as np
@@ -10,10 +10,10 @@ import numpy as np
 from mio import init_logger
 from mio.devices.gs.config import GSDevConfig
 from mio.devices.gs.header import GSBufferHeader, GSBufferHeaderFormat
+from mio.io import BufferedCSVWriter, VideoWriter
 from mio.plots.headers import StreamPlotter
 from mio.stream_daq import StreamDaq
 from mio.types import ConfigSource
-from mio.io import BufferedCSVWriter, VideoWriter
 
 
 # testing here:
@@ -25,10 +25,10 @@ def format_frame(frame_data: list[np.ndarray], config: GSDevConfig) -> np.ndarra
     # frame = pixels.reshape((config.frame_height, config.frame_width_input)) # active full
     # frame = pixels.reshape(320, 328) #active full
     # frame = pixels.reshape(120, 120) # active when ROI
-    frame = pixels.reshape(320, 328) # active full
+    frame = pixels.reshape(320, 328)  # active full
 
     # strip training pixels
-    frame = frame[:, 8:] # active full
+    frame = frame[:, 8:]  # active full
 
     return frame
 
@@ -40,8 +40,8 @@ class GSStreamDaq(StreamDaq):
 
     def __init__(
         self,
-        device_config: Union[GSDevConfig, ConfigSource],
-        header_fmt: Union[GSBufferHeaderFormat, ConfigSource] = "gs-buffer-header",
+        device_config: GSDevConfig | ConfigSource,
+        header_fmt: GSBufferHeaderFormat | ConfigSource = "gs-buffer-header",
     ) -> None:
         """
         Constructer for the class.
@@ -66,9 +66,9 @@ class GSStreamDaq(StreamDaq):
 
         self.preamble = self.config.preamble
 
-        self._nbuffer_per_fm: Optional[int] = None
-        self._buffered_writer: Optional[BufferedCSVWriter] = None
-        self._header_plotter: Optional[StreamPlotter] = None
+        self._nbuffer_per_fm: int | None = None
+        self._buffered_writer: BufferedCSVWriter | None = None
+        self._header_plotter: StreamPlotter | None = None
 
     @property
     def buffer_npix(self) -> list[int]:
@@ -86,9 +86,9 @@ class GSStreamDaq(StreamDaq):
         image: np.ndarray,
         header_list: list[GSBufferHeaderFormat],
         show_video: bool,
-        writer: Optional[VideoWriter],
+        writer: VideoWriter | None,
         show_metadata: bool,
-        metadata: Optional[Path] = None,
+        metadata: Path | None = None,
     ) -> None:
         """
         Inner handler for :meth:`.capture` to process the frames from the frame queue.

@@ -1,6 +1,6 @@
 from collections.abc import Callable, Generator, MutableMapping
 from pathlib import Path
-from typing import Callable, Optional, Any, MutableMapping, Generator
+from typing import Any
 
 import pytest
 import tomli_w
@@ -279,11 +279,14 @@ def set_config(
     monkeypatch.setattr(config, "_config", None)
     return request.getfixturevalue(request.param)
 
+
 @pytest.fixture()
 def gs_raw_buffers() -> Generator[bytes, None, None]:
     from mio.stream_daq import iter_buffers
+
     from mio.devices.gs.config import GSDevConfig
     from mio.utils import file_iter
+
     from .conftest import DATA_DIR
 
     gs_data = DATA_DIR / "gs_test_raw_15_brightDark.bin"

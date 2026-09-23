@@ -4,7 +4,7 @@ specific values. This allows for the model to be reused across different minisco
 for consuming code to use a consistent, introspectable API
 """
 
-from typing import ClassVar
+from typing import ClassVar, Self
 
 import numpy as np
 
@@ -158,7 +158,7 @@ class SDBufferHeader(BufferHeader):
 
     @classmethod
     def from_buffer(
-        cls, buffer: bytes, format: BufferHeaderFormat, config: Optional[MiniscopeConfig] = None
+        cls, buffer: bytes, config: MiniscopeConfig | None = None
     ) -> tuple[Self, np.ndarray]:
         """no-op! there is no buffer splitting in sd-card devices"""
         raise NotImplementedError(

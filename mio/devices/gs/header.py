@@ -1,22 +1,15 @@
-# ruff: noqa: D100
+"""
+Variations on the base Stream header classes
+"""
 
-import sys
-from typing import TYPE_CHECKING
-
-if sys.version_info >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
-
+from typing import TYPE_CHECKING, Self
 
 import numpy as np
 
 from mio.models.stream import StreamBufferHeader, StreamBufferHeaderFormat
-from mio.logging import init_logger
 
 if TYPE_CHECKING:
     from mio.devices.gs.config import GSDevConfig
-
 
 
 def buffer_to_array(buffer: bytes) -> np.ndarray:
@@ -43,10 +36,11 @@ def buffer_to_array(buffer: bytes) -> np.ndarray:
     # return packed_16bit.flatten()
 
     # cast to an 8 bit ndarray
-    stripped_8bit = stripped[:, :-2] # current
-    packed_8bit =  np.packbits(stripped_8bit, axis=1).flatten()
+    stripped_8bit = stripped[:, :-2]  # current
+    packed_8bit = np.packbits(stripped_8bit, axis=1).flatten()
 
     return packed_8bit
+
 
 def buffer_to_array2(buffer: bytes) -> np.ndarray:
     """
@@ -73,9 +67,10 @@ def buffer_to_array2(buffer: bytes) -> np.ndarray:
 
     # cast to an 8 bit ndarray
     # stripped_8bit = stripped[:, :-2] # current
-    packed_8bit =  np.packbits(pixel_cols, axis=1).flatten()
+    packed_8bit = np.packbits(pixel_cols, axis=1).flatten()
 
     return packed_8bit
+
 
 class GSBufferHeader(StreamBufferHeader):
     """
@@ -107,12 +102,11 @@ class GSBufferHeader(StreamBufferHeader):
         # _logger.debug("HEADER LEN: %s, expected: %s", len(buffer), header_fmt.header_length * 4)
         header_array = np.frombuffer(buffer[header_start:header_end], dtype=np.uint32)
         header = cls.from_format(header_array, header_fmt, construct=True)
-        # _logger.debug("HEADER: buffer: %s, frame: %s", header.frame_buffer_count, header.frame_num)
         dummy_len = config.dummy_words * 4
         # payload = buffer_to_array(
         #    buffer[header_end:-dummy_len]
         # )  # ignoring the last 384 bits, can change after dummy is detected
-        payload = buffer_to_array2( buffer[header_end:-dummy_len])
+        payload = buffer_to_array2(buffer[header_end:-dummy_len])
         return header, payload
 
 

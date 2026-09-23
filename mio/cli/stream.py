@@ -17,7 +17,6 @@ from mio.models.process import FrequencyMaskingConfig
 from mio.ntp import prompt_ntp_sync
 
 
-
 @click.group()
 def stream() -> None:
     """
@@ -95,10 +94,10 @@ def _capture_options(fn: Callable) -> Callable:
 @stream.command()
 @_common_options
 @_capture_options
-@click.option("-d", "--device", type=click.Choice(["streamdaq", "gs"]))
+@click.option("-d", "--device", type=click.Choice(["streamdaq", "gs"]), default="streamdaq")
 def capture(
     config: Path,
-    device: Literal["streamdaq", "gs"] = "streamdaq",
+    device: Literal["streamdaq", "gs"],
     freq_mask_config: Path | None,
     output: Path | None,
     okwarg: dict | None,

@@ -1,15 +1,19 @@
-import pytest
 from collections import defaultdict
 
-from bitstring import Bits
 import numpy as np
-
-from mio.devices.gs.daq import format_frame
-from mio.devices.gs.testing import patterned_frame, frame_to_naneye_buffers, create_serialized_frame_data
-from mio.devices.gs.header import GSBufferHeaderFormat, GSBufferHeader
-from mio.devices.gs.config import GSDevConfig
+import pytest
+from bitstring import Bits
 from mio.stream_daq import iter_buffers
+
+from mio.devices.gs.config import GSDevConfig
+from mio.devices.gs.daq import format_frame
+from mio.devices.gs.header import GSBufferHeader, GSBufferHeaderFormat
+from mio.devices.gs.testing import (
+    frame_to_naneye_buffers,
+    patterned_frame,
+)
 from mio.utils import file_iter
+
 from ..conftest import DATA_DIR
 
 
@@ -22,10 +26,14 @@ def test_format_frames():
     format = GSBufferHeaderFormat.from_id("gs-buffer-header")
     config = GSDevConfig.from_id("MSUS-test")
 
-    frame = patterned_frame(width=config.frame_width, height=config.frame_height, pattern="sequential")
+    frame = patterned_frame(
+        width=config.frame_width, height=config.frame_height, pattern="sequential"
+    )
     buffers = frame_to_naneye_buffers(frame)
 
-    processed = [GSBufferHeader.from_buffer(buf, header_fmt=format, config=config) for buf in buffers]
+    processed = [
+        GSBufferHeader.from_buffer(buf, header_fmt=format, config=config) for buf in buffers
+    ]
     pixels = [p[1] for p in processed]
 
     reconstructed = format_frame(pixels, config)
@@ -39,9 +47,8 @@ def test_format_headers_raw(gs_raw_buffers):
     format = GSBufferHeaderFormat.from_id("gs-buffer-header")
     config = GSDevConfig.from_id("MSUS-test")
 
-
     frame_buffers = defaultdict(list)
-    for i, buffer in enumerate(gs_raw_buffers):
+    for buffer in gs_raw_buffers:
         # this extracts header and pixels
         header, pixels = GSBufferHeader.from_buffer(buffer, header_fmt=format, config=config)
         # add the pixels value to a list of buffers
@@ -105,7 +112,3 @@ def test_format_frame_with_known_input(binary_input, thresh_low, thresh_high):
     # 75% of pixels are brighter than high thresh, vice versa for low
     assert bright_qts[0] > thresh_high
     assert dark_qts[1] < thresh_low
-
-
-
-

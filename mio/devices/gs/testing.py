@@ -1,7 +1,7 @@
 # ruff: noqa: D100
 import time
 from pathlib import Path
-from typing import ClassVar, List, Optional, Tuple, Union
+from typing import ClassVar
 
 import numpy as np
 from bitstring import Bits
@@ -46,7 +46,7 @@ def patterned_frame(width: int = 328, height: int = 320, pattern: str = "sequenc
     return frame
 
 
-def pack_12bit_to_32bit_buffers(frame: np.ndarray) -> Tuple[List[np.ndarray], np.ndarray]:
+def pack_12bit_to_32bit_buffers(frame: np.ndarray) -> tuple[list[np.ndarray], np.ndarray]:
     """
     Pack 12-bit pixel data into 32-bit buffers.
 
@@ -135,7 +135,7 @@ def pack_12bit_to_32bit_buffers(frame: np.ndarray) -> Tuple[List[np.ndarray], np
 
 def create_serialized_frame_data(
     width: int = 320, height: int = 328, pattern: str = "sequence"
-) -> Tuple[List[np.ndarray], np.ndarray]:
+) -> tuple[list[np.ndarray], np.ndarray]:
     """
     Create serialized frame data with the specified buffer structure.
 
@@ -159,7 +159,7 @@ def create_serialized_frame_data(
 
 
 def frame_to_naneye_buffers(
-    frame: Optional[np.ndarray] = None, buffer_size: int = 3750
+    frame: np.ndarray | None = None, buffer_size: int = 3750
 ) -> list[bytes]:
     """
     Convert a video frame to a series of naneye-formatted buffers.
@@ -231,8 +231,8 @@ class _BinaryDaq:
 
     def __init__(
         self,
-        device_config: Union[GSDevConfig, ConfigSource],
-        header_fmt: Union[GSBufferHeaderFormat, ConfigSource] = "gs-buffer-header",
+        device_config: GSDevConfig | ConfigSource,
+        header_fmt: GSBufferHeaderFormat | ConfigSource = "gs-buffer-header",
     ):
         self.config: GSDevConfig = GSDevConfig.from_any(device_config)
         self.header_fmt = GSBufferHeaderFormat.from_any(header_fmt)

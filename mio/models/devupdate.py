@@ -78,7 +78,10 @@ class DevUpdateCommand(BaseModel):
         elif key == UpdateKey.SUBSAMPLE:
             assert value in [0, 1], "For SUBSAMPLE, value must be in [0, 1]"
         elif key == UpdateKey.TL:
-            assert 0 <= value <= 1055, "For TUNABLE LENS, value must be in [0, 1055] to go from a DAC: [-180, 875] corresponding to a DPT: [-7:8]"
+            assert 0 <= value <= 1055, (
+                "For TUNABLE LENS, value must be in [0, 1055] "
+                "to go from a DAC: [-180, 875] corresponding to a DPT: [-7:8]"
+            )
         elif key in [UpdateKey.ROI_X, UpdateKey.ROI_Y]:
             # validation not implemented
             pass

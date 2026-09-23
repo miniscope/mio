@@ -1,11 +1,9 @@
-from mio.devices.gs.daq import GSStreamDaq
-from mio.devices.gs.header import GSBufferHeader
-
-from mio.utils import hash_file
-from ..conftest import DATA_DIR
-
 from mio.stream_daq import StreamDaq
+
 from mio.devices.gs.config import GSDevConfig
+from mio.utils import hash_file
+
+from ..conftest import DATA_DIR
 
 
 def test_binary_output(set_okdev_input, tmp_path):
