@@ -65,7 +65,7 @@ def test_format_headers_raw(msus_raw_buffers):
 
 
 @pytest.mark.parametrize(
-    "binary_input,thresh_low,thresh_high", [(DATA_DIR / "gs_test_raw_15_brightDark.bin", 300, 900)]
+    "binary_input,thresh_low,thresh_high", [(DATA_DIR / "msus_test_raw_15_brightDark.bin", 300, 900)]
 )
 def test_format_frame_with_known_input(binary_input, thresh_low, thresh_high):
     """

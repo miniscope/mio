@@ -289,7 +289,7 @@ def msus_raw_buffers() -> Generator[bytes, None, None]:
 
     from .conftest import DATA_DIR
 
-    gs_data = DATA_DIR / "gs_test_raw_15_brightDark.bin"
+    gs_data = DATA_DIR / "msus_test_raw_15_brightDark.bin"
 
     config: MSUSDevConfig = MSUSDevConfig.from_id("MSUS-test")
 

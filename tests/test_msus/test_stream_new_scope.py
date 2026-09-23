@@ -9,7 +9,7 @@ from ..conftest import DATA_DIR
 def test_binary_output(set_okdev_input, tmp_path):
     daqConfig = MSUSDevConfig.from_id("MSUS")
 
-    data_file = DATA_DIR / "gs_test_raw.bin"
+    data_file = DATA_DIR / "msus_test_raw.bin"
     set_okdev_input(data_file)
 
     output_file = tmp_path / "output.bin"
