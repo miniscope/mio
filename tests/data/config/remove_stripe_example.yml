@@ -1,0 +1,11 @@
+id: test_remove_stripe_example
+mio_model: mio.models.process.FrequencyMaskingConfig
+mio_version: 0.6.1
+enable: true
+cast_float32: true
+spatial_LPF_cutoff_radius: 5
+vertical_BEF_cutoff: 2
+horizontal_BEF_cutoff: 0
+output_mask: false
+output_result: false
+output_freq_domain: false

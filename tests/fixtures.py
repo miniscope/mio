@@ -1,39 +1,39 @@
+from collections.abc import Callable, Generator, MutableMapping
 from pathlib import Path
 from typing import Callable, Optional, Any, MutableMapping, Generator
 
 import pytest
-import yaml
 import tomli_w
+import yaml
 from _pytest.monkeypatch import MonkeyPatch
 from bitstring import Bits
 
-from mio import Config
-from mio.io import SDCard
-from mio.models.config import _global_config_path, set_user_dir
-from mio.models.data import Frames
+from mio.devices.sdcard.data import SDCardVideo
+from mio.devices.sdcard.device import SDCardDevice
+from mio.models.config import Config, _global_config_path, set_user_dir
 from mio.models.mixins import ConfigYAMLMixin, YamlDumper
 
 
 @pytest.fixture
-def wirefree() -> SDCard:
+def wirefree() -> SDCardDevice:
     """
-    SDCard with wirefree layout pointing to the sample data file
+    SDCardDevice with wirefree layout pointing to the sample data file
 
     """
     sd_path = Path(__file__).parent.parent / "data" / "wirefree_example.img"
-    sdcard = SDCard(drive=sd_path, layout="wirefree-sd-layout")
+    sdcard = SDCardDevice(drive=sd_path, layout="wirefree-sd-layout")
     return sdcard
 
 
 @pytest.fixture
-def wirefree_battery() -> SDCard:
+def wirefree_battery() -> SDCardDevice:
     sd_path = Path(__file__).parent.parent / "data" / "wirefree_battery_sample.img"
-    sdcard = SDCard(drive=sd_path, layout="wirefree-sd-layout-battery")
+    sdcard = SDCardDevice(drive=sd_path, layout="wirefree-sd-layout-battery")
     return sdcard
 
 
 @pytest.fixture()
-def wirefree_frames(wirefree) -> Frames:
+def wirefree_frames(wirefree: SDCardDevice) -> SDCardVideo:
     frames = []
     with wirefree:
         while True:
@@ -42,11 +42,11 @@ def wirefree_frames(wirefree) -> Frames:
                 frames.append(frame_object)
             except StopIteration:
                 break
-    return Frames(frames=frames)
+    return SDCardVideo(frames=frames)
 
 
 @pytest.fixture()
-def tmp_config_source(tmp_path, monkeypatch) -> Path:
+def tmp_config_source(tmp_path: Path, monkeypatch: MonkeyPatch) -> Path:
     """
     Monkeypatch the config sources to include a temporary path
     """
@@ -64,12 +64,27 @@ def tmp_config_source(tmp_path, monkeypatch) -> Path:
 
 
 @pytest.fixture()
+def tmp_config_dir(tmp_path: Path, monkeypatch: MonkeyPatch, set_env: Callable) -> Path:
+    """
+    Monkeypatch the `config_dir` parameter to a temporary path that doesn't include any of the
+    builtin configs
+    """
+
+    def _config_sources(cls: type[ConfigYAMLMixin]) -> list[Path]:
+        return [tmp_path]
+
+    set_env({"config_dir": tmp_path})
+    monkeypatch.setattr(ConfigYAMLMixin, "config_sources", classmethod(_config_sources))
+    return tmp_path
+
+
+@pytest.fixture()
 def yaml_config(
-    tmp_config_source, tmp_path, monkeypatch
-) -> Callable[[str, dict, Optional[Path]], Path]:
+    tmp_config_source: Path, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> Callable[[str, dict, Path | None], Path]:
     out_file = tmp_config_source / "test_config.yaml"
 
-    def _yaml_config(id: str, data: dict, path: Optional[Path] = None) -> Path:
+    def _yaml_config(id: str, data: dict, path: Path | None = None) -> Path:
         if path is None:
             path = out_file
         else:
@@ -104,7 +119,7 @@ def monkeypatch_session() -> MonkeyPatch:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def dodge_existing_configs(tmp_path_factory):
+def dodge_existing_configs(tmp_path_factory: pytest.TempPathFactory) -> Generator[None, None, None]:
     """
     Suspend any existing global config file during config tests
     """
@@ -113,10 +128,7 @@ def dodge_existing_configs(tmp_path_factory):
     backup_global_config_path = tmp_path / "mio_config.yaml.global.bak"
 
     user_config_path = list(Config().user_dir.glob("mio_config.*"))
-    if len(user_config_path) == 0:
-        user_config_path = None
-    else:
-        user_config_path = user_config_path[0]
+    user_config_path = None if len(user_config_path) == 0 else user_config_path[0]
 
     backup_user_config_path = tmp_path / "mio_config.yaml.user.bak"
 
@@ -144,13 +156,13 @@ def dodge_existing_configs(tmp_path_factory):
 
 
 @pytest.fixture()
-def tmp_cwd(tmp_path, monkeypatch) -> Path:
+def tmp_cwd(tmp_path: Path, monkeypatch: MonkeyPatch) -> Path:
     monkeypatch.chdir(tmp_path)
     return tmp_path
 
 
 @pytest.fixture()
-def set_env(monkeypatch) -> Callable[[dict[str, Any]], None]:
+def set_env(monkeypatch: MonkeyPatch) -> Callable[[dict[str, Any]], None]:
     """
     Function fixture to set environment variables using a nested dict
     matching a GlobalConfig.model_dump()
@@ -165,7 +177,7 @@ def set_env(monkeypatch) -> Callable[[dict[str, Any]], None]:
 
 
 @pytest.fixture()
-def set_dotenv(tmp_cwd) -> Callable[[dict[str, Any]], Path]:
+def set_dotenv(tmp_cwd: Path) -> Callable[[dict[str, Any]], Path]:
     """
     Function fixture to set config variables in a .env file
     """
@@ -182,7 +194,7 @@ def set_dotenv(tmp_cwd) -> Callable[[dict[str, Any]], Path]:
 
 
 @pytest.fixture()
-def set_pyproject(tmp_cwd) -> Callable[[dict[str, Any]], Path]:
+def set_pyproject(tmp_cwd: Path) -> Callable[[dict[str, Any]], Path]:
     """
     Function fixture to set config variables in a pyproject.toml file
     """
@@ -200,7 +212,7 @@ def set_pyproject(tmp_cwd) -> Callable[[dict[str, Any]], Path]:
 
 
 @pytest.fixture()
-def set_local_yaml(tmp_cwd) -> Callable[[dict[str, Any]], Path]:
+def set_local_yaml(tmp_cwd: Path) -> Callable[[dict[str, Any]], Path]:
     """
     Function fixture to set config variables in a mio_config.yaml file in the current directory
     """
@@ -215,7 +227,7 @@ def set_local_yaml(tmp_cwd) -> Callable[[dict[str, Any]], Path]:
 
 
 @pytest.fixture()
-def set_user_yaml(tmp_path) -> Callable[[dict[str, Any]], Path]:
+def set_user_yaml(tmp_path: Path) -> Callable[[dict[str, Any]], Path]:
     """
     Function fixture to set config variables in a user config file
     """
@@ -259,7 +271,12 @@ def set_global_yaml() -> Callable[[dict[str, Any]], Path]:
         "set_global_yaml",
     ]
 )
-def set_config(request) -> Callable[[dict[str, Any]], Path]:
+def set_config(
+    request: pytest.FixtureRequest, monkeypatch: MonkeyPatch
+) -> Callable[[dict[str, Any]], Path]:
+    from mio.models import config
+
+    monkeypatch.setattr(config, "_config", None)
     return request.getfixturevalue(request.param)
 
 @pytest.fixture()
@@ -278,7 +295,7 @@ def gs_raw_buffers() -> Generator[bytes, None, None]:
     return iter_buffers(file_iterator, Bits(config.preamble))
 
 
-def _flatten(d, parent_key="", separator="__") -> dict:
+def _flatten(d: dict, parent_key: str = "", separator: str = "__") -> dict:
     """https://stackoverflow.com/a/6027615/13113166"""
     items = []
     for key, value in d.items():
@@ -288,4 +305,3 @@ def _flatten(d, parent_key="", separator="__") -> dict:
         else:
             items.append((new_key, value))
     return dict(items)
-

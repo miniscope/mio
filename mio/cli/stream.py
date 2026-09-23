@@ -3,20 +3,25 @@ CLI commands for running streamDaq
 """
 
 import os
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Literal, Optional
+from typing import Literal
 
 import click
 
 from mio.cli.common import ConfigIDOrPath
 from mio.devices.gs.daq import GSStreamDaq
-from mio.stream_daq import StreamDaq
+from mio.devices.stream import StreamDevice
+from mio.devices.stream.config import StreamDevConfig
+from mio.models.process import FrequencyMaskingConfig
+from mio.ntp import prompt_ntp_sync
+
 
 
 @click.group()
 def stream() -> None:
     """
-    Command group for StreamDaq
+    Command group for StreamDevice
     """
     pass
 
@@ -24,7 +29,7 @@ def stream() -> None:
 def _common_options(fn: Callable) -> Callable:
     fn = click.option(
         "-c",
-        "--device_config",
+        "--config",
         required=True,
         help=(
             "Either a config `id` or a path to device config YAML file for streamDaq. "
@@ -49,11 +54,10 @@ def _capture_options(fn: Callable) -> Callable:
         "-ok",
         "--output-kwarg",
         "okwarg",
-        help="Output kwargs (passed to StreamDaq.init_video). \n"
+        help="Output kwargs (passed to StreamDevice.init_video). \n"
         "passed as (potentially multiple) calls like\n\n"
         "mio stream capture -ok key1 val1 -ok key2 val2",
         multiple=True,
-        type=(str, Any),
     )(fn)
     fn = click.option("--no-display", is_flag=True, help="Don't show video in real time")(fn)
     fn = click.option("-b", "--binary_export", is_flag=True, help="Save binary to a .bin file")(fn)
@@ -64,7 +68,27 @@ def _capture_options(fn: Callable) -> Callable:
         help="Display metadata in real time. \n"
         "**WARNING:** This is still an **EXPERIMENTAL** feature and is **UNSTABLE**.",
     )(fn)
-
+    fn = click.option(
+        "-f",
+        "--freq_mask_config",
+        help="Path to, or ID of frequency masking config YAML file - "
+        "applies frequency masking to the displayed video, "
+        "but preserves raw video and does not modify the video output written to disk "
+        "(apply postprocessing separately).",
+        type=ConfigIDOrPath(),
+    )(fn)
+    fn = click.option(
+        "--mode",
+        type=click.Choice(["capture", "ber"]),
+        default="capture",
+        show_default=True,
+        help="Capture mode. \n"
+        "- 'capture' (default) capture video/metadata;\n"
+        "- 'ber' runs a PRBS bit-error-rate test and produces no video/metadata output.",
+    )(fn)
+    fn = click.option(
+        "--ntp", is_flag=True, help="Synchronize system clock with NTP before capturing"
+    )(fn)
     return fn
 
 
@@ -73,44 +97,63 @@ def _capture_options(fn: Callable) -> Callable:
 @_capture_options
 @click.option("-d", "--device", type=click.Choice(["streamdaq", "gs"]))
 def capture(
-    device_config: Path,
+    config: Path,
     device: Literal["streamdaq", "gs"] = "streamdaq",
-    output: Optional[Path] = None,
-    okwarg: Optional[dict] = None,
-    no_display: Optional[bool] = None,
-    binary_export: Optional[bool] = None,
-    metadata_display: Optional[bool] = None,
+    freq_mask_config: Path | None,
+    output: Path | None,
+    okwarg: dict | None,
+    no_display: bool | None,
+    binary_export: bool | None,
+    metadata_display: bool | None,
+    mode: Literal["capture", "ber"],
+    ntp: bool = False,
     **kwargs: dict,
 ) -> None:
     """
-    Capture video from a StreamDaq device, optionally saving as an encoded video or as raw binary
+    Capture video from a StreamDevice device, optionally saving as an encoded video or as raw binary
     """
-    if device == "gs":
-        daq_inst = GSStreamDaq(device_config=device_config)
+
+    # Rather don't like getting config here, but I want to do ntp check in the CLI so it's here.
+    config = StreamDevConfig.from_any(config)
+    if ntp and config.runtime.ntp_server is not None:
+        prompt_ntp_sync(
+            config.runtime.ntp_server, max_offset_seconds=config.runtime.ntp_max_offset_seconds
+        )
+
+    if device == "streamdaq":
+        daq_inst = StreamDevice(config=config)
     else:
-        daq_inst = StreamDaq(device_config=device_config)
+        # TODO: get the right config class here
+        daq_inst = GSStreamDaq(device_config=config)
 
     okwargs = dict(okwarg)
 
     if output:
         unique_stem_path = get_unique_stempath(Path(output))
-        video_output = unique_stem_path.with_suffix(".avi")
-        metadata_output = unique_stem_path.with_suffix(".csv")
-
+        video_output = unique_stem_path.with_suffix(".avi") if mode == "capture" else None
+        metadata_output = unique_stem_path.with_suffix(".csv") if mode == "capture" else None
         binary_output = unique_stem_path.with_suffix(".bin") if binary_export else None
+        # TODO: Restore BER mode
+        # ber_output = unique_stem_path.with_suffix(".json") if mode == "ber" else None
     else:
         video_output = None
         metadata_output = None
         binary_output = None
+        # ber_output = None
+
+    if freq_mask_config:
+        freq_mask_config = FrequencyMaskingConfig.from_any(freq_mask_config)
+    else:
+        freq_mask_config = None
 
     daq_inst.capture(
-        source="fpga",
         video=video_output,
         video_kwargs=okwargs,
         metadata=metadata_output,
         binary=binary_output,
-        show_video=not no_display,
-        show_metadata=metadata_display,
+        show_video=not no_display and mode == "capture",
+        show_metadata=metadata_display and mode == "capture",
+        freq_mask_config=freq_mask_config,
     )
 
 
@@ -130,7 +173,7 @@ def capture(
 @click.pass_context
 def test(ctx: click.Context, source: Path, profile: bool, **kwargs: dict) -> None:
     """
-    Run StreamDaq in testing mode, using the okDevMock rather than the actual device
+    Run StreamDevice in testing mode, using the okDevMock rather than the actual device
     """
     if profile:
         raise NotImplementedError("Profiling mode is not implemented")
@@ -139,23 +182,6 @@ def test(ctx: click.Context, source: Path, profile: bool, **kwargs: dict) -> Non
     os.environ["PYTEST_OKDEV_DATA_FILE"] = str(source)
 
     ctx.forward(capture)
-
-
-@stream.command("binary")
-@_common_options
-@click.option("-o", "--output", type=click.Path(), help="Path to output binary output")
-def stream_binary(device_config: str | Path, output: Path) -> None:
-    """
-    Stream *just* the binary data output from a special BinaryDaq class.
-
-    Used to generate test data,
-    should probably be removed from main CLI once streamdaq
-    is more reasonably divided into subcomponents.
-    """
-    from mio.devices.gs.testing import _BinaryDaq
-
-    daq = _BinaryDaq(device_config=device_config)
-    daq.capture(output)
 
 
 def get_unique_stempath(base_output: Path) -> Path:

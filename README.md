@@ -8,10 +8,12 @@
 
 Generic i/o interfaces for miniscopes.
 
-In alpha - Fuller README forthcoming.
+This software is currently in internal alpha development 
+and is not yet intended for production usage in live experiments.
+The software will be ready for public/external/production use after version `v1.0.0`.
 
-See the docs for now: https://miniscope-io.readthedocs.io/
-
+Fuller README forthcoming. 
+In the meantime, see the docs: https://miniscope-io.readthedocs.io/
 
 
 ## Licensing

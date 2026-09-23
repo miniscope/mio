@@ -1,16 +1,20 @@
 """
-Plot headers from :class:`.SDCard`
+Plot headers from :class:`.SDCardDevice`
 """
 
 from collections import deque
 from itertools import count
 from time import time
-from typing import Any, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
+from noob import process_method
+from noob.utils import resolve_python_identifier
 
-from mio.models.stream import StreamBufferHeader
+from mio.devices.base import BufferHeader
+from mio.devices.stream.headers import StreamBufferHeader
+from mio.types import PythonIdentifier
 
 try:
     import matplotlib.pyplot as plt
@@ -69,7 +73,7 @@ def battery_voltage(headers: pd.DataFrame, ax: "plt.Axes") -> "plt.Axes":
 
 
 def plot_headers(
-    headers: pd.DataFrame, size: Optional[Tuple[int, int]] = None
+    headers: pd.DataFrame, size: tuple[int, int] | None = None
 ) -> ("plt.Figure", "plt.Axes"):
     """
     Plot the headers (generated from :meth:`.Frame.to_df` )
@@ -108,18 +112,21 @@ def plot_headers(
 
 class StreamPlotter:
     """
-    Plot headers from StreamDaq.
+    Plot headers from StreamDevice.
 
     .. note::
 
         Eventually this should get generalized into a plotter object that
         can take an arbitrary set of keys and values, but for now is
-        somewhat specific to :class:`.StreamDaq` , at least in the type hints.
+        somewhat specific to :class:`.StreamDevice` , at least in the type hints.
 
     """
 
     def __init__(
-        self, header_keys: List[str], history_length: int = 100, update_ms: int = 1000
+        self,
+        header_keys: list[str] | PythonIdentifier,
+        history_length: int = 100,
+        update_ms: int = 1000,
     ) -> None:
         """
         Constructor of StreamPlotter.
@@ -138,7 +145,10 @@ class StreamPlotter:
 
         # If a single string is provided, convert it to a list with one element
         if isinstance(header_keys, str):
-            header_keys = [header_keys]
+            header_cls = resolve_python_identifier(header_keys)
+            if not issubclass(header_cls, BufferHeader):
+                raise TypeError("Header class must be a buffer header class!")
+            header_keys = header_cls.csv_header_cols()
 
         self.header_keys = header_keys
         self.history_length = history_length
@@ -152,7 +162,6 @@ class StreamPlotter:
     def _init_plot(
         self,
     ) -> tuple["plt.Figure", dict[str, "plt.Axes"], dict[str, "plt.Line2D"]]:
-
         # initialize matplotlib
         plt.ion()
         fig: plt.Figure
@@ -178,6 +187,7 @@ class StreamPlotter:
             ax.set_ylabel(header_key)
         return fig, axes_dict, lines
 
+    @process_method
     def update(
         self,
         header: StreamBufferHeader,

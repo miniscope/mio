@@ -3,10 +3,11 @@ CLI for updating device over IR or UART.
 """
 
 import click
-import yaml
 
+from mio.cli.common import ConfigIDOrPath
 from mio.device_update import device_update
 from mio.models.devupdate import DeviceCommand
+from mio.models.update import UpdateBatch
 
 
 @click.command()
@@ -22,7 +23,7 @@ from mio.models.devupdate import DeviceCommand
     required=False,
     default=0,
     type=int,
-    help="[EXPERIMENTAL FEATURE] ID of the device to update. 0 (default) will update all devices.",
+    help="ID of the device to update. 0 (default) will update all devices.",
 )
 @click.option(
     "-k",
@@ -42,11 +43,8 @@ from mio.models.devupdate import DeviceCommand
     "-b",
     "--batch",
     required=False,
-    type=click.Path(exists=True, dir_okay=False),
-    help=(
-        "[EXPERIMENTAL FEATURE] YAML file that works as a batch file to update."
-        "Specify key and value pairs in the file."
-    ),
+    type=ConfigIDOrPath(),
+    help=("Batch config (ID or YAML path). " "Provide a list of device entries."),
 )
 def update(port: str, key: str, value: int, device_id: int, batch: str) -> None:
     """
@@ -61,10 +59,9 @@ def update(port: str, key: str, value: int, device_id: int, batch: str) -> None:
     if key and value is not None:
         device_update(port=port, key=key, value=value, device_id=device_id)
     elif batch:
-        with open(batch) as f:
-            batch_file = yaml.safe_load(f)
-        for key, value in batch_file:
-            device_update(port=port, key=key, value=value, device_id=device_id)
+        batch_cfg = UpdateBatch.from_any(batch)
+        for entry_port, entry_dev_id, k, v in batch_cfg.iter_updates(port):
+            device_update(port=entry_port, key=k, value=v, device_id=entry_dev_id)
     else:
         raise click.UsageError("Either --key with --value or --restart must be specified.")
 

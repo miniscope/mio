@@ -3,9 +3,10 @@ Models for device update commands.
 """
 
 from enum import Enum
+from typing import Self
 
 import serial.tools.list_ports
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class DeviceCommand(Enum):
@@ -60,15 +61,13 @@ class DevUpdateCommand(BaseModel):
     key: UpdateKey
     value: int
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
     @model_validator(mode="after")
-    def validate_values(cls, values: dict) -> dict:
+    def validate_values(self) -> Self:
         """
         Validate values based on key.
         """
-        key = values.key
-        value = values.value
+        key = self.key
+        value = self.value
 
         if key == UpdateKey.LED:
             assert 0 <= value <= 100, "For LED, value must be between 0 and 100"
@@ -87,7 +86,7 @@ class DevUpdateCommand(BaseModel):
             raise NotImplementedError()
         else:
             raise ValueError(f"{key} is not a valid update key," "need an instance of UpdateKey")
-        return values
+        return self
 
     @field_validator("port")
     def validate_port(cls, value: str) -> str:

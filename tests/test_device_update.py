@@ -1,17 +1,20 @@
+from unittest.mock import MagicMock, call, patch
+
 import pytest
 import serial
 from pydantic import ValidationError
-from unittest.mock import MagicMock, patch, call
-from mio.models.devupdate import UpdateCommandDefinitions, UpdateKey
+
 from mio.device_update import device_update, find_ftdi_device
+from mio.models.devupdate import UpdateCommandDefinitions, UpdateKey
 
 
 @pytest.fixture
 def mock_serial_fixture(request):
     device_list = request.param
-    with patch("serial.Serial") as mock_serial, patch(
-        "serial.tools.list_ports.comports"
-    ) as mock_comports:
+    with (
+        patch("serial.Serial") as mock_serial,
+        patch("serial.tools.list_ports.comports") as mock_comports,
+    ):
         mock_serial_instance = mock_serial.return_value
         mock_comports.return_value = [
             MagicMock(vid=device["vid"], pid=device["pid"], device=device["device"])

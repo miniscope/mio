@@ -1,8 +1,168 @@
 # Changelog
 
-## 0.7 - Processing Module & Video Encoding Fixes
+## Upcoming
 
-### 0.7.0 - 2024-07-21
+### *.*
+
+#### Added
+
+- [`#183`](https://github.com/miniscope/mio/pull/183) - Begin standardizing device metadata tables with pandera.
+  Unfortunately this requires a duplication of models, where we specify individual record models AND table models,
+  this is mostly for perf reasons, whomp whomp, but there are some legitimate impedance mismatches between record and table models.
+  This change is only on the tables specified by the {class}`~mio.models.dataset.Dataset` classes so far,
+  but will work towards structuring all metadata tables declaratively.
+- [`#179`](https://github.com/miniscope/mio/pull/179) - Add `ber` (bitwise error mode) as a separate mode in streamdaq
+
+#### Refactor
+
+- [`#186`](https://github.com/miniscope/mio/pull/186) - 
+  Decompose the streamdaq into separable functions:
+  - passing config rather than binding them all to the stream device instance
+  - Move `_parse_header` to take place on the `StreamBufferHeader` class entirely
+  - Rm convenience accessors to the config from the instance (that were used by the methods, coupling them to the instance)
+- Standardize `Device` instantiation and class vars (renames `--device-config` to just `config`)
+- [`#177`](https://github.com/miniscope/mio/pull/177) - Move all headers to `devices` structure
+- [`#166`](https://github.com/miniscope/mio/pull/166) - Create `devices` and move streamdaq to it
+
+#### Removed
+
+- [`#185`](https://github.com/miniscope/mio/pull/185) - remove UART remnants on stream daq
+
+#### DX/Testing
+
+- [`#184`](https://github.com/miniscope/mio/pull/184) - lint the tests lol
+
+#### Deps
+
+- [`#164`](https://github.com/miniscope/mio/pull/164)
+  - Remove numpy version cap (unclear why it was there)
+  - Add opencv cap for mac, where recent versions of python-opencv have not been built with ffmpeg
+
+## 0.10
+
+### 0.10.0
+
+#### CLI
+
+- [`#141`](https://github.com/miniscope/mio/pull/141) - add cli commands for manipulating configs:
+  - `mio config create` to create a new config from a config model (use --list) to show available models
+  - `mio config path` to show the path to a config
+  - `mio config open` to open the config in default text editor
+- [`#154`](https://github.com/miniscope/mio/pull/154) - add cli command for removing frames from video:
+  - `mio process remove_frames` to remove frames by explicitly specified index from videos and metadata
+- [`#155`](https://github.com/miniscope/mio/pull/155) - `mio process concat` - concatenate videos and metadata
+
+#### CI/CD
+
+- [`#157`](https://github.com/miniscope/mio/pull/157) - Add continuous deployment to PyPI 
+
+#### New features
+
+- [`#133`](https://github.com/miniscope/mio/pull/133) - {class}`~mio.models.dataset.Dataset` 
+  organization - group recordings with their metadata, and group multiple recordings collected at the same time.
+- [`#133`](https://github.com/miniscope/mio/pull/133), [`#155`](https://github.com/miniscope/mio/pull/155)
+  Noise-aware stitching: Given two recordings of the same data stream,
+  create a stitched version that picks the best frames from each of them
+- [`#133`](https://github.com/miniscope/mio/pull/133), [`#155`](https://github.com/miniscope/mio/pull/155)
+  Alignment Maps - within a dataset, create an alignment map to align frames between recordings,
+  either by `frame_num` or by timestamps.
+- preserve noise scoring metadata in `_scores.csv` and use to pick frames during stitching
+  
+#### Perf
+
+- [`#155`](https://github.com/miniscope/mio/pull/155) - Vectorized black area detection
+
+#### Removed
+
+- [`#155`](https://github.com/miniscope/mio/pull/155) - Inter-frame mean squared error noise detection, unused.
+
+## 0.9
+
+### 0.9.0 - 2026-01-27 - Batch device update, NTP sync, driver import fix
+
+#### New features
+- [`#140`](https://github.com/miniscope/mio/pull/140) - Batch upload device parameters via CLI (`mio update -b`)
+- [`#142`](https://github.com/miniscope/mio/pull/142) - Add NTP time synchronization. Optional dependency - install with `pip install mio[ntp]`
+- [`#147`](https://github.com/miniscope/mio/pull/147) - `buffer_npix` is now a property on `StreamDevConfig`
+
+#### Bugfixes
+- [`#137`](https://github.com/miniscope/mio/pull/137) - Fix reconstructed frame index error in `mio stream`
+- [`#148`](https://github.com/miniscope/mio/pull/148) - Make OpalKelly driver import optional so CLI works without device drivers
+
+#### Maintenance
+- [`#149`](https://github.com/miniscope/mio/pull/149) - Pin numpy <2.0 and remove deprecated ruff rules
+- Exclude Python 3.13 on Windows from test matrix, fix docs build errors
+
+## 0.8
+
+### 0.8.1 - 2025-09-25 - Bugfix for frame reconstruction, CLI updates, more metadata for `stream`
+
+#### New features
+- [`#93`](https://github.com/Aharoni-Lab/mio/pull/93) - Add `mio config list` to display available configs
+- [`#103`](https://github.com/Aharoni-Lab/mio/pull/103) - Add `mio hash` to cli to hash video files
+- [`#136`](https://github.com/Aharoni-Lab/mio/pull/136) - Add runtime metadata fields for later video repair
+
+#### Bugfixes
+- [`#136`](https://github.com/Aharoni-Lab/mio/pull/136) - Fix buffer misalignment during frame reconstruction
+
+### 0.8.0 - 2025-09-19 - Realtime frequency filters for `stream` and test adjustments
+
+#### New Features
+- [`#121`](https://github.com/Aharoni-Lab/mio/pull/121) - Adds optional realtime frequency filtering to `mio stream`. Example usage:  
+  ```bash
+  mio stream capture -c wireless-200px -f remove_stripe_example
+  ```  
+  See the CLI docs for more details.
+
+#### Bugfixes
+- [`#121`](https://github.com/Aharoni-Lab/mio/pull/121) - The FFT/IFFT operation on videos sometimes produced values larger than the maximum of the type (e.g., 255 for `np.uint8`), resulting in bright artifacts. The frequency mask helper method now clips values before returning them to prevent this.
+
+#### Refactors
+- [`#121`](https://github.com/Aharoni-Lab/mio/pull/121) - `FrequencyMaskingConfig` is now a subclass of `MiniscopeConfig, ConfigYAMLMixin`, allowing it to be treated like other configs.
+
+#### Testing
+- [`#132`](https://github.com/Aharoni-Lab/mio/pull/132), [`#134`](https://github.com/Aharoni-Lab/mio/pull/134) - Pin macOS version to `macos-14` due to upstream issues in the Coveralls action.
+- [`#121`](https://github.com/Aharoni-Lab/mio/pull/121) - Add basic tests to ensure the method is invoked via CLI.
+
+
+## 0.7.*
+
+### 0.7.1 - 2025-08-07
+
+#### Bugfix
+
+- [`#125`](https://github.com/Aharoni-Lab/mio/pull/125) - If a device configuration caused the
+  `buffer_npix` method to not match the number of buffers per frame returned by the device,
+  frame headers would be duplicated when sent through the rest of the pipeline,
+  resulting in duplicate rows in the resulting csv file.
+  Behavior was fixed, and the warning was upgrade to a more explicit exception message
+  that is more informative about the nature of the problem
+
+#### Added
+
+- [`#125`](https://github.com/Aharoni-Lab/mio/pull/125) - the `BufferedCSVWriter` class now
+  takes an explicit list of values to use as the headers, and accepts dicts for rows that
+  match those headers. this makes for explicit alignment in produced tables,
+  ignoring extra values and filling missing values.
+- [`#117`](https://github.com/Aharoni-Lab/mio/pull/117) - A {class}`mio.plots.VideoPlotter`
+  class was added to display a list of videos together
+
+#### Refactor
+
+- [`#116`](https://github.com/Aharoni-Lab/mio/pull/116) - Continuing the process of
+  splitting up the {class}`mio.stream_daq.StreamDaq` class, the method for
+  iterating over an arbitrary-sized input buffer from a device, concatenating it,
+  and splitting it into buffers according to some `preamble` bytestring
+  was split into a {func}`mio.stream_daq.iter_buffers` generator function,
+  where the binary source of devices is now any iterator that yields bytestrings.
+  Corresponding `__iter__` methods were added to {class}`mio.devices.opalkelly.okDev`.
+
+#### Testing
+
+- [`#125`](https://github.com/Aharoni-Lab/mio/pull/125) - Added a performance test with a generous
+  baseline to ensure that the streamdaq runs without significant delays.
+
+### 0.7.0 - 2025-07-21 - Processing Module & Video Encoding Fixes
 PRs: [`#83`](https://github.com/Aharoni-Lab/mio/pull/83), [`#94`](https://github.com/Aharoni-Lab/mio/pull/94), [`#97`](https://github.com/Aharoni-Lab/mio/pull/97), [`#99`](https://github.com/Aharoni-Lab/mio/pull/99), [`#112`](https://github.com/Aharoni-Lab/mio/pull/112)
 #### Changes
 - **Added video processing (denoising) module for neural recordings.** This module is currently for offline use with video files. Real-time integration with `streamDaq` is planned for a future update.

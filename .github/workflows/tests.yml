@@ -19,19 +19,33 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['ubuntu-latest', 'windows-latest', 'macos-latest']
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        os: ['ubuntu-latest', 'windows-latest', 'macos-14']
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        exclude:
+          - os: 'windows-latest'
+            python-version: "3.13"
+          - os: 'windows-latest'
+            python-version: "3.14"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
+          cache-dependency-path: pylock.toml
+
+      - name: Cache Venv
+        uses: actions/cache@v5
+        with:
+          path: '.venv'
+          key: ${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('pylock.toml') }}
 
       - name: Install dependencies
-        run: pip install -e .[tests] pytest-md
+        run: |
+          python -m pip install pdm
+          pdm install --with tests
       
       - name: show runner.os
         run: echo ${{ runner.os }}
@@ -46,22 +60,26 @@ jobs:
 
       - name: Install FFmpeg on Ubuntu
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
       - name: Run tests
-        uses: pavelzw/pytest-action@v2
-        with:
-          verbose: true
-          emoji: false
-          job-summary: true
+        run: pdm run test
 
       - name: Report to coveralls
+        id: coverage-report
+        continue-on-error: true
         uses: coverallsapp/github-action@v2
         with:
           flag-name: run-${{ join(matrix.*, '-') }}
           parallel: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # don't fail job if coverage reporting fails
+      - run: echo "OK"
+        if: job.steps.coverage-report.status == failure()
 
   coverage:
     name: Report coverage
@@ -70,7 +88,13 @@ jobs:
     needs: test
     steps:
       - name: Complete Coveralls report
+        id: coverage-finish
+        continue-on-error: true
         uses: coverallsapp/github-action@v2
         with:
           parallel-finished: true
+
+      # don't fail job if coverage reporting fails
+      - run: echo "OK"
+        if: job.steps.coverage-finish.status == failure()
 

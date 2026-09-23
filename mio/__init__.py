@@ -3,21 +3,12 @@ I/O SDK for UCLA Miniscopes
 """
 
 from importlib import metadata
-from pathlib import Path
 
 from mio.logging import init_logger
-from mio.models.config import Config
-
-BASE_DIR = Path(__file__).parent.resolve()
-DATA_DIR = BASE_DIR / "data"
-CONFIG_DIR = DATA_DIR / "config"
-DEVICE_DIR = BASE_DIR / "devices"
+from mio.models.config import get_config
 
 __all__ = [
-    "BASE_DIR",
-    "DATA_DIR",
-    "CONFIG_DIR",
-    "Config",
+    "get_config",
     "init_logger",
 ]
 

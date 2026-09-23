@@ -6,20 +6,19 @@ import logging
 import multiprocessing as mp
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Optional, Union
 
 from rich.logging import RichHandler
 
-from mio.models.config import LOG_LEVELS, Config
+from mio.models.config import LOG_LEVELS, get_config
 
 
 def init_logger(
     name: str,
-    log_dir: Union[Optional[Path], bool] = None,
-    level: Optional[LOG_LEVELS] = None,
-    file_level: Optional[LOG_LEVELS] = None,
-    log_file_n: Optional[int] = None,
-    log_file_size: Optional[int] = None,
+    log_dir: Path | None | bool = None,
+    level: LOG_LEVELS | None = None,
+    file_level: LOG_LEVELS | None = None,
+    log_file_n: int | None = None,
+    log_file_size: int | None = None,
 ) -> logging.Logger:
     """
     Make a logger.
@@ -32,20 +31,20 @@ def init_logger(
             and indicate what they are logging for, eg. ``mio.sdcard``
             and don't contain metadata like timestamps, etc. (which are in the logs)
         log_dir (:class:`pathlib.Path`): Directory to store file-based logs in. If ``None``,
-            get from :class:`.Config`. If ``False`` , disable file logging.
+            get from :class:`~.mio.models.config.Config`. If ``False`` , disable file logging.
         level (:class:`.LOG_LEVELS`): Level to use for stdout logging. If ``None`` ,
-            get from :class:`.Config`
+            get from :class:`~.mio.models.config.Config`
         file_level (:class:`.LOG_LEVELS`): Level to use for file-based logging.
-             If ``None`` , get from :class:`.Config`
+             If ``None`` , get from :class:`~.mio.models.config.Config`
         log_file_n (int): Number of rotating file logs to use.
-            If ``None`` , get from :class:`.Config`
+            If ``None`` , get from :class:`~.mio.models.config.Config`
         log_file_size (int): Maximum size of logfiles before rotation.
-            If ``None`` , get from :class:`.Config`
+            If ``None`` , get from :class:`~.mio.models.config.Config`
 
     Returns:
         :class:`logging.Logger`
     """
-    config = Config()
+    config = get_config()
     if log_dir is None:
         log_dir = config.log_dir
     if level is None:

@@ -7,6 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 from importlib.metadata import version as _version
+import logging
 import sys
 from unittest.mock import Mock
 
@@ -81,6 +82,57 @@ graphviz_output_format = "svg"
 # Mock imports for packages we don't have yet - this one is
 # for opal kelley stuff we need to figure out the licensing for
 autodoc_mock_imports = ["routine"]
+autodoc_pydantic_model_show_json = False
+autodoc_pydantic_model_show_json_error_strategy = "coerce"
 
 # todo
 todo_include_todos = True
+
+
+class FuckTheSphinxFiltersFilter(logging.Filter):
+    """
+    A filter that goes like "fuck the sphinx logging filters that ignores our warning filters"
+
+    Use this whenever there are warnings that cause CI to fail but you can't actually
+    do normal python things to suppress the warnings because
+    """
+
+    def filter(self, record: logging.LogRecord):
+        # the pandera Config thing gets indexed multiple times but we actually don't care!
+        if (
+            hasattr(record, "getMessage")
+            and "pandera.api.dataframe.model.Config" in record.getMessage()
+        ):
+            return False
+
+        return True
+
+
+def _no_attribute_fallback_for_annotations():
+    """
+    Stop type annotations in signatures from cross-referencing unrelated *attributes*.
+    e.g. a `type[T]` annotation starts looking around for things named "type"
+    rather than looking for builtins.type
+    """
+    from sphinx.domains.python import PythonDomain
+
+    _resolve_xref = PythonDomain.resolve_xref
+
+    def resolve_xref(self, env, fromdocname, builder, typ, target, node, contnode):
+        if typ == "class":
+            args = (env, node.get("py:module"), node.get("py:class"), target)
+            searchmode = 1 if node.hasattr("refspecific") else 0
+            if not self.find_obj(*args, "class", searchmode) and not self.find_obj(
+                *args, "data", searchmode
+            ):
+                # return unresolved so intersphinx gets a shot at it (eg. builtin ``type``)
+                return None
+        return _resolve_xref(self, env, fromdocname, builder, typ, target, node, contnode)
+
+    PythonDomain.resolve_xref = resolve_xref
+
+
+def setup(app):
+    logger = logging.getLogger("sphinx")
+    logger.filters.insert(0, FuckTheSphinxFiltersFilter())
+    _no_attribute_fallback_for_annotations()

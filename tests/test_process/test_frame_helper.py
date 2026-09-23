@@ -1,14 +1,15 @@
+import sys
+from enum import StrEnum
+from pprint import pformat
+
 import cv2
-import yaml
 import numpy as np
 import pytest
-import sys
-from enum import Enum
-from pprint import pformat
+import yaml
 from pydantic import BaseModel
 
-from mio.models.process import DenoiseConfig, NoisePatchConfig
-from mio.process.frame_helper import InvalidFrameDetector
+from mio.models.process import BlackAreaDetectorConfig, DenoiseConfig, NoisePatchConfig
+from mio.process.frame_helper import BlackAreaDetector, InvalidFrameDetector
 
 from ..conftest import DATA_DIR
 
@@ -18,7 +19,7 @@ else:
     from typing import TypedDict
 
 
-class GroundTruthCategory(str, Enum):
+class GroundTruthCategory(StrEnum):
     check_pattern = "check_pattern"
     blacked_out = "blacked_out"
 
@@ -50,7 +51,6 @@ class NoiseGroundTruth(BaseModel):
     [
         (["gradient"], GroundTruthCategory.check_pattern),
         (["black_area"], GroundTruthCategory.blacked_out),
-        (["mean_error"], GroundTruthCategory.check_pattern),
     ],
 )
 def test_noisy_frame_detection(video, ground_truth, noise_detection_method, noise_category):
@@ -58,25 +58,15 @@ def test_noisy_frame_detection(video, ground_truth, noise_detection_method, nois
     Contrast method of noise detection should correctly label frames corrupted
     by speckled noise
     """
-    if "gradient" in noise_detection_method:
-        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_example")
-    elif "mean_error" in noise_detection_method:
-        if "extended" in video:
-            # FIXME: resolve this before merging `feat-preprocess` to `main`
-            pytest.xfail(
-                "Bug in comparison to previous frames when first frame is noisy, "
-                "see https://github.com/Aharoni-Lab/mio/pull/97"
-            )
-        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_example_mean_error")
-    elif "black_area" in noise_detection_method:
-        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_example")
+    if "gradient" in noise_detection_method or "black_area" in noise_detection_method:
+        global_config: DenoiseConfig = DenoiseConfig.from_id("denoise_noise_detection_test")
     else:
         raise ValueError("Invalid noise detection method")
 
     config: NoisePatchConfig = global_config.noise_patch
     config.method = noise_detection_method
 
-    with open(ground_truth, "r") as yfile:
+    with open(ground_truth) as yfile:
         expected = NoiseGroundTruth(**yaml.safe_load(yfile))
 
     if noise_category not in expected.frames:
@@ -122,3 +112,30 @@ def test_noisy_frame_detection(video, ground_truth, noise_detection_method, nois
     )
     extra_frames = set(detected_frame_indices) - all_expected
     assert extra_frames == set(), f"Detected extra, non-noise frames as noisy: {extra_frames}"
+
+
+@pytest.mark.parametrize(
+    "min_rows,expected_noisy",
+    [
+        (1, True),  # default: any flagged row triggers detection
+        (5, True),  # exactly 5 noisy rows meets the threshold
+        (10, False),  # only 5 noisy rows, below threshold of 10
+    ],
+)
+def test_black_area_min_rows(min_rows, expected_noisy):
+    """min_rows controls how many flagged rows are needed to mark a frame as invalid."""
+    # Create a 50x50 frame with 5 rows of consecutive zeros (noisy) and the rest bright
+    frame = np.ones((50, 50), dtype=np.uint8) * 128
+    for row in range(5):
+        frame[row, :30] = 0  # 30 consecutive black pixels in rows 0-4
+
+    config = BlackAreaDetectorConfig(
+        consecutive_threshold=10,
+        value_threshold=0,
+        min_rows=min_rows,
+    )
+    detector = BlackAreaDetector(config)
+    is_noisy, mask = detector.find_invalid_area(frame)
+    assert (
+        is_noisy == expected_noisy
+    ), f"min_rows={min_rows}: expected noisy={expected_noisy}, got {is_noisy}"

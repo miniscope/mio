@@ -1,10 +1,11 @@
 import os
-from pathlib import Path
-from typing import Union, Callable
+from collections.abc import Callable
 from datetime import datetime
+from pathlib import Path
 
 import pytest
 import yaml
+from _pytest.monkeypatch import MonkeyPatch
 
 from mio.models.mixins import ConfigYAMLMixin
 
@@ -15,30 +16,18 @@ CONFIG_DIR = DATA_DIR / "config"
 MOCK_DIR = Path(__file__).parent / "mock"
 
 
-def pytest_sessionstart(session):
-    """
-    Allow coverage to handle multiprocessing.
-
-    References:
-        https://pytest-cov.readthedocs.io/en/latest/subprocess-support.html
-    """
-    from pytest_cov.embed import cleanup_on_sigterm
-
-    cleanup_on_sigterm()
-
-
 @pytest.fixture(autouse=True)
-def mock_okdev(monkeypatch):
-    from mio.devices.mocks import okDevMock
-    from mio.devices import opalkelly
-    from mio import stream_daq
+def mock_okdev(monkeypatch: MonkeyPatch) -> None:
+    from mio.devices.stream import nodes
+    from mio.interfaces import opalkelly
+    from mio.interfaces.mocks import okDevMock
 
     monkeypatch.setattr(opalkelly, "okDev", okDevMock)
-    monkeypatch.setattr(stream_daq, "okDev", okDevMock)
+    monkeypatch.setattr(nodes, "okDev", okDevMock)
 
 
 @pytest.fixture(scope="session", autouse=True)
-def mock_config_source(monkeypatch_session):
+def mock_config_source(monkeypatch_session: MonkeyPatch) -> None:
     """
     Add the `tests/data/config` directory to the config sources for the entire testing session
     """
@@ -51,15 +40,32 @@ def mock_config_source(monkeypatch_session):
     monkeypatch_session.setattr(ConfigYAMLMixin, "config_sources", classmethod(_config_sources))
 
 
+@pytest.fixture(autouse=True)
+def set_log_levels(set_global_yaml: Callable[[dict], None]) -> None:
+    from mio.models.config import get_config
+
+    set_global_yaml({"logs": {"level": "ERROR"}})
+    config = get_config()
+    config.logs.level = "ERROR"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def set_matplotlib_backend() -> None:
+    """Use headless agg backend during tests"""
+    import matplotlib
+
+    matplotlib.use("agg")
+
+
 @pytest.fixture()
-def set_okdev_input(monkeypatch):
+def set_okdev_input(monkeypatch: MonkeyPatch) -> Callable[[str | Path], None]:
     """
-    closure fixture to set the environment variable used by StreamDaq to set the
+    closure fixture to set the environment variable used by StreamDevice to set the
     okDev data source
     """
 
-    def _set_okdev_input(file: Union[str, Path]):
-        from mio.devices.mocks import okDevMock
+    def _set_okdev_input(file: str | Path) -> None:
+        from mio.interfaces.mocks import okDevMock
 
         monkeypatch.setattr(okDevMock, "DATA_FILE", file)
         os.environ["PYTEST_OKDEV_DATA_FILE"] = str(file)
@@ -68,13 +74,13 @@ def set_okdev_input(monkeypatch):
 
 
 @pytest.fixture()
-def config_override(tmp_path) -> Callable[[Path, dict], Path]:
+def config_override(tmp_path: Path) -> Callable[[Path, dict], Path]:
     """
     Create a config file with some of its properties overridden
     """
 
     def _config_override(path: Path, config: dict) -> Path:
-        with open(path, "r") as f:
+        with open(path) as f:
             data = yaml.safe_load(f)
         data.update(config)
         out_path = tmp_path / f"config_override_{datetime.now().strftime('%H_%M_%S_%f')}.yml"

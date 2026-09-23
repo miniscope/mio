@@ -1,13 +1,12 @@
 import logging
+import multiprocessing as mp
+import re
+import warnings
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+from time import sleep
 
 import pytest
-from pathlib import Path
-import re
-import multiprocessing as mp
-from time import sleep
-import warnings
-
-from logging.handlers import RotatingFileHandler
 from rich.logging import RichHandler
 
 from mio.logging import init_logger
@@ -41,7 +40,7 @@ def test_init_logger(capsys, tmp_path):
     captured = capsys.readouterr()
     assert "WARNING" in captured.out
 
-    with open(log_file, "r") as lfile:
+    with open(log_file) as lfile:
         log_str = lfile.read()
     assert "WARNING" in log_str
 
@@ -49,7 +48,7 @@ def test_init_logger(capsys, tmp_path):
     logger.info(info_msg)
     captured = capsys.readouterr()
     assert "INFO" in captured.out
-    with open(log_file, "r") as lfile:
+    with open(log_file) as lfile:
         log_str = lfile.read()
     assert "INFO" not in log_str
 
@@ -68,10 +67,11 @@ def test_nested_loggers(capsys, tmp_path):
 
     root_logger = logging.getLogger("mio")
 
-    warnings.warn(f"FILES IN LOG DIR: {list(log_dir.glob('*'))}")
-    warnings.warn(f"ROOT LOGGER HANDLERS: {root_logger.handlers}")
+    warnings.warn(f"FILES IN LOG DIR: {list(log_dir.glob('*'))}", stacklevel=2)
+    warnings.warn(f"ROOT LOGGER HANDLERS: {root_logger.handlers}", stacklevel=2)
 
-    assert len(root_logger.handlers) == 2
+    # the 2 we expect, and 2 from pytest for log capturing
+    assert len(root_logger.handlers) == 4
     assert len(parent.handlers) == 0
     assert len(child.handlers) == 0
 
@@ -116,7 +116,8 @@ def test_init_logger_from_config(
         assert dotenv_logger.level == level_name_map.get(level)
 
     assert len(dotenv_logger.handlers) == 0
-    assert len(root_logger.handlers) == 2
+    # the 2 we expect, and 2 from pytest for log capturing
+    assert len(root_logger.handlers) == 4
     file_handlers = [h for h in root_logger.handlers if isinstance(h, RotatingFileHandler)]
     stream_handlers = [h for h in root_logger.handlers if isinstance(h, RichHandler)]
     assert len(file_handlers) == 1
@@ -132,7 +133,7 @@ def test_init_logger_from_config(
         assert stream_handler.level == level_name_map.get(level)
 
 
-def _mp_function(name, path):
+def _mp_function(name, path) -> None:
     logger = init_logger(name, log_dir=path, level="DEBUG", file_level="DEBUG")
     for i in range(100):
         sleep(0.001)
@@ -143,10 +144,13 @@ def test_multiprocess_logging(capfd, tmp_path):
     """
     We should be able to handle logging from multiple processes
     """
+    # 3.14 changes default to forkserver,
+    # use `spawn` explicitly until we update the logging to match noob's new version
+    ctx = mp.get_context("spawn")
 
-    proc_1 = mp.Process(target=_mp_function, args=("proc_1", tmp_path))
-    proc_2 = mp.Process(target=_mp_function, args=("proc_2", tmp_path))
-    proc_3 = mp.Process(target=_mp_function, args=("proc_1.proc_3", tmp_path))
+    proc_1 = ctx.Process(target=_mp_function, args=("proc_1", tmp_path))
+    proc_2 = ctx.Process(target=_mp_function, args=("proc_2", tmp_path))
+    proc_3 = ctx.Process(target=_mp_function, args=("proc_1.proc_3", tmp_path))
 
     proc_1.start()
     proc_2.start()
@@ -164,12 +168,12 @@ def test_multiprocess_logging(capfd, tmp_path):
     assert "mio.log" in logs
     assert len(logs) == 4
 
-    for logfile, logs in logs.items():
+    for logfile, lines in logs.items():
 
         # main logfile does not receive messages
         if logfile == "mio.log":
-            assert len(logs.split("\n")) == 1
+            assert len(lines.split("\n")) == 1
         else:
-            assert len(logs.split("\n")) == 101
+            assert len(lines.split("\n")) == 101
 
     assert len(re.findall("DEBUG", stdout.out)) == 300
