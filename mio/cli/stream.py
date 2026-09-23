@@ -10,7 +10,7 @@ from typing import Literal
 import click
 
 from mio.cli.common import ConfigIDOrPath
-from mio.devices.gs.daq import GSStreamDaq
+from mio.devices.msus.daq import MSUSStreamDevice
 from mio.devices.stream import StreamDevice
 from mio.devices.stream.config import StreamDevConfig
 from mio.models.process import FrequencyMaskingConfig
@@ -94,10 +94,10 @@ def _capture_options(fn: Callable) -> Callable:
 @stream.command()
 @_common_options
 @_capture_options
-@click.option("-d", "--device", type=click.Choice(["streamdaq", "gs"]), default="streamdaq")
+@click.option("-d", "--device", type=click.Choice(["streamdaq", "msus"]), default="streamdaq")
 def capture(
     config: Path,
-    device: Literal["streamdaq", "gs"],
+    device: Literal["streamdaq", "msus"],
     freq_mask_config: Path | None,
     output: Path | None,
     okwarg: dict | None,
@@ -123,7 +123,7 @@ def capture(
         daq_inst = StreamDevice(config=config)
     else:
         # TODO: get the right config class here
-        daq_inst = GSStreamDaq(device_config=config)
+        daq_inst = MSUSStreamDevice(device_config=config)
 
     okwargs = dict(okwarg)
 

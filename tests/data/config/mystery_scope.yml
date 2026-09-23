@@ -1,5 +1,5 @@
 id: MSUS-test
-mio_model: mio.devices.gs.config.GSDevConfig
+mio_model: mio.devices.msus.config.GSDevConfig
 mio_version: "v5.0.0"
 
 # capture device. "OK" (Opal Kelly) or "UART"

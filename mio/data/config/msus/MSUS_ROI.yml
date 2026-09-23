@@ -1,7 +1,7 @@
 # https://miniscope-io.readthedocs.io/en/latest/api/models/buffer.html#mio.models.buffer.BufferHeader.frame_buffer_count
 
 id: MSUS_ROI
-mio_model: mio.devices.gs.config.GSDevConfig
+mio_model: mio.devices.msus.config.GSDevConfig
 mio_version: "v5.0.0"
 
 # capture device. "OK" (Opal Kelly) or "UART"

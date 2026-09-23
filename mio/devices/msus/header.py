@@ -9,12 +9,12 @@ import numpy as np
 from mio.models.stream import StreamBufferHeader, StreamBufferHeaderFormat
 
 if TYPE_CHECKING:
-    from mio.devices.gs.config import GSDevConfig
+    from mio.devices.msus.config import MSUSDevConfig
 
 
 def buffer_to_array(buffer: bytes) -> np.ndarray:
     """
-    Given the GS's "12-bit" pixel format,
+    Given the MSUS's "12-bit" pixel format,
     where 10-bit pixels are flanked by two pad values
     e.g. (``1xxxxxxxxxx0``)
 
@@ -44,7 +44,7 @@ def buffer_to_array(buffer: bytes) -> np.ndarray:
 
 def buffer_to_array2(buffer: bytes) -> np.ndarray:
     """
-    Given the GS's "12-bit" pixel format,
+    Given the MSUS's "12-bit" pixel format,
     where 10-bit pixels are flanked by two pad values
     e.g. (``1xxxxxxxxxx0``)
 
@@ -72,9 +72,9 @@ def buffer_to_array2(buffer: bytes) -> np.ndarray:
     return packed_8bit
 
 
-class GSBufferHeader(StreamBufferHeader):
+class MSUSBufferHeader(StreamBufferHeader):
     """
-    Header at the start of GS buffers -
+    Header at the start of MSUS buffers -
     Dummy [0-11 32 bit words]
     Preamble [12th 32 bit word] ~ 0x12345678 (LSB = 0x78563412)
     Header [12th 32 bit word]
@@ -93,10 +93,10 @@ class GSBufferHeader(StreamBufferHeader):
 
     @classmethod
     def from_buffer(
-        cls, buffer: bytes, header_fmt: "GSBufferHeaderFormat", config: "GSDevConfig"
+        cls, buffer: bytes, header_fmt: "MSUSBufferHeaderFormat", config: "MSUSDevConfig"
     ) -> tuple[Self, np.ndarray]:
         """Split buffer into a :class:`.GSBufferHeader` and a 1D, 16-bit pixel array."""
-        # _logger = init_logger("gs")
+        # _logger = init_logger("msus")
         header_start = len(config.preamble)
         header_end = header_start + ((header_fmt.header_length) * 4)  # = 44 ((384-32)/32)  = 11
         # _logger.debug("HEADER LEN: %s, expected: %s", len(buffer), header_fmt.header_length * 4)
@@ -110,7 +110,7 @@ class GSBufferHeader(StreamBufferHeader):
         return header, payload
 
 
-class GSBufferHeaderFormat(StreamBufferHeaderFormat):
-    """Positions of header fields in GS headers"""
+class MSUSBufferHeaderFormat(StreamBufferHeaderFormat):
+    """Positions of header fields in MSUS headers"""
 
     pass

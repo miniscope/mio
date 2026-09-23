@@ -7,8 +7,8 @@ import numpy as np
 from bitstring import Bits
 
 from mio import init_logger
-from mio.devices.gs.config import GSDevConfig
-from mio.devices.gs.header import GSBufferHeader, GSBufferHeaderFormat
+from mio.devices.msus.config import MSUSDevConfig
+from mio.devices.msus.header import MSUSBufferHeader, MSUSBufferHeaderFormat
 from mio.devices.opalkelly import okDev
 from mio.stream_daq import iter_buffers
 from mio.types import ConfigSource
@@ -210,13 +210,13 @@ def frame_to_naneye_buffers(
     buffer_bytes: list[bytes] = [np.packbits(arr.flatten()).tobytes() for arr in split]
 
     # create headers
-    fmt = GSBufferHeaderFormat.from_id("gs-buffer-header")
+    fmt = MSUSBufferHeaderFormat.from_id("msus-buffer-header")
     headers = [np.zeros(fmt.header_length, dtype=np.uint32) for _ in range(len(buffer_bytes))]
     for i in range(len(buffer_bytes)):
         headers[i][fmt.buffer_count] = i
 
     # concat preamble and dummy words and cast to bytes
-    config = GSDevConfig.from_id("MSUS-test")
+    config = MSUSDevConfig.from_id("MSUS-test")
     header_bytes = [config.preamble + h.view(np.uint8).tobytes() for h in headers]
 
     # combine header and pixel buffers, add dummy suffix
@@ -227,17 +227,17 @@ def frame_to_naneye_buffers(
 
 # the following is for dealing with the creation of binary data
 class _BinaryDaq:
-    buffer_header_cls: ClassVar = GSBufferHeader
+    buffer_header_cls: ClassVar = MSUSBufferHeader
 
     def __init__(
         self,
-        device_config: GSDevConfig | ConfigSource,
-        header_fmt: GSBufferHeaderFormat | ConfigSource = "gs-buffer-header",
+        device_config: MSUSDevConfig | ConfigSource,
+        header_fmt: MSUSBufferHeaderFormat | ConfigSource = "msus-buffer-header",
     ):
-        self.config: GSDevConfig = GSDevConfig.from_any(device_config)
-        self.header_fmt = GSBufferHeaderFormat.from_any(header_fmt)
+        self.config: MSUSDevConfig = MSUSDevConfig.from_any(device_config)
+        self.header_fmt = MSUSBufferHeaderFormat.from_any(header_fmt)
         self.preamble = self.config.preamble
-        self.logger = init_logger("gs.BinaryDaq")
+        self.logger = init_logger("msus.BinaryDaq")
 
     def capture(self, binary_output: Path, n_frames: int = 15, read_size: int = 2048) -> None:
         """Change n_frames to capture the frames you want."""
@@ -249,7 +249,7 @@ class _BinaryDaq:
         frames_seen = set()
 
         for buf in iter_buffers(dev, preamble=pre, pre_first=True, capture_binary=binary_output):
-            header, payload = GSBufferHeader.from_buffer(buf, self.header_fmt, self.config)
+            header, payload = MSUSBufferHeader.from_buffer(buf, self.header_fmt, self.config)
             frames_seen.add(int(header.frame_num))
             self.logger.info(header)
             if len(frames_seen) > n_frames:

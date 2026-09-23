@@ -1,13 +1,13 @@
 from mio.stream_daq import StreamDaq
 
-from mio.devices.gs.config import GSDevConfig
+from mio.devices.msus.config import MSUSDevConfig
 from mio.utils import hash_file
 
 from ..conftest import DATA_DIR
 
 
 def test_binary_output(set_okdev_input, tmp_path):
-    daqConfig = GSDevConfig.from_id("MSUS-test")
+    daqConfig = MSUSDevConfig.from_id("MSUS-test")
 
     data_file = DATA_DIR / "gs_test_raw.bin"
     set_okdev_input(data_file)

@@ -3,25 +3,25 @@ from collections import defaultdict
 import numpy as np
 import pytest
 
-from mio.devices.gs import testing
-from mio.devices.gs.config import GSDevConfig
-from mio.devices.gs.header import GSBufferHeader, GSBufferHeaderFormat, buffer_to_array
+from mio.devices.msus import testing
+from mio.devices.msus.config import MSUSDevConfig
+from mio.devices.msus.header import MSUSBufferHeader, MSUSBufferHeaderFormat, buffer_to_array
 
 
 def test_format_headers_synthetic():
     """We can split a buffer into a (header, 1D pixel array) pairs"""
-    format = GSBufferHeaderFormat.from_id("gs-buffer-header")
-    config = GSDevConfig.from_id("MSUS-test")
+    format = MSUSBufferHeaderFormat.from_id("msus-buffer-header")
+    config = MSUSDevConfig.from_id("MSUS-test")
 
     frame = testing.patterned_frame(pattern="sequence")
     buffers = testing.frame_to_naneye_buffers(frame)
 
     for i, buffer in enumerate(buffers):
-        header, pixels = GSBufferHeader.from_buffer(buffer, header_fmt=format, config=config)
+        header, pixels = MSUSBufferHeader.from_buffer(buffer, header_fmt=format, config=config)
 
         # the only thing in out headers for now is the frame count,
         # but we should have recovered that correctly
-        assert isinstance(header, GSBufferHeader)
+        assert isinstance(header, MSUSBufferHeader)
         assert header.buffer_count == i
 
         # all the buffers should just be a sequence of numbers from 0 to 2**10,
@@ -36,12 +36,12 @@ def test_format_headers_synthetic():
 
 
 @pytest.mark.skip("Test doesn't do anything - make it actually test something!")
-def test_format_headers_raw(gs_raw_buffers):
-    format = GSBufferHeaderFormat.from_id("gs-buffer-header")
-    config = GSDevConfig.from_id("MSUS")
+def test_format_headers_raw(msus_raw_buffers):
+    format = MSUSBufferHeaderFormat.from_id("msus-buffer-header")
+    config = MSUSDevConfig.from_id("MSUS")
 
-    for buffer in gs_raw_buffers:
-        header, pixels = GSBufferHeader.from_buffer(buffer, header_fmt=format, config=config)
+    for buffer in msus_raw_buffers:
+        header, pixels = MSUSBufferHeader.from_buffer(buffer, header_fmt=format, config=config)
 
     # todo: confirm the structure of header and pixels (HINT: see test_format_frames)
     # compare to what you might know: pixel values are between [], or are they the same?
@@ -55,13 +55,13 @@ def test_format_headers_raw(gs_raw_buffers):
     # but maybe generate the .avi file from the binary input
 
 
-def test_buffer_npix(gs_raw_buffers):
-    format = GSBufferHeaderFormat.from_id("gs-buffer-header")
-    config = GSDevConfig.from_id("MSUS")
+def test_buffer_npix(msus_raw_buffers):
+    format = MSUSBufferHeaderFormat.from_id("msus-buffer-header")
+    config = MSUSDevConfig.from_id("MSUS")
     frame_buffers = defaultdict(list)
 
-    for _, buffer in enumerate(gs_raw_buffers):
-        header, pixels = GSBufferHeader.from_buffer(buffer, header_fmt=format, config=config)
+    for _, buffer in enumerate(msus_raw_buffers):
+        header, pixels = MSUSBufferHeader.from_buffer(buffer, header_fmt=format, config=config)
         frame_buffers[header.frame_num].append(pixels)
 
     # discard first and last which may be incomplete in the sample

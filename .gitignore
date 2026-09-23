@@ -169,6 +169,7 @@ tests/data/stitch/*_timestamps.csv
 tests/data/stitch/*_noise.csv
 tests/data/stitch/*_scores.csv
 tests/data/stitch/*_stitched*
+tmp/
 
 noob_config.yaml
 

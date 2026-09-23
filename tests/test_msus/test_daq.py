@@ -5,10 +5,10 @@ import pytest
 from bitstring import Bits
 from mio.stream_daq import iter_buffers
 
-from mio.devices.gs.config import GSDevConfig
-from mio.devices.gs.daq import format_frame
-from mio.devices.gs.header import GSBufferHeader, GSBufferHeaderFormat
-from mio.devices.gs.testing import (
+from mio.devices.msus.config import MSUSDevConfig
+from mio.devices.msus.daq import format_frame
+from mio.devices.msus.header import MSUSBufferHeader, MSUSBufferHeaderFormat
+from mio.devices.msus.testing import (
     frame_to_naneye_buffers,
     patterned_frame,
 )
@@ -23,8 +23,8 @@ def test_format_frames():
     processed by parsing the headers (tested separately in `test_header`),
     and reassemble it to the original frame.
     """
-    format = GSBufferHeaderFormat.from_id("gs-buffer-header")
-    config = GSDevConfig.from_id("MSUS-test")
+    format = MSUSBufferHeaderFormat.from_id("msus-buffer-header")
+    config = MSUSDevConfig.from_id("MSUS-test")
 
     frame = patterned_frame(
         width=config.frame_width, height=config.frame_height, pattern="sequential"
@@ -32,7 +32,7 @@ def test_format_frames():
     buffers = frame_to_naneye_buffers(frame)
 
     processed = [
-        GSBufferHeader.from_buffer(buf, header_fmt=format, config=config) for buf in buffers
+        MSUSBufferHeader.from_buffer(buf, header_fmt=format, config=config) for buf in buffers
     ]
     pixels = [p[1] for p in processed]
 
@@ -40,17 +40,17 @@ def test_format_frames():
     assert np.array_equal(frame, reconstructed)
 
 
-def test_format_headers_raw(gs_raw_buffers):
+def test_format_headers_raw(msus_raw_buffers):
     """
     Use the fixtures and previously recorded .bin files to test the format_headers method.
     """
-    format = GSBufferHeaderFormat.from_id("gs-buffer-header")
-    config = GSDevConfig.from_id("MSUS-test")
+    format = MSUSBufferHeaderFormat.from_id("msus-buffer-header")
+    config = MSUSDevConfig.from_id("MSUS-test")
 
     frame_buffers = defaultdict(list)
-    for buffer in gs_raw_buffers:
+    for buffer in msus_raw_buffers:
         # this extracts header and pixels
-        header, pixels = GSBufferHeader.from_buffer(buffer, header_fmt=format, config=config)
+        header, pixels = MSUSBufferHeader.from_buffer(buffer, header_fmt=format, config=config)
         # add the pixels value to a list of buffers
         frame_buffers[header.frame_num].append(pixels)
 
@@ -82,16 +82,16 @@ def test_format_frame_with_known_input(binary_input, thresh_low, thresh_high):
     Here we are just testing the *values* of the frames - whether we get
     correct pixel values (or as close as we can verify with such a coarse notion of known input)
     """
-    format = GSBufferHeaderFormat.from_id("gs-buffer-header")
-    config: GSDevConfig = GSDevConfig.from_id("MSUS-test")
+    format = MSUSBufferHeaderFormat.from_id("msus-buffer-header")
+    config: MSUSDevConfig = MSUSDevConfig.from_id("MSUS-test")
 
     iterator = file_iter(binary_input, 2048)
     frame_buffers = defaultdict(list)
 
     # collect pixel buffers by frame
     for buffer in iter_buffers(iterator, Bits(config.preamble)):
-        header, pixels = GSBufferHeader.from_buffer(buffer, header_fmt=format, config=config)
-        header: GSBufferHeader
+        header, pixels = MSUSBufferHeader.from_buffer(buffer, header_fmt=format, config=config)
+        header: MSUSBufferHeader
         frame_buffers[header.frame_num].append(pixels)
 
     # delete the first and last, we assume they are incomplete

@@ -8,16 +8,16 @@ import cv2
 import numpy as np
 
 from mio import init_logger
-from mio.devices.gs.config import GSDevConfig
-from mio.devices.gs.header import GSBufferHeader, GSBufferHeaderFormat
+from mio.devices.msus.config import MSUSDevConfig
+from mio.devices.msus.header import MSUSBufferHeader, MSUSBufferHeaderFormat
+from mio.devices.stream import StreamDevice
 from mio.io import BufferedCSVWriter, VideoWriter
 from mio.plots.headers import StreamPlotter
-from mio.stream_daq import StreamDaq
 from mio.types import ConfigSource
 
 
 # testing here:
-def format_frame(frame_data: list[np.ndarray], config: GSDevConfig) -> np.ndarray:
+def format_frame(frame_data: list[np.ndarray], config: MSUSDevConfig) -> np.ndarray:
     """
     Convert a list of 1D pixel arrays into a full frame, stripping the leading "training" pixels
     """
@@ -33,15 +33,15 @@ def format_frame(frame_data: list[np.ndarray], config: GSDevConfig) -> np.ndarra
     return frame
 
 
-class GSStreamDaq(StreamDaq):
+class MSUSStreamDevice(StreamDevice):
     """Mystery scope daq"""
 
-    buffer_header_cls: ClassVar = GSBufferHeader
+    buffer_header_cls: ClassVar = MSUSBufferHeader
 
     def __init__(
         self,
-        device_config: GSDevConfig | ConfigSource,
-        header_fmt: GSBufferHeaderFormat | ConfigSource = "gs-buffer-header",
+        device_config: MSUSDevConfig | ConfigSource,
+        header_fmt: MSUSBufferHeaderFormat | ConfigSource = "msus-buffer-header",
     ) -> None:
         """
         Constructer for the class.
@@ -61,8 +61,8 @@ class GSStreamDaq(StreamDaq):
 
         super().__init__(device_config, header_fmt)  # initiating parameters of the parent class
         self.logger = init_logger("GSStreamDaq")
-        self.config = GSDevConfig.from_any(device_config)
-        self.header_fmt = GSBufferHeaderFormat.from_any(header_fmt)
+        self.config = MSUSDevConfig.from_any(device_config)
+        self.header_fmt = MSUSBufferHeaderFormat.from_any(header_fmt)
 
         self.preamble = self.config.preamble
 
@@ -84,7 +84,7 @@ class GSStreamDaq(StreamDaq):
     def _handle_frame(
         self,
         image: np.ndarray,
-        header_list: list[GSBufferHeaderFormat],
+        header_list: list[MSUSBufferHeaderFormat],
         show_video: bool,
         writer: VideoWriter | None,
         show_metadata: bool,

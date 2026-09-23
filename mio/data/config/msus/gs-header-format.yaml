@@ -1,5 +1,5 @@
-id: gs-buffer-header
-mio_model: mio.devices.gs.header.GSBufferHeaderFormat
+id: msus-buffer-header
+mio_model: mio.devices.msus.header.GSBufferHeaderFormat
 mio_version: "v5.0.0"
 linked_list: 0
 frame_num: 1

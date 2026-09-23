@@ -281,17 +281,17 @@ def set_config(
 
 
 @pytest.fixture()
-def gs_raw_buffers() -> Generator[bytes, None, None]:
+def msus_raw_buffers() -> Generator[bytes, None, None]:
     from mio.stream_daq import iter_buffers
 
-    from mio.devices.gs.config import GSDevConfig
+    from mio.devices.msus.config import MSUSDevConfig
     from mio.utils import file_iter
 
     from .conftest import DATA_DIR
 
     gs_data = DATA_DIR / "gs_test_raw_15_brightDark.bin"
 
-    config: GSDevConfig = GSDevConfig.from_id("MSUS-test")
+    config: MSUSDevConfig = MSUSDevConfig.from_id("MSUS-test")
 
     file_iterator = file_iter(gs_data, 2048)
 

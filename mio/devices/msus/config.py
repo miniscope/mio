@@ -7,7 +7,7 @@ from pydantic import ConfigDict
 from mio.models.stream import StreamDevConfig
 
 
-class GSDevConfig(StreamDevConfig):
+class MSUSDevConfig(StreamDevConfig):
     """Device config for an unknown, mystery microscope"""
 
     pix_depth: int = 8  # 12 # 12 to 8 bit conversion
