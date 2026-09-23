@@ -172,4 +172,5 @@ tests/data/stitch/*_stitched*
 tmp/
 
 noob_config.yaml
+mio_config.y*ml
 
