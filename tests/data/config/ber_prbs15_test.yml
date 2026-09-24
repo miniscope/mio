@@ -8,10 +8,7 @@ frame_width: 200
 frame_height: 200
 pix_depth: 8
 header_len: 384
-buffer_block_length: 10
-block_size: 512
-num_buffers: 32
-dummy_words: 10
+pix_per_buffer: 5032
 reverse_header_bits: true
 reverse_header_bytes: true
 reverse_payload_bits: true

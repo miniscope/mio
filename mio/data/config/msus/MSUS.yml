@@ -25,10 +25,10 @@ preamble: 0x78563412 # new preamble
 # Incoming Pre-Processed Image format.
 # StreamDaq will calculate buffer size, etc. based on these parameters
 # this should be 320x320x10
-frame_width: 328  # 328 * 12 PP, with the extra 8 coming from the start_of_frame sequence
+frame_width: 320  # 328 * 12 PP, with the extra 8 coming from the start_of_frame sequence
 frame_height: 320 # 320 # 320 lines total, set to the ROI number on the firmware!
 pix_depth: 8 # pixel depth, or, pixel period
-pix_per_buffer:  13120  # 9840 #  ORIGINAL: 10000
+pix_per_buffer:  10000  # 9840 #  ORIGINAL: 10000
 
 # Buffer data format. These have to match the firmware value
 header_len: 384 # 12 * 32 (in bits)
@@ -36,8 +36,8 @@ header_len: 384 # 12 * 32 (in bits)
 # Flags to flip bit/byte order when recovering headers and data. See model document for details.
 reverse_header_bits: False # False
 reverse_header_bytes: False # False
-reverse_payload_bits: False # False
-reverse_payload_bytes: False # False
+reverse_payload_bits: True # False
+reverse_payload_bytes: True # False
 
 adc_scale:
   ref_voltage: 1.1

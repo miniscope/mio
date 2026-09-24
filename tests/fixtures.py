@@ -2,16 +2,19 @@ from collections.abc import Callable, Generator, MutableMapping
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 import tomli_w
 import yaml
 from _pytest.monkeypatch import MonkeyPatch
-from bitstring import Bits
 
 from mio.devices.sdcard.data import SDCardVideo
 from mio.devices.sdcard.device import SDCardDevice
+from mio.devices.stream import StreamBufferHeader, StreamDevConfig
+from mio.devices.stream.nodes import SplitBuffers, trim_or_pad
 from mio.models.config import Config, _global_config_path, set_user_dir
 from mio.models.mixins import ConfigYAMLMixin, YamlDumper
+from mio.utils import file_iter
 
 
 @pytest.fixture
@@ -281,21 +284,33 @@ def set_config(
 
 
 @pytest.fixture()
-def msus_raw_buffers() -> Generator[bytes, None, None]:
-    from mio.devices.msus.config import MSUSDevConfig
-    from mio.stream_daq import iter_buffers
+def msus_raw_buffers(
+    request: pytest.FixtureRequest,
+) -> Generator[tuple[StreamBufferHeader, np.ndarray], None, None]:
+    data_dir = Path(__file__).parent / "data"
+    gs_data = (
+        data_dir / request.param
+        if hasattr(request, "param")
+        else data_dir / "msus_test_raw_15_brightDark.bin"
+    )
 
-    from mio.utils import file_iter
-
-    from .conftest import DATA_DIR
-
-    gs_data = DATA_DIR / "msus_test_raw_15_brightDark.bin"
-
-    config: MSUSDevConfig = MSUSDevConfig.from_id("MSUS-test")
+    config = StreamDevConfig.from_id("MSUS")
 
     file_iterator = file_iter(gs_data, 2048)
 
-    return iter_buffers(file_iterator, Bits(config.preamble))
+    splitter = SplitBuffers(id="splitter", config=config)
+
+    def _iter_buffers() -> Generator[tuple[StreamBufferHeader, np.ndarray], None, None]:
+        for chunk in file_iterator:
+            buffers = splitter.process(chunk)
+            if not isinstance(buffers, list):
+                continue
+            for buffer in buffers:
+                header, pixels = StreamBufferHeader.from_buffer(buffer, config=config)
+                pixels, header = trim_or_pad(buffer=pixels, header=header, config=config)
+                yield header, pixels
+
+    return _iter_buffers()
 
 
 def _flatten(d: dict, parent_key: str = "", separator: str = "__") -> dict:
