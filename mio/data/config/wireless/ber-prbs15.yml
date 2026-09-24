@@ -1,6 +1,6 @@
 id: ber-prbs15
 mio_model: mio.models.stream.StreamDevConfig
-mio_version: "v5.0.0"
+mio_version: "v0.11.0"
 
 # bitstream file to upload to Opal Kelly board
 bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit"
@@ -15,10 +15,7 @@ pix_depth: 8
 
 # Buffer data format. These have to match the firmware value
 header_len: 384 # 12 * 32 (in bits)
-buffer_block_length: 10
-block_size: 512
-num_buffers: 32
-dummy_words: 10
+pix_per_buffer: 5032
 
 # Flags to flip bit/byte order when recovering headers and data. See model document for details.
 reverse_header_bits: True

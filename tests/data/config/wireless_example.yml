@@ -15,9 +15,7 @@ pix_depth: 8
 
 # Buffer data format. These have to match the firmware value
 header_len: 12
-buffer_block_length: 40
-block_size: 512
-num_buffers: 8
+pix_per_buffer: 5032
 
 # Temporary parameter to handle bit polarity. This is not actual LSB so need to fix later.
 LSB: True

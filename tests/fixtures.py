@@ -2,6 +2,7 @@ from collections.abc import Callable, Generator, MutableMapping
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 import tomli_w
 import yaml
@@ -9,8 +10,11 @@ from _pytest.monkeypatch import MonkeyPatch
 
 from mio.devices.sdcard.data import SDCardVideo
 from mio.devices.sdcard.device import SDCardDevice
+from mio.devices.stream import StreamBufferHeader, StreamDevConfig
+from mio.devices.stream.nodes import SplitBuffers, trim_or_pad
 from mio.models.config import Config, _global_config_path, set_user_dir
 from mio.models.mixins import ConfigYAMLMixin, YamlDumper
+from mio.utils import file_iter
 
 
 @pytest.fixture
@@ -277,6 +281,34 @@ def set_config(
 
     monkeypatch.setattr(config, "_config", None)
     return request.getfixturevalue(request.param)
+
+
+@pytest.fixture()
+def msus_pixel_buffers(
+    request: pytest.FixtureRequest,
+) -> Generator[tuple[StreamBufferHeader, np.ndarray], None, None]:
+    data_dir = Path(__file__).parent / "data"
+    gs_data = (
+        data_dir / request.param
+        if hasattr(request, "param")
+        else data_dir / "msus_test_raw_15_brightDark.bin"
+    )
+
+    config = StreamDevConfig.from_id("MSUS")
+    file_iterator = file_iter(gs_data, 2048)
+    splitter = SplitBuffers(id="splitter", config=config)
+
+    def _iter_buffers() -> Generator[tuple[StreamBufferHeader, np.ndarray], None, None]:
+        for chunk in file_iterator:
+            buffers = splitter.process(chunk)
+            if not isinstance(buffers, list):
+                continue
+            for buffer in buffers:
+                header, pixels = StreamBufferHeader.from_buffer(buffer, config=config)
+                pixels, header = trim_or_pad(buffer=pixels, header=header, config=config)
+                yield header, pixels
+
+    return _iter_buffers()
 
 
 def _flatten(d: dict, parent_key: str = "", separator: str = "__") -> dict:

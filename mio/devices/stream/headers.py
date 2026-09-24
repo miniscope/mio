@@ -184,7 +184,7 @@ class StreamBufferHeader(BufferHeader):
             buffer_recv_index=-1,  # will be set later in buffer_to_frame for processed buffers
             buffer_recv_unix_time=time.time(),
         )
-        header_data = StreamBufferHeader.from_sequence(header.astype(int), **runtime_metadata)
+        header_data = cls.from_sequence(header.astype(int), **runtime_metadata)
         header_data.adc_scaling = config.adc_scale
         return header_data, payload
 

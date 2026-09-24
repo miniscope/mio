@@ -3,6 +3,7 @@ The junk drawer my dogs
 """
 
 import hashlib
+from collections.abc import Iterator
 from pathlib import Path
 
 import cv2
@@ -88,3 +89,13 @@ def _format_ranges(indices: list[int] | set[int]) -> list[str]:
 def add_noob_sources() -> list[Path]:
     """Provide the tubes directory so that noob can find it!"""
     return [Path(__file__).parent / "data" / "tubes"]
+
+
+def file_iter(path: Path, read_size: int) -> Iterator[bytes]:
+    """Iterator to read chunks of `read_size` bytes from a file"""
+    with open(path, "rb") as f:
+        while True:
+            data = f.read(read_size)
+            yield data
+            if len(data) != read_size:
+                break
