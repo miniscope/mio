@@ -117,7 +117,6 @@ def capture(
         )
 
     daq_inst = StreamDevice(config=config)
-
     okwargs = dict(okwarg)
 
     if output:

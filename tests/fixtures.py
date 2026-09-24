@@ -284,7 +284,7 @@ def set_config(
 
 
 @pytest.fixture()
-def msus_raw_buffers(
+def msus_pixel_buffers(
     request: pytest.FixtureRequest,
 ) -> Generator[tuple[StreamBufferHeader, np.ndarray], None, None]:
     data_dir = Path(__file__).parent / "data"
@@ -295,9 +295,7 @@ def msus_raw_buffers(
     )
 
     config = StreamDevConfig.from_id("MSUS")
-
     file_iterator = file_iter(gs_data, 2048)
-
     splitter = SplitBuffers(id="splitter", config=config)
 
     def _iter_buffers() -> Generator[tuple[StreamBufferHeader, np.ndarray], None, None]:
