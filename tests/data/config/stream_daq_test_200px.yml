@@ -15,10 +15,7 @@ pix_depth: 8
 
 # Buffer data format. These have to match the firmware value
 header_len: 384 # 12 * 32 (in bits)
-buffer_block_length: 10
-block_size: 512
-num_buffers: 32
-dummy_words: 0
+pix_per_buffer: 5032
 
 # Flags to flip bit/byte order when recovering headers and data. See model document for details.
 reverse_header_bits: True

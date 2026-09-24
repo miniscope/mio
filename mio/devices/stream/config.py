@@ -146,9 +146,11 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
     preamble: bytes
     header_len: int
     pix_depth: int = 8
-    buffer_block_length: int
-    block_size: int
-    num_buffers: int
+    pix_per_buffer: int
+    """
+    The *maximum* number of pixels per buffer, 
+    (with one remainder buffer in case total pixels are not divisible by this)
+    """
     reverse_header_bits: bool = False
     reverse_header_bytes: bool = False
     reverse_payload_bits: bool = False
@@ -198,21 +200,6 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
         return value
 
     @property
-    def px_per_buffer(self) -> int:
-        """
-        Number of pixels per buffer
-        """
-
-        px_per_word = 32 / self.pix_depth
-        if self._px_per_buffer is None:
-            self._px_per_buffer = (
-                self.buffer_block_length * self.block_size
-                - self.header_len / self.pix_depth
-                - px_per_word * self.dummy_words
-            )
-        return self._px_per_buffer
-
-    @property
     def buffer_npix(self) -> list[int]:
         """
         List of pixel counts per buffer for a complete frame.
@@ -222,19 +209,15 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
         (the remainder).
         """
         px_per_frame = self.frame_width * self.frame_height
-        # Payload size in bytes (= pixels when pix_depth=8)
-        byte_per_word = 4  # 32 bits / 8 bits
-        payload_bytes = int(
-            self.buffer_block_length * self.block_size
-            - self.header_len / 8
-            - self.dummy_words * byte_per_word
-        )
-        quotient, remainder = divmod(px_per_frame, payload_bytes)
-        return [payload_bytes] * int(quotient) + ([int(remainder)] if remainder else [])
+        quotient, remainder = divmod(px_per_frame, self.pix_per_buffer)
+        return [self.pix_per_buffer] * int(quotient) + ([int(remainder)] if remainder else [])
 
     @property
     def read_length(self) -> int:
         """
         How many bytes to read from the FPGA per chunk, roughly the expected size of a buffer
+
+        For now, just {attr}`~.StreamDevConfig.pix_per_buffer`,
+        but kept in case we want it to be independently controllable in the future.
         """
-        return int(max(self.buffer_npix) * self.pix_depth / 8 / 16) * 16
+        return self.pix_per_buffer

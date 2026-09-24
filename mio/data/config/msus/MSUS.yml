@@ -1,8 +1,8 @@
 # https://miniscope-io.readthedocs.io/en/latest/api/models/buffer.html#mio.models.buffer.BufferHeader.frame_buffer_count
 
 id: MSUS
-mio_model: mio.devices.msus.config.GSDevConfig
-mio_version: "v5.0.0"
+mio_model: mio.devices.stream.config.StreamDevConfig
+mio_version: "v0.11.0"
 
 # capture device. "OK" (Opal Kelly) or "UART"
 device: "OK"
@@ -19,13 +19,6 @@ bitstream: "XEM7310-A75/USBInterface-12_5mhz-J2_2-3v3-IEEE.bit"
 # bitstream: "XEM7310-A75/USBInterface-25mhz-J2_2+J2_4-3v3-IEEE.bit"
 # bitstream: "XEM7310-A75/USBInterface-12_5mhz-J2_2+J2_4-3v3-IEEE.bit"
 
-# COM port and baud rate is only required for UART mode
-
-
-
-port: null
-baudrate: null
-
 # Preamble for each data buffer.
 preamble: 0x78563412 # new preamble
 
@@ -35,14 +28,10 @@ preamble: 0x78563412 # new preamble
 frame_width: 328  # 328 * 12 PP, with the extra 8 coming from the start_of_frame sequence
 frame_height: 320 # 320 # 320 lines total, set to the ROI number on the firmware!
 pix_depth: 8 # pixel depth, or, pixel period
-max_pixels_per_buffer:  13120  # 9840 #  ORIGINAL: 10000
+pix_per_buffer:  13120  # 9840 #  ORIGINAL: 10000
 
 # Buffer data format. These have to match the firmware value
 header_len: 384 # 12 * 32 (in bits)
-buffer_block_length: 4  # 10 # originally 12 how many words per block length
-block_size:  3280 # 3714 # just buffer (header+data-header)
-num_buffers: 5 # 6 # (maybe change to 10 num of data buffers inside mcu
-dummy_words: 12 # 12 # num of dummy words before header file
 
 # Flags to flip bit/byte order when recovering headers and data. See model document for details.
 reverse_header_bits: False # False
