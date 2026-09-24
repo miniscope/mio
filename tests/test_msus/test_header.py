@@ -2,10 +2,10 @@ from collections import defaultdict
 
 import numpy as np
 import pytest
-
-from mio.devices.msus import testing
 from mio.devices.msus.config import MSUSDevConfig
 from mio.devices.msus.header import MSUSBufferHeader, MSUSBufferHeaderFormat, buffer_to_array
+
+from mio.devices.msus import testing
 
 
 def test_format_headers_synthetic():

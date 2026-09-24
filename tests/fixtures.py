@@ -282,9 +282,9 @@ def set_config(
 
 @pytest.fixture()
 def msus_raw_buffers() -> Generator[bytes, None, None]:
+    from mio.devices.msus.config import MSUSDevConfig
     from mio.stream_daq import iter_buffers
 
-    from mio.devices.msus.config import MSUSDevConfig
     from mio.utils import file_iter
 
     from .conftest import DATA_DIR

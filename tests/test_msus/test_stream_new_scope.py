@@ -1,6 +1,6 @@
+from mio.devices.msus.config import MSUSDevConfig
 from mio.stream_daq import StreamDaq
 
-from mio.devices.msus.config import MSUSDevConfig
 from mio.utils import hash_file
 
 from ..conftest import DATA_DIR

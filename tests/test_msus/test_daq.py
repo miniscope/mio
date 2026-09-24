@@ -3,11 +3,11 @@ from collections import defaultdict
 import numpy as np
 import pytest
 from bitstring import Bits
-from mio.stream_daq import iter_buffers
-
 from mio.devices.msus.config import MSUSDevConfig
 from mio.devices.msus.daq import format_frame
 from mio.devices.msus.header import MSUSBufferHeader, MSUSBufferHeaderFormat
+from mio.stream_daq import iter_buffers
+
 from mio.devices.msus.testing import (
     frame_to_naneye_buffers,
     patterned_frame,

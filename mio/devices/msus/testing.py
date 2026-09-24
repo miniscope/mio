@@ -1,16 +1,12 @@
 # ruff: noqa: D100
-import time
 from pathlib import Path
 from typing import ClassVar
 
 import numpy as np
-from bitstring import Bits
 
 from mio import init_logger
-from mio.devices.msus.config import MSUSDevConfig
-from mio.devices.msus.header import MSUSBufferHeader, MSUSBufferHeaderFormat
-from mio.devices.opalkelly import okDev
-from mio.stream_daq import iter_buffers
+from mio.devices.stream import StreamBufferHeader, StreamDevConfig
+from mio.devices.stream.nodes import SplitBuffers, init_okdev
 from mio.types import ConfigSource
 
 DUMMY_WORD = b"\xcc\xcc\x00\xff"
@@ -210,13 +206,12 @@ def frame_to_naneye_buffers(
     buffer_bytes: list[bytes] = [np.packbits(arr.flatten()).tobytes() for arr in split]
 
     # create headers
-    fmt = MSUSBufferHeaderFormat.from_id("msus-buffer-header")
     headers = [np.zeros(fmt.header_length, dtype=np.uint32) for _ in range(len(buffer_bytes))]
     for i in range(len(buffer_bytes)):
         headers[i][fmt.buffer_count] = i
 
     # concat preamble and dummy words and cast to bytes
-    config = MSUSDevConfig.from_id("MSUS-test")
+    config = StreamDevConfig.from_id("MSUS-test")
     header_bytes = [config.preamble + h.view(np.uint8).tobytes() for h in headers]
 
     # combine header and pixel buffers, add dummy suffix
@@ -227,41 +222,29 @@ def frame_to_naneye_buffers(
 
 # the following is for dealing with the creation of binary data
 class _BinaryDaq:
-    buffer_header_cls: ClassVar = MSUSBufferHeader
+    buffer_header_cls: ClassVar = StreamBufferHeader
 
     def __init__(
         self,
-        device_config: MSUSDevConfig | ConfigSource,
-        header_fmt: MSUSBufferHeaderFormat | ConfigSource = "msus-buffer-header",
+        device_config: StreamDevConfig | ConfigSource,
     ):
-        self.config: MSUSDevConfig = MSUSDevConfig.from_any(device_config)
-        self.header_fmt = MSUSBufferHeaderFormat.from_any(header_fmt)
+        self.config: StreamDevConfig = StreamDevConfig.from_any(device_config)
         self.preamble = self.config.preamble
         self.logger = init_logger("msus.BinaryDaq")
 
     def capture(self, binary_output: Path, n_frames: int = 15, read_size: int = 2048) -> None:
         """Change n_frames to capture the frames you want."""
-        dev = self._init_okdev(read_size)
-        pre = Bits(self.preamble)
-        if self.config.reverse_header_bits:
-            pre = pre[::-1]
-
         frames_seen = set()
 
-        for buf in iter_buffers(dev, preamble=pre, pre_first=True, capture_binary=binary_output):
-            header, payload = MSUSBufferHeader.from_buffer(buf, self.header_fmt, self.config)
-            frames_seen.add(int(header.frame_num))
-            self.logger.info(header)
-            if len(frames_seen) > n_frames:
-                break
-
-    def _init_okdev(self, read_length: int) -> okDev:
-        dev = okDev(read_length=read_length)
-        dev.upload_bit(str(self.config.bitstream))
-        dev.set_wire(0x00, 0b0010)
-        time.sleep(0.01)
-        dev.set_wire(0x00, 0b0)
-        dev.set_wire(0x00, 0b1000)
-        time.sleep(0.01)
-        dev.set_wire(0x00, 0b0)
-        return dev
+        dev = init_okdev(self.config.bitstream, self.config.read_length)
+        splitter = SplitBuffers(config=self.config)
+        for chunk in dev:
+            buffers = splitter.process(chunk)
+            if not isinstance(buffers, list):
+                continue
+            for buffer in buffers:
+                header, payload = StreamBufferHeader.from_buffer(buffer, self.config)
+                frames_seen.add(int(header.frame_num))
+                self.logger.info(header)
+                if len(frames_seen) > n_frames:
+                    break
