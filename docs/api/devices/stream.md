@@ -44,7 +44,7 @@ Below is an example configuration YAML file. More examples can be found in `mio.
 
 ```yaml
 # bitstream file to upload to Opal Kelly board
-bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit"
+bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2+J2_4-3v3-IEEE.bit"
 
 # Preamble for each data buffer.
 preamble: 0x12345678
