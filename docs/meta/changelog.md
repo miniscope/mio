@@ -1,8 +1,16 @@
 # Changelog
 
-## Upcoming
+## 0.11
 
-### *.*
+### 0.11.0
+
+The biggest change here is that we have overhauled the whole streamdaq to use [noob](https://github.com/miniscope/noob),
+our graph processing lib designed for exactly this!
+Now all the little tweaks and modifications we have wanted to make over the time we have been developing mio
+have a standard way of being expressed, and can live alongside each other as different graph definitions
+without needing to slip them into the huge monolithic streamdaq class.
+
+The first version with noob is an attempt to be a 1:1 swap, and then future versions will continue adapting the surrounding systems.
 
 #### Added
 
@@ -23,6 +31,7 @@
 - Standardize `Device` instantiation and class vars (renames `--device-config` to just `config`)
 - [`#177`](https://github.com/miniscope/mio/pull/177) - Move all headers to `devices` structure
 - [`#166`](https://github.com/miniscope/mio/pull/166) - Create `devices` and move streamdaq to it
+- [`#192`](https://github.com/miniscope/mio/pull/192) - Swap backend to `noob`!!!
 
 #### Removed
 
