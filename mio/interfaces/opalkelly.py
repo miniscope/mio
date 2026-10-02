@@ -2,12 +2,7 @@
 Interfaces for OpalKelly (model number?) FPGAs
 """
 
-import sys
-
-if sys.version_info < (3, 11):
-    from typing_extensions import Self
-else:
-    from typing import Self
+from typing import Self
 
 from mio.exceptions import (
     DeviceConfigurationError,

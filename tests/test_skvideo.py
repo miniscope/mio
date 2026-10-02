@@ -19,7 +19,6 @@ def test_write_video(tmp_path):
         "-vcodec": "rawvideo",
         "-f": "avi",
         "-pix_fmt": "gray",
-        "-vsync": "0",  # probably not necessary but for safety
     }
 
     out = tmp_path / "test.avi"

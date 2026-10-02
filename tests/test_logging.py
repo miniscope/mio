@@ -70,7 +70,8 @@ def test_nested_loggers(capsys, tmp_path):
     warnings.warn(f"FILES IN LOG DIR: {list(log_dir.glob('*'))}", stacklevel=2)
     warnings.warn(f"ROOT LOGGER HANDLERS: {root_logger.handlers}", stacklevel=2)
 
-    assert len(root_logger.handlers) == 2
+    # the 2 we expect, and 2 from pytest for log capturing
+    assert len(root_logger.handlers) == 4
     assert len(parent.handlers) == 0
     assert len(child.handlers) == 0
 
@@ -115,7 +116,8 @@ def test_init_logger_from_config(
         assert dotenv_logger.level == level_name_map.get(level)
 
     assert len(dotenv_logger.handlers) == 0
-    assert len(root_logger.handlers) == 2
+    # the 2 we expect, and 2 from pytest for log capturing
+    assert len(root_logger.handlers) == 4
     file_handlers = [h for h in root_logger.handlers if isinstance(h, RotatingFileHandler)]
     stream_handlers = [h for h in root_logger.handlers if isinstance(h, RichHandler)]
     assert len(file_handlers) == 1

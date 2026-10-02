@@ -1,5 +1,5 @@
 import sys
-from enum import Enum
+from enum import StrEnum
 from pprint import pformat
 
 import cv2
@@ -19,7 +19,7 @@ else:
     from typing import TypedDict
 
 
-class GroundTruthCategory(str, Enum):
+class GroundTruthCategory(StrEnum):
     check_pattern = "check_pattern"
     blacked_out = "blacked_out"
 

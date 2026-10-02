@@ -170,3 +170,5 @@ tests/data/stitch/*_noise.csv
 tests/data/stitch/*_scores.csv
 tests/data/stitch/*_stitched*
 
+noob_config.yaml
+

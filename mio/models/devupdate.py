@@ -2,16 +2,11 @@
 Models for device update commands.
 """
 
-import sys
 from enum import Enum
+from typing import Self
 
 import serial.tools.list_ports
 from pydantic import BaseModel, field_validator, model_validator
-
-if sys.version_info < (3, 11):
-    from typing_extensions import Self
-else:
-    from typing import Self
 
 
 class DeviceCommand(Enum):

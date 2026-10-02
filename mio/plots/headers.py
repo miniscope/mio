@@ -9,8 +9,12 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from noob import process_method
+from noob.utils import resolve_python_identifier
 
+from mio.devices.base import BufferHeader
 from mio.devices.stream.headers import StreamBufferHeader
+from mio.types import PythonIdentifier
 
 try:
     import matplotlib.pyplot as plt
@@ -119,7 +123,10 @@ class StreamPlotter:
     """
 
     def __init__(
-        self, header_keys: list[str], history_length: int = 100, update_ms: int = 1000
+        self,
+        header_keys: list[str] | PythonIdentifier,
+        history_length: int = 100,
+        update_ms: int = 1000,
     ) -> None:
         """
         Constructor of StreamPlotter.
@@ -138,7 +145,10 @@ class StreamPlotter:
 
         # If a single string is provided, convert it to a list with one element
         if isinstance(header_keys, str):
-            header_keys = [header_keys]
+            header_cls = resolve_python_identifier(header_keys)
+            if not issubclass(header_cls, BufferHeader):
+                raise TypeError("Header class must be a buffer header class!")
+            header_keys = header_cls.csv_header_cols()
 
         self.header_keys = header_keys
         self.history_length = history_length
@@ -177,6 +187,7 @@ class StreamPlotter:
             ax.set_ylabel(header_key)
         return fig, axes_dict, lines
 
+    @process_method
     def update(
         self,
         header: StreamBufferHeader,

@@ -2,7 +2,7 @@ id: test-ber-prbs15
 mio_model: mio.models.stream.StreamDevConfig
 mio_version: 0.9.1.dev120+gb8dfe68c
 device: OK
-bitstream: XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit
+bitstream: XEM7310-A75/USBInterface-8_33mhz-J2_2+J2_4-3v3-IEEE.bit
 preamble: 305419896
 frame_width: 200
 frame_height: 200

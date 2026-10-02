@@ -1,17 +1,11 @@
 """Base device headers"""
 
-import sys
 from collections.abc import Sequence
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Self
 
 import pandera.pandas as pa
 
 from mio.models import Container, Table
-
-if sys.version_info <= (3, 11):
-    from typing_extensions import Self
-else:
-    from typing import Self
 
 
 class BufferHeader(Container):

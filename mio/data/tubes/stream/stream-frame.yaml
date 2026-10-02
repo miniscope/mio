@@ -1,0 +1,79 @@
+noob_id: stream-frame
+noob_model: noob.tube.TubeSpecification
+noob_version: v1000.1.0
+description: |
+  Frame assembly from buffers
+  
+input:
+  config:
+    type: mio.devices.stream.StreamDevConfig
+    scope: tube
+  header_csv:
+    type: pathlib.Path
+    scope: tube
+  video_path:
+    type: pathlib.Path
+    scope: tube
+  header_cls:
+    type: str
+    default: mio.devices.stream.StreamBufferHeader
+    required: false
+
+  chunks:
+    type: list[bytes]
+    scope: process
+
+assets:
+  counter:
+    type: itertools.count
+    scope: runner
+
+nodes:
+  map_chunks:
+    type: map
+    depends:
+      - value: input.chunks
+  parse_header:
+    type: mio.devices.stream.nodes.ParseHeader
+    params:
+      config: input.config
+    depends:
+      - chunk: map_chunks.value
+      - counter: assets.counter
+  trim:
+    type: mio.devices.stream.nodes.trim_or_pad
+    params:
+      config: input.config
+    depends:
+      - buffer: parse_header.buffer
+      - header: parse_header.header
+  combine:
+    type: mio.devices.stream.nodes.CombineBuffers
+    params:
+      config: input.config
+    depends:
+      - buffer: trim.buffer
+      - header: parse_header.header
+
+  write_csv:
+    type: mio.io.BufferedCSVWriter
+    enabled: input.header_csv
+    params:
+      file_path: input.header_csv
+      header: input.header_cls
+    depends:
+      - data: trim.header
+      - reconstructed_frame_index: combine.frame_idx
+  write_video:
+    type: mio.io.VideoWriter
+    enabled: input.video_path
+    params:
+      path: input.video_path
+    depends:
+      - frame: combine.frame
+
+  return:
+    type: return
+    depends:
+      - frame: combine.frame
+      - header: parse_header.header
