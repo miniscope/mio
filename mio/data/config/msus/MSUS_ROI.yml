@@ -1,0 +1,46 @@
+id: MSUS_ROI
+mio_model: mio.devices.stream.config.StreamDevConfig
+mio_version: "v0.11.0"
+
+
+bitstream: "XEM7310-A75/USBInterface-8_33mhz-J2_2-3v3-IEEE.bit"
+
+# Preamble for each data buffer.
+preamble: 0x78563412 # new preamble
+
+# Incoming Pre-Processed Image format.
+frame_width: 120  # 328 * 12 PP, with the extra 8 coming from the start_of_frame sequence
+frame_height: 120 # 320 # 320 lines total, set to the ROI number on the firmware!
+pix_depth: 8 # pixel depth, or, pixel period
+pix_per_buffer:  10000
+
+# Buffer data format. These have to match the firmware value
+header_len: 384 # 12 * 32 (in bits)
+
+# Flags to flip bit/byte order when recovering headers and data. See model document for details.
+reverse_header_bits: False # False
+reverse_header_bytes: False # False
+reverse_payload_bits: False # False
+reverse_payload_bytes: False # False
+
+adc_scale:
+  ref_voltage: 1.1
+  bitdepth: 8
+  battery_div_factor: 5
+  vin_div_factor: 11.3
+
+runtime:
+  serial_buffer_queue_size: 50
+  frame_buffer_queue_size: 50
+  image_buffer_queue_size: 50
+  csv:
+    buffer: 5
+  plot:
+    keys:
+      - timestamp
+      - buffer_count
+      - frame_buffer_count
+      - battery_voltage
+      - input_voltage
+    update_ms: 1000
+    history: 500

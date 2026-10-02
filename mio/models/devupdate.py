@@ -41,6 +41,8 @@ class UpdateKey(int, Enum):
     ROI_X = 2
     ROI_Y = 3
     SUBSAMPLE = 4
+    TL = 10
+
     """
     ROI_WIDTH = 4  # not implemented
     ROI_HEIGHT = 5  # not implemented
@@ -75,6 +77,11 @@ class DevUpdateCommand(BaseModel):
             assert value in [DeviceCommand.REBOOT.value], "For DEVICE, value must be in [200]"
         elif key == UpdateKey.SUBSAMPLE:
             assert value in [0, 1], "For SUBSAMPLE, value must be in [0, 1]"
+        elif key == UpdateKey.TL:
+            assert 0 <= value <= 1055, (
+                "For TUNABLE LENS, value must be in [0, 1055] "
+                "to go from a DAC: [-180, 875] corresponding to a DPT: [-7:8]"
+            )
         elif key in [UpdateKey.ROI_X, UpdateKey.ROI_Y]:
             # validation not implemented
             pass

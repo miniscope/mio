@@ -105,7 +105,7 @@ class ConfigYAMLMixin(BaseModel, YAMLMixin):
     mio_model: PythonIdentifier = Field(None, validate_default=True)
     mio_version: str = version("mio")
 
-    HEADER_FIELDS: ClassVar[tuple[str]] = ("id", "mio_model", "mio_version")
+    HEADER_FIELDS: ClassVar[tuple[str, ...]] = ("id", "mio_model", "mio_version")
 
     @classmethod
     def from_yaml(cls: Self, file_path: str | Path) -> Self:
