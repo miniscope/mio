@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.11
+## 0.12
 
-### 0.11.0
+### 0.12.0
 
 The biggest change here is that we have overhauled the whole streamdaq to use [noob](https://github.com/miniscope/noob),
 our graph processing lib designed for exactly this!
