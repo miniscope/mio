@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import zlib
 from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
@@ -130,6 +131,13 @@ class StreamBufferHeader(BufferHeader):
             "If the buffer is not part of a valid frame, this will be -1."
         ),
     )
+    header_crc_ok: bool | None = Field(
+        None,
+        description=(
+            "Whether the header CRC sent by the firmware matched. "
+            "None if the config does not enable ``header_crc``."
+        ),
+    )
 
     _adc_scaling: ADCScaling = None
 
@@ -184,9 +192,36 @@ class StreamBufferHeader(BufferHeader):
             buffer_recv_index=-1,  # will be set later in buffer_to_frame for processed buffers
             buffer_recv_unix_time=time.time(),
         )
-        header_data = StreamBufferHeader.from_sequence(header.astype(int), **runtime_metadata)
+        header = header.astype(int)
+        if config.header_crc:
+            battery_idx = cls.POSITIONS["battery_voltage_raw"]
+            runtime_metadata["header_crc_ok"] = check_header_crc(
+                int.from_bytes(config.preamble, "big"), header, battery_idx + 1
+            )
+            # the battery ADC value is only the low byte, the rest is the CRC
+            header[battery_idx] &= 0xFF
+        header_data = StreamBufferHeader.from_sequence(header, **runtime_metadata)
         header_data.adc_scaling = config.adc_scale
         return header_data, payload
+
+
+def check_header_crc(preamble: int, header: np.ndarray, crc_word: int) -> bool:
+    """
+    Verify the 24-bit header CRC sent by the firmware.
+
+    Args:
+        preamble: Preamble word (header word 0)
+        header: Header words following the preamble, as parsed by
+            :meth:`.BufferFormatter.bytebuffer_to_ndarrays`
+        crc_word: Index of the word carrying the CRC, counted from the preamble
+
+    Returns:
+        bool: ``True`` if the received CRC matches
+    """
+    words = np.concatenate(([preamble], header)).astype("<u4")
+    received_crc = int(words[crc_word]) >> 8
+    words[crc_word] &= 0xFF
+    return (zlib.crc32(words.tobytes()) & 0xFFFFFF) == received_crc
 
 
 class StreamBufferTable(Table):
@@ -211,3 +246,4 @@ class StreamBufferTable(Table):
     buffer_recv_unix_time: float = pa.Field(ge=0, coerce=True)
     black_padding_px: int = pa.Field(ge=0, coerce=True)
     reconstructed_frame_index: int = pa.Field(ge=0, coerce=True)
+    header_crc_ok: bool | None = pa.Field(nullable=True, coerce=True)

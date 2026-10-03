@@ -135,7 +135,13 @@ class ParseHeader(Node):
 
 
 class CombineBuffers(Node):
-    """Collect buffers until we the header tells us that we're in a new frame"""
+    """
+    Collect buffers until we the header tells us that we're in a new frame
+
+    Buffers whose header failed the CRC check (``header_crc_ok is False``) are dropped
+    and padded like a lost buffer, since a corrupted header may place pixels
+    in the wrong frame or position.
+    """
 
     config: StreamDevConfig
 
@@ -143,10 +149,15 @@ class CombineBuffers(Node):
     _buffers_prealloc: list[np.ndarray] = PrivateAttr(default_factory=list)
     _current_frame: int = -1
     _frame_idx: int = 0
+    _n_crc_dropped: int = 0
 
     def process(
         self, buffer: np.ndarray, header: StreamBufferHeader
     ) -> tuple[A[NoEventable[np.ndarray], Name("frame")], A[int, Name("frame_idx")]]:
+        if header.header_crc_ok is False:
+            self._n_crc_dropped += 1
+            return MetaSignal.NoEvent, self._frame_idx
+
         # when starting, wait for the start of a new frame
         if self._current_frame == -1:
             if header.frame_buffer_count != 0:
@@ -196,8 +207,13 @@ class CombineBuffers(Node):
         Clear mutable state *except* for the buffer index,
         which should continue incrementing across stop/start cycles.
         """
+        if self.config.header_crc:
+            init_logger("stream.combine_buffers").info(
+                f"Dropped {self._n_crc_dropped} buffers with a bad header CRC"
+            )
         self._buffers = []
         self._current_frame = -1
+        self._n_crc_dropped = 0
 
 
 def imshow(frame: np.ndarray, window: str = "image") -> None:
