@@ -14,13 +14,13 @@ frame_height: 200
 pix_depth: 8
 
 # Buffer data format. These have to match the firmware value
-header_len: 384 # 12 * 32 (in bits)
+header_len: 416 # 13 * 32 (in bits), the last word is the header CRC word
 buffer_block_length: 10
 block_size: 512
 num_buffers: 32
 dummy_words: 10
 
-# Firmware sends a 24-bit header CRC in bits 31:8 of the battery word
+# Last header word: bits 7:0 firmware version record byte, bits 31:8 (the last 3 header bytes) header CRC
 header_crc: True
 
 # Flags to flip bit/byte order when recovering headers and data. See model document for details.

@@ -137,11 +137,13 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
         This is used to stabilize clock recovery in FPGA Manchester decoder.
         This value does not have a meaning for image recovery.
     header_crc : bool, optional
-        If True, the firmware sends a 24-bit CRC-32 of the header in bits 31:8 of the
-        battery header word (the battery ADC value stays in bits 7:0).
+        If True, the header ends with a CRC word: its first byte is free for other data
+        (the firmware version record), and the last 3 bytes of the header are the low 24 bits
+        of a CRC-32 (as :func:`zlib.crc32`) of the header bytes after the preamble and before them.
+        ``header_len`` must include this word.
         mio verifies it, stores the result in ``header_crc_ok``,
         and keeps buffers with a bad header out of the reconstructed frames.
-        Default is False (firmware without the CRC sends zeros in these bits).
+        Default is False.
     """
 
     device: Literal["OK"] = "OK"

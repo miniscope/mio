@@ -178,50 +178,38 @@ class StreamBufferHeader(BufferHeader):
         Parse a header and its payload from the raw buffer from the hardware
         """
 
-        header, payload = BufferFormatter.bytebuffer_to_ndarrays(
+        header = BufferFormatter.bytebuffer_to_header(
             buffer=buffer,
             header_length_words=int(config.header_len / 32),
             preamble_length_words=int(len(Bits(config.preamble)) / 32),
             reverse_header_bits=config.reverse_header_bits,
             reverse_header_bytes=config.reverse_header_bytes,
-            reverse_payload_bits=config.reverse_payload_bits,
-            reverse_payload_bytes=config.reverse_payload_bytes,
         )
 
         runtime_metadata = dict(
             buffer_recv_index=-1,  # will be set later in buffer_to_frame for processed buffers
             buffer_recv_unix_time=time.time(),
         )
-        header = header.astype(int)
         if config.header_crc:
-            battery_idx = cls.POSITIONS["battery_voltage_raw"]
-            runtime_metadata["header_crc_ok"] = check_header_crc(
-                int.from_bytes(config.preamble, "big"), header, battery_idx + 1
+            # the last 3 header bytes are the low 24 bits of a CRC-32 of the bytes before them
+            header_bytes = header.view(np.uint8)
+            crc = int.from_bytes(header_bytes[-3:], "little")
+            runtime_metadata["header_crc_ok"] = (zlib.crc32(header_bytes[:-3]) & 0xFFFFFF) == crc
+
+        if runtime_metadata.get("header_crc_ok") is False:
+            # the buffer is dropped downstream, so skip unpacking its pixels
+            payload = np.empty(0, dtype=np.uint8)
+        else:
+            payload = BufferFormatter.bytebuffer_to_payload(
+                buffer=buffer,
+                header_length_words=int(config.header_len / 32),
+                reverse_payload_bits=config.reverse_payload_bits,
+                reverse_payload_bytes=config.reverse_payload_bytes,
             )
-            # the battery ADC value is only the low byte, the rest is the CRC
-            header[battery_idx] &= 0xFF
-        header_data = StreamBufferHeader.from_sequence(header, **runtime_metadata)
+
+        header_data = StreamBufferHeader.from_sequence(header.astype(int), **runtime_metadata)
         header_data.adc_scaling = config.adc_scale
         return header_data, payload
-
-
-def check_header_crc(preamble: int, header: np.ndarray, crc_word: int) -> bool:
-    """
-    Verify the 24-bit header CRC sent by the firmware.
-
-    Args:
-        preamble: Preamble word (header word 0)
-        header: Header words following the preamble, as parsed by
-            :meth:`.BufferFormatter.bytebuffer_to_ndarrays`
-        crc_word: Index of the word carrying the CRC, counted from the preamble
-
-    Returns:
-        bool: ``True`` if the received CRC matches
-    """
-    words = np.concatenate(([preamble], header)).astype("<u4")
-    received_crc = int(words[crc_word]) >> 8
-    words[crc_word] &= 0xFF
-    return (zlib.crc32(words.tobytes()) & 0xFFFFFF) == received_crc
 
 
 class StreamBufferTable(Table):

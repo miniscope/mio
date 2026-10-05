@@ -208,13 +208,11 @@ class CombineBuffers(Node):
         which should continue incrementing across stop/start cycles.
         """
         if self._n_crc_dropped:
-            init_logger("stream.combine_buffers").warning(
+            self.logger.warning(
                 f"Discarded {self._n_crc_dropped} buffers whose header is corrupted "
                 f"(CRC mismatch). They show as padded gaps in the video "
                 f"and as header_crc_ok=False in the csv."
             )
-        elif self.config.header_crc:
-            init_logger("stream.combine_buffers").info("No buffers with a corrupted header")
         self._buffers = []
         self._current_frame = -1
         self._n_crc_dropped = 0

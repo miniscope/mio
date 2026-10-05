@@ -126,28 +126,64 @@ class BufferFormatter:
         Note that this truncates the preamble from the header.
         The first word :code:`0x12345678` is truncated because :code:`preamble_length_words=1`.
         """
+        header = cls.bytebuffer_to_header(
+            buffer=buffer,
+            header_length_words=header_length_words,
+            preamble_length_words=preamble_length_words,
+            reverse_header_bits=reverse_header_bits,
+            reverse_header_bytes=reverse_header_bytes,
+        )
+        payload = cls.bytebuffer_to_payload(
+            buffer=buffer,
+            header_length_words=header_length_words,
+            reverse_payload_bits=reverse_payload_bits,
+            reverse_payload_bytes=reverse_payload_bytes,
+        )
+        return header, payload
 
-        # Padding in case the buffer is not a multiple of 4 bytes (32 bits)
-        padding_length = (4 - (len(buffer) % 4)) % 4
-        padded_buffer = buffer + b"\x00" * padding_length
+    @classmethod
+    def bytebuffer_to_header(
+        cls,
+        buffer: bytes,
+        header_length_words: int,
+        preamble_length_words: int,
+        reverse_header_bits: bool,
+        reverse_header_bytes: bool,
+    ) -> np.ndarray:
+        """
+        Format only the header of the buffer as a uint32 array, without the preamble.
 
-        # Convert the padded buffer to a uint32 numpy array
-        data = np.frombuffer(padded_buffer, dtype=np.uint32)
-
-        # Process header
-        header = data[preamble_length_words:header_length_words]
+        See :meth:`.bytebuffer_to_ndarrays` for the parameters.
+        """
+        header = np.frombuffer(buffer, dtype=np.uint32, count=header_length_words)
+        header = header[preamble_length_words:]
         if reverse_header_bits:
             header = cls._reverse_bits_in_array(header)
         if reverse_header_bytes:
             header = cls._reverse_byte_order_in_array(header)
+        return header
 
-        # Process body
-        payload_data = data[header_length_words:]
+    @classmethod
+    def bytebuffer_to_payload(
+        cls,
+        buffer: bytes,
+        header_length_words: int,
+        reverse_payload_bits: bool,
+        reverse_payload_bytes: bool,
+    ) -> np.ndarray:
+        """
+        Format only the payload of the buffer as a uint8 array.
+
+        See :meth:`.bytebuffer_to_ndarrays` for the parameters.
+        """
+        # Padding in case the buffer is not a multiple of 4 bytes (32 bits)
+        padding_length = (4 - (len(buffer) % 4)) % 4
+        padded_buffer = buffer + b"\x00" * padding_length
+
+        payload_data = np.frombuffer(padded_buffer, dtype=np.uint32)[header_length_words:]
         if reverse_payload_bits:
             payload_data = cls._reverse_bits_in_array(payload_data)
         if reverse_payload_bytes:
             payload_data = cls._reverse_byte_order_in_array(payload_data)
 
-        # Convert processed body buffer to uint8 numpy array
-        payload_uint8 = payload_data.view(np.uint8)
-        return header, payload_uint8
+        return payload_data.view(np.uint8)
