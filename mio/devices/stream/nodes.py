@@ -207,10 +207,14 @@ class CombineBuffers(Node):
         Clear mutable state *except* for the buffer index,
         which should continue incrementing across stop/start cycles.
         """
-        if self.config.header_crc:
-            init_logger("stream.combine_buffers").info(
-                f"Dropped {self._n_crc_dropped} buffers with a bad header CRC"
+        if self._n_crc_dropped:
+            init_logger("stream.combine_buffers").warning(
+                f"Discarded {self._n_crc_dropped} buffers whose header is corrupted "
+                f"(CRC mismatch). They show as padded gaps in the video "
+                f"and as header_crc_ok=False in the csv."
             )
+        elif self.config.header_crc:
+            init_logger("stream.combine_buffers").info("No buffers with a corrupted header")
         self._buffers = []
         self._current_frame = -1
         self._n_crc_dropped = 0
@@ -286,7 +290,13 @@ def trim_or_pad(
         It feels cleaner to remove these dummy words right after the preamble detections.
         That way, all data we inject into later stages will be pure metadata and pixel data.
         This isn't critical and I don't want to slow down detection so skipping for now.
+
+    Buffers with a corrupted header (``header_crc_ok is False``) are passed through unchanged,
+    since their ``frame_buffer_count`` can't be trusted. :class:`.CombineBuffers` drops them.
     """
+    if header.header_crc_ok is False:
+        return buffer, header
+
     try:
         expected_data_size = config.buffer_npix[header.frame_buffer_count]
     except IndexError:
