@@ -20,6 +20,7 @@ from pydantic import PrivateAttr
 
 from mio import init_logger
 from mio.devices.stream import StreamBufferHeader, StreamDevConfig
+from mio.devices.stream.headers import VERSION_RECORD_LENGTH, FirmwareVersionRecord
 from mio.exceptions import DeviceConfigurationError
 from mio.interfaces.mocks import okDevMock
 
@@ -216,6 +217,47 @@ class CombineBuffers(Node):
         self._buffers = []
         self._current_frame = -1
         self._n_crc_dropped = 0
+
+
+class VersionRecord(Node):
+    """
+    Assemble the firmware version record from the version byte of consecutive buffers
+    with a valid header CRC, and log it once.
+    """
+
+    _bytes: dict[int, int] = PrivateAttr(default_factory=dict)
+    _last_buffer_count: int = -1
+    _logged: bool = False
+
+    def process(self, header: StreamBufferHeader) -> None:
+        if self._logged or header.version_byte is None or not header.header_crc_ok:
+            return
+        if header.buffer_count != self._last_buffer_count + 1:
+            self._bytes.clear()
+        self._last_buffer_count = header.buffer_count
+        self._bytes[header.buffer_count % VERSION_RECORD_LENGTH] = header.version_byte
+        if len(self._bytes) < VERSION_RECORD_LENGTH:
+            return
+
+        record = FirmwareVersionRecord.from_bytes(
+            bytes(self._bytes[i] for i in range(VERSION_RECORD_LENGTH))
+        )
+        if record is None:
+            self._bytes.clear()
+            return
+        dirty = "-dirty" if record.git_dirty else ""
+        self.logger.info(
+            f"Firmware {record.fw_version} (git {record.git_hash}{dirty}), "
+            f"header layout {record.header_layout}, "
+            f"{record.image_width}x{record.image_height} px at {record.frame_rate} fps"
+        )
+        self._logged = True
+
+    def deinit(self) -> None:
+        """Assemble and log the record again on the next start"""
+        self._bytes.clear()
+        self._last_buffer_count = -1
+        self._logged = False
 
 
 def imshow(frame: np.ndarray, window: str = "image") -> None:

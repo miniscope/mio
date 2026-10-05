@@ -143,6 +143,8 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
         ``header_len`` must include this word.
         mio verifies it, stores the result in ``header_crc_ok``,
         and keeps buffers with a bad header out of the reconstructed frames.
+        The first byte is stored in ``version_byte``, and the firmware version record
+        assembled from it is logged once.
         Default is False.
     """
 

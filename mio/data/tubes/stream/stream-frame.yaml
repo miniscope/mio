@@ -47,6 +47,10 @@ nodes:
     depends:
       - buffer: parse_header.buffer
       - header: parse_header.header
+  version:
+    type: mio.devices.stream.nodes.VersionRecord
+    depends:
+      - header: parse_header.header
   combine:
     type: mio.devices.stream.nodes.CombineBuffers
     params:
