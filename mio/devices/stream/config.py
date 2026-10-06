@@ -136,6 +136,16 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
         Number of 32-bit dummy words in the header.
         This is used to stabilize clock recovery in FPGA Manchester decoder.
         This value does not have a meaning for image recovery.
+    header_crc : bool, optional
+        If True, the header ends with a CRC word: its first byte is free for other data
+        (the firmware version record), and the last 3 bytes of the header are the low 24 bits
+        of a CRC-32 (as :func:`zlib.crc32`) of the header bytes after the preamble and before them.
+        ``header_len`` must include this word.
+        mio verifies it, stores the result in ``header_crc_ok``,
+        and keeps buffers with a bad header out of the reconstructed frames.
+        The first byte is stored in ``version_byte``, and the firmware version record
+        assembled from it is logged once.
+        Default is False.
     """
 
     device: Literal["OK"] = "OK"
@@ -154,6 +164,7 @@ class StreamDevConfig(MiniscopeConfig, ConfigYAMLMixin):
     reverse_payload_bits: bool = False
     reverse_payload_bytes: bool = False
     dummy_words: int = 0
+    header_crc: bool = False
     adc_scale: ADCScaling | None = ADCScaling()
     runtime: StreamDevRuntime = StreamDevRuntime()
 

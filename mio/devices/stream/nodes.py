@@ -20,6 +20,7 @@ from pydantic import PrivateAttr
 
 from mio import init_logger
 from mio.devices.stream import StreamBufferHeader, StreamDevConfig
+from mio.devices.stream.headers import VERSION_RECORD_LENGTH, FirmwareVersionRecord
 from mio.exceptions import DeviceConfigurationError
 from mio.interfaces.mocks import okDevMock
 
@@ -135,7 +136,13 @@ class ParseHeader(Node):
 
 
 class CombineBuffers(Node):
-    """Collect buffers until we the header tells us that we're in a new frame"""
+    """
+    Collect buffers until we the header tells us that we're in a new frame
+
+    Buffers whose header failed the CRC check (``header_crc_ok is False``) are dropped
+    and padded like a lost buffer, since a corrupted header may place pixels
+    in the wrong frame or position.
+    """
 
     config: StreamDevConfig
 
@@ -143,10 +150,15 @@ class CombineBuffers(Node):
     _buffers_prealloc: list[np.ndarray] = PrivateAttr(default_factory=list)
     _current_frame: int = -1
     _frame_idx: int = 0
+    _n_crc_dropped: int = 0
 
     def process(
         self, buffer: np.ndarray, header: StreamBufferHeader
     ) -> tuple[A[NoEventable[np.ndarray], Name("frame")], A[int, Name("frame_idx")]]:
+        if header.header_crc_ok is False:
+            self._n_crc_dropped += 1
+            return MetaSignal.NoEvent, self._frame_idx
+
         # when starting, wait for the start of a new frame
         if self._current_frame == -1:
             if header.frame_buffer_count != 0:
@@ -196,8 +208,56 @@ class CombineBuffers(Node):
         Clear mutable state *except* for the buffer index,
         which should continue incrementing across stop/start cycles.
         """
+        if self._n_crc_dropped:
+            self.logger.warning(
+                f"Discarded {self._n_crc_dropped} buffers whose header is corrupted "
+                f"(CRC mismatch). They show as padded gaps in the video "
+                f"and as header_crc_ok=False in the csv."
+            )
         self._buffers = []
         self._current_frame = -1
+        self._n_crc_dropped = 0
+
+
+class VersionRecord(Node):
+    """
+    Assemble the firmware version record from the version byte of consecutive buffers
+    with a valid header CRC, and log it once.
+    """
+
+    _bytes: dict[int, int] = PrivateAttr(default_factory=dict)
+    _last_buffer_count: int = -1
+    _logged: bool = False
+
+    def process(self, header: StreamBufferHeader) -> None:
+        if self._logged or header.version_byte is None or not header.header_crc_ok:
+            return
+        if header.buffer_count != self._last_buffer_count + 1:
+            self._bytes.clear()
+        self._last_buffer_count = header.buffer_count
+        self._bytes[header.buffer_count % VERSION_RECORD_LENGTH] = header.version_byte
+        if len(self._bytes) < VERSION_RECORD_LENGTH:
+            return
+
+        record = FirmwareVersionRecord.from_bytes(
+            bytes(self._bytes[i] for i in range(VERSION_RECORD_LENGTH))
+        )
+        if record is None:
+            self._bytes.clear()
+            return
+        dirty = "-dirty" if record.git_dirty else ""
+        self.logger.info(
+            f"Firmware {record.fw_version} (git {record.git_hash}{dirty}), "
+            f"header layout {record.header_layout}, "
+            f"{record.image_width}x{record.image_height} px at {record.frame_rate} fps"
+        )
+        self._logged = True
+
+    def deinit(self) -> None:
+        """Assemble and log the record again on the next start"""
+        self._bytes.clear()
+        self._last_buffer_count = -1
+        self._logged = False
 
 
 def imshow(frame: np.ndarray, window: str = "image") -> None:
@@ -270,7 +330,13 @@ def trim_or_pad(
         It feels cleaner to remove these dummy words right after the preamble detections.
         That way, all data we inject into later stages will be pure metadata and pixel data.
         This isn't critical and I don't want to slow down detection so skipping for now.
+
+    Buffers with a corrupted header (``header_crc_ok is False``) are passed through unchanged,
+    since their ``frame_buffer_count`` can't be trusted. :class:`.CombineBuffers` drops them.
     """
+    if header.header_crc_ok is False:
+        return buffer, header
+
     try:
         expected_data_size = config.buffer_npix[header.frame_buffer_count]
     except IndexError:

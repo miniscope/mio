@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import struct
 import time
+import zlib
 from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 import pandera.pandas as pa
 from bitstring import Bits
-from pydantic import Field, computed_field
+from pydantic import BaseModel, Field, computed_field
 
 from mio.bit_operation import BufferFormatter
 from mio.devices.base.headers import BufferHeader
@@ -19,6 +21,9 @@ if TYPE_CHECKING:
     from mio.devices.stream.config import StreamDevConfig
 
 from typing import Self
+
+VERSION_RECORD_LENGTH = 32
+VERSION_RECORD_MAGIC = 0xA5
 
 
 class ADCScaling(MiniscopeConfig):
@@ -130,6 +135,21 @@ class StreamBufferHeader(BufferHeader):
             "If the buffer is not part of a valid frame, this will be -1."
         ),
     )
+    header_crc_ok: bool | None = Field(
+        None,
+        description=(
+            "Whether the header CRC sent by the firmware matched. "
+            "None if the config does not enable ``header_crc``."
+        ),
+    )
+    version_byte: int | None = Field(
+        None,
+        description=(
+            "Byte ``buffer_count % 32`` of the firmware version record, "
+            "the first byte of the header CRC word (see :class:`.FirmwareVersionRecord`). "
+            "None if the config does not enable ``header_crc``."
+        ),
+    )
 
     _adc_scaling: ADCScaling = None
 
@@ -170,23 +190,90 @@ class StreamBufferHeader(BufferHeader):
         Parse a header and its payload from the raw buffer from the hardware
         """
 
-        header, payload = BufferFormatter.bytebuffer_to_ndarrays(
+        header = BufferFormatter.bytebuffer_to_header(
             buffer=buffer,
             header_length_words=int(config.header_len / 32),
             preamble_length_words=int(len(Bits(config.preamble)) / 32),
             reverse_header_bits=config.reverse_header_bits,
             reverse_header_bytes=config.reverse_header_bytes,
-            reverse_payload_bits=config.reverse_payload_bits,
-            reverse_payload_bytes=config.reverse_payload_bytes,
         )
 
         runtime_metadata = dict(
             buffer_recv_index=-1,  # will be set later in buffer_to_frame for processed buffers
             buffer_recv_unix_time=time.time(),
         )
+        if config.header_crc:
+            # the last 3 header bytes are the low 24 bits of a CRC-32 of the bytes before them
+            header_bytes = header.view(np.uint8)
+            crc = int.from_bytes(header_bytes[-3:], "little")
+            runtime_metadata["header_crc_ok"] = (zlib.crc32(header_bytes[:-3]) & 0xFFFFFF) == crc
+            # the first byte of the CRC word
+            runtime_metadata["version_byte"] = int(header_bytes[-4])
+
+        if runtime_metadata.get("header_crc_ok") is False:
+            # the buffer is dropped downstream, so skip unpacking its pixels
+            payload = np.empty(0, dtype=np.uint8)
+        else:
+            payload = BufferFormatter.bytebuffer_to_payload(
+                buffer=buffer,
+                header_length_words=int(config.header_len / 32),
+                reverse_payload_bits=config.reverse_payload_bits,
+                reverse_payload_bytes=config.reverse_payload_bytes,
+            )
+
         header_data = StreamBufferHeader.from_sequence(header.astype(int), **runtime_metadata)
         header_data.adc_scaling = config.adc_scale
         return header_data, payload
+
+
+class FirmwareVersionRecord(BaseModel):
+    """
+    Firmware version record, sent one byte per buffer in the first byte of the header CRC word
+    (byte index = ``buffer_count % 32``), so it can be assembled from any 32 consecutive buffers.
+
+    Byte layout: 0 magic 0xA5, 1 record format, 2-4 firmware version major, minor, patch,
+    5-8 git hash (little endian), 9 header layout version, 10 flags, 11 device id,
+    12-17 image width, height, black reference pixels (uint16, little endian), 18 frame rate,
+    19 number of buffers, 20 buffer block length, 21 git tree dirty, 22-30 reserved,
+    31 checksum (all 32 bytes sum to 0 modulo 256).
+    """
+
+    format: int
+    fw_version: str
+    git_hash: str
+    git_dirty: bool
+    header_layout: int
+    flags: int
+    device_id: int
+    image_width: int
+    image_height: int
+    blackref_px: int
+    frame_rate: int
+    num_buffers: int
+    buffer_block_length: int
+
+    @classmethod
+    def from_bytes(cls, record: bytes) -> Self | None:
+        """Decode a complete record, or ``None`` if its magic byte or checksum is wrong"""
+        if record[0] != VERSION_RECORD_MAGIC or sum(record) % 256 != 0:
+            return None
+        major, minor, patch = record[2:5]
+        width, height, blackref = struct.unpack_from("<HHH", record, 12)
+        return cls(
+            format=record[1],
+            fw_version=f"{major}.{minor}.{patch}",
+            git_hash=f"{struct.unpack_from('<I', record, 5)[0]:08x}",
+            git_dirty=bool(record[21]),
+            header_layout=record[9],
+            flags=record[10],
+            device_id=record[11],
+            image_width=width,
+            image_height=height,
+            blackref_px=blackref,
+            frame_rate=record[18],
+            num_buffers=record[19],
+            buffer_block_length=record[20],
+        )
 
 
 class StreamBufferTable(Table):
@@ -211,3 +298,5 @@ class StreamBufferTable(Table):
     buffer_recv_unix_time: float = pa.Field(ge=0, coerce=True)
     black_padding_px: int = pa.Field(ge=0, coerce=True)
     reconstructed_frame_index: int = pa.Field(ge=0, coerce=True)
+    header_crc_ok: bool | None = pa.Field(nullable=True, coerce=True)
+    version_byte: int | None = pa.Field(nullable=True, coerce=True)
