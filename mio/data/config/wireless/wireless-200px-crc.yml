@@ -14,7 +14,7 @@ frame_height: 200
 pix_depth: 8
 
 # Buffer data format. These have to match the firmware value
-header_len: 416 # 13 * 32 (in bits), the last word is the header CRC word
+header_len: 448 # 14 * 32 (in bits), the last word is the header CRC word (firmware header layout 4)
 buffer_block_length: 10
 block_size: 512
 num_buffers: 32
